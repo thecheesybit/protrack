@@ -5,6 +5,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { TopBar } from './TopBar'
 import { ModeSwitcher } from './ModeSwitcher'
 import { BoardCanvas } from './BoardCanvas'
+import { FocusPanel } from '@/components/focus/FocusPanel'
 
 /**
  * The single unified dashboard — everything lives here. No nested routing.
@@ -37,6 +38,8 @@ export function Dashboard() {
           )}
         </main>
       </div>
+
+      <FocusPanel />
     </div>
   )
 }
