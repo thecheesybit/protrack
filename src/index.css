@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─────────────────────────────────────────────────────────────
+   Theme tokens — RGB channel triplets so Tailwind's `<alpha-value>`
+   works (e.g. bg-surface/60). Swapping `.dark` morphs the whole UI.
+   ───────────────────────────────────────────────────────────── */
+:root {
+  --bg: 248 249 252;
+  --surface: 255 255 255;
+  --surface-2: 244 245 249;
+  --text: 17 17 23;
+  --muted: 102 102 117;
+  --border: 226 227 234;
+  --accent: 99 102 241;
+  --accent-2: 139 92 246;
+}
+
+.dark {
+  --bg: 9 9 14;
+  --surface: 21 21 30;
+  --surface-2: 28 28 40;
+  --text: 237 237 244;
+  --muted: 148 148 165;
+  --border: 39 39 53;
+  --accent: 129 140 248;
+  --accent-2: 167 139 250;
+}
+
+@layer base {
+  * {
+    @apply border-line;
+  }
+
+  html,
+  body,
+  #root {
+    @apply h-full;
+  }
+
+  body {
+    @apply bg-bg text-ink font-sans antialiased;
+    color-scheme: light dark;
+    transition: background-color 0.4s ease, color 0.4s ease;
+  }
+
+  /* Custom scrollbar — subtle, premium. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-line;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted/50;
+  }
+
+  ::selection {
+    background: rgb(var(--accent) / 0.3);
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-br from-accent to-accent-2 bg-clip-text text-transparent;
+  }
+
+  /* Faint dotted grid backdrop for the board canvas. */
+  .bg-grid {
+    background-image: radial-gradient(rgb(var(--border) / 0.6) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+}
