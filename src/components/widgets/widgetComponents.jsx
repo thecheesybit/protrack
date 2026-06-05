@@ -1,10 +1,12 @@
 import { PlaceholderWidget } from './PlaceholderWidget'
 import { TimetableWidget } from './TimetableWidget'
+import { SubjectsWidget } from './SubjectsWidget'
 
 // Maps widget id → real component. Anything not yet built falls back to the
 // polished placeholder. Filled in sprint by sprint.
 const COMPONENTS = {
   timetable: TimetableWidget,
+  subjects: SubjectsWidget,
 }
 
 export function getWidgetComponent(id) {
