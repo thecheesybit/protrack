@@ -2,6 +2,7 @@ import { Sun, Moon, Settings, Sparkles, LogOut } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useTheme } from '@/hooks/useTheme'
 import { useStore } from '@/store/useStore'
+import { Logo } from '@/components/common/Logo'
 import { cn } from '@/utils/cn'
 
 function IconButton({ label, onClick, children, className }) {
@@ -30,11 +31,14 @@ export function TopBar() {
 
   return (
     <header className="flex items-center justify-between gap-4">
-      <div>
-        <p className="text-sm text-muted">Welcome back,</p>
-        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
-          {firstName} 👋
-        </h1>
+      <div className="flex items-center gap-3">
+        <Logo className="h-10 w-10 shrink-0 drop-shadow" />
+        <div>
+          <p className="text-sm text-muted">Welcome back,</p>
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
+            {firstName} 👋
+          </h1>
+        </div>
       </div>
 
       <div className="flex items-center gap-2">

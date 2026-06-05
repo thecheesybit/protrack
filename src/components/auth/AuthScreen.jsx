@@ -1,7 +1,8 @@
 import { motion } from 'framer-motion'
-import { Sparkles, AlertTriangle } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { AuroraBackground } from '@/components/common/AuroraBackground'
+import { Logo } from '@/components/common/Logo'
 import { GlassCard } from '@/components/ui/GlassCard'
 
 const FEATURES = [
@@ -54,9 +55,7 @@ export function AuthScreen() {
           transition={{ delay: 0.1 }}
         >
           <div className="mb-8 flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-accent-2 shadow-glow">
-              <Sparkles className="h-6 w-6 text-white" />
-            </div>
+            <Logo className="h-12 w-12 drop-shadow-lg" />
             <div>
               <h1 className="text-xl font-bold tracking-tight">PRO TRACK</h1>
               <p className="text-xs text-muted">Your calm, all-in-one workspace</p>

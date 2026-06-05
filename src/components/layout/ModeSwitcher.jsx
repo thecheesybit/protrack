@@ -1,25 +1,91 @@
-import { motion } from 'framer-motion'
-import { Plus } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { useEffect, useState } from 'react'
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  horizontalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { Plus, Settings2 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
 import { getIcon } from '@/lib/icons'
-import { MODE_PALETTE } from '@/lib/constants'
-import { createMode } from '@/services/modeService'
+import { reorderModes } from '@/services/modeService'
 import { updateActiveMode } from '@/services/userService'
+import { ModeEditorModal } from '@/components/modes/ModeEditorModal'
 import { cn } from '@/utils/cn'
 
-/**
- * Workspace mode pills. Selecting a mode swaps the entire board context and
- * persists the choice so the next visit resumes here. The sliding highlight is
- * a single shared `layoutId` element.
- */
+function SortableModePill({ mode, active, onSelect, onEdit }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: mode.id })
+  const Icon = getIcon(mode.icon)
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn('relative shrink-0', isDragging && 'z-10 opacity-80')}
+      {...attributes}
+      {...listeners}
+    >
+      <button
+        onClick={onSelect}
+        className={cn(
+          'group flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition-colors',
+          active
+            ? 'bg-surface-2 text-ink shadow-sm'
+            : 'text-muted hover:bg-surface-2/50 hover:text-ink',
+        )}
+      >
+        <span
+          className="h-2 w-2 rounded-full"
+          style={{ backgroundColor: mode.accentColor || '#6366f1' }}
+        />
+        <Icon className="h-4 w-4" />
+        <span className="whitespace-nowrap">{mode.name}</span>
+        {active && (
+          <span
+            role="button"
+            tabIndex={0}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              onEdit()
+            }}
+            className="-mr-1 ml-0.5 flex h-5 w-5 items-center justify-center rounded-md text-muted opacity-0 transition-opacity hover:text-ink group-hover:opacity-100"
+            aria-label="Edit mode"
+          >
+            <Settings2 className="h-3.5 w-3.5" />
+          </span>
+        )}
+      </button>
+    </div>
+  )
+}
+
 export function ModeSwitcher() {
   const { user } = useAuth()
   const modes = useStore((s) => s.modes)
   const activeModeId = useStore((s) => s.activeModeId)
   const setActiveModeId = useStore((s) => s.setActiveModeId)
   const restoreWidgets = useStore((s) => s.restoreWidgets)
+
+  const [items, setItems] = useState(modes)
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editingMode, setEditingMode] = useState(null)
+
+  useEffect(() => setItems(modes), [modes])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+  )
 
   const selectMode = async (id) => {
     if (id === activeModeId) return
@@ -32,62 +98,67 @@ export function ModeSwitcher() {
     }
   }
 
-  const addMode = async () => {
+  const onDragEnd = async ({ active, over }) => {
+    if (!over || active.id === over.id) return
+    const oldIndex = items.findIndex((m) => m.id === active.id)
+    const newIndex = items.findIndex((m) => m.id === over.id)
+    const next = arrayMove(items, oldIndex, newIndex)
+    setItems(next) // optimistic
     try {
-      const order = modes.length
-      const accentColor = MODE_PALETTE[order % MODE_PALETTE.length]
-      const ref = await createMode(user.uid, {
-        name: `New Mode ${order + 1}`,
-        icon: 'Layers',
-        accentColor,
-        order,
-      })
-      await selectMode(ref.id)
-      toast.success('Mode created')
+      await reorderModes(user.uid, next.map((m) => m.id))
     } catch (err) {
-      console.error('[mode] failed to create mode', err)
-      toast.error('Could not create mode')
+      console.error('[mode] reorder failed', err)
+      setItems(modes) // rollback
     }
   }
 
-  return (
-    <div className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-line/70 bg-surface/50 p-1.5 backdrop-blur-xl">
-      {modes.map((mode) => {
-        const Icon = getIcon(mode.icon)
-        const active = mode.id === activeModeId
-        return (
-          <button
-            key={mode.id}
-            onClick={() => selectMode(mode.id)}
-            className={cn(
-              'relative flex shrink-0 items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition-colors',
-              active ? 'text-ink' : 'text-muted hover:text-ink',
-            )}
-          >
-            {active && (
-              <motion.span
-                layoutId="active-mode-pill"
-                transition={{ type: 'spring', stiffness: 420, damping: 36 }}
-                className="absolute inset-0 rounded-xl bg-surface-2 shadow-sm"
-              />
-            )}
-            <span
-              className="relative h-2 w-2 rounded-full"
-              style={{ backgroundColor: mode.accentColor || '#6366f1' }}
-            />
-            <Icon className="relative h-4 w-4" />
-            <span className="relative whitespace-nowrap">{mode.name}</span>
-          </button>
-        )
-      })}
+  const openCreate = () => {
+    setEditingMode(null)
+    setEditorOpen(true)
+  }
+  const openEdit = (mode) => {
+    setEditingMode(mode)
+    setEditorOpen(true)
+  }
 
-      <button
-        onClick={addMode}
-        title="New mode"
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted transition-colors hover:bg-surface-2 hover:text-ink"
-      >
-        <Plus className="h-4 w-4" />
-      </button>
-    </div>
+  return (
+    <>
+      <div className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-line/70 bg-surface/50 p-1.5 backdrop-blur-xl">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={onDragEnd}
+        >
+          <SortableContext
+            items={items.map((m) => m.id)}
+            strategy={horizontalListSortingStrategy}
+          >
+            {items.map((mode) => (
+              <SortableModePill
+                key={mode.id}
+                mode={mode}
+                active={mode.id === activeModeId}
+                onSelect={() => selectMode(mode.id)}
+                onEdit={() => openEdit(mode)}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
+
+        <button
+          onClick={openCreate}
+          title="New mode"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+
+      <ModeEditorModal
+        open={editorOpen}
+        onClose={() => setEditorOpen(false)}
+        mode={editingMode}
+      />
+    </>
   )
 }

@@ -23,6 +23,20 @@ import {
   Link2,
   Trophy,
   Brain,
+  Briefcase,
+  Code,
+  Dumbbell,
+  Palette,
+  FlaskConical,
+  Globe,
+  Heart,
+  Music,
+  Camera,
+  Rocket,
+  Target,
+  Calculator,
+  Languages,
+  Trees,
 } from 'lucide-react'
 
 export const ICONS = {
@@ -48,7 +62,41 @@ export const ICONS = {
   Link2,
   Trophy,
   Brain,
+  Briefcase,
+  Code,
+  Dumbbell,
+  Palette,
+  FlaskConical,
+  Globe,
+  Heart,
+  Music,
+  Camera,
+  Rocket,
+  Target,
+  Calculator,
+  Languages,
+  Trees,
 }
+
+/** Curated set offered in the mode icon picker. */
+export const MODE_ICON_NAMES = [
+  'BookOpen',
+  'GraduationCap',
+  'Briefcase',
+  'Code',
+  'FlaskConical',
+  'Calculator',
+  'Languages',
+  'Globe',
+  'Palette',
+  'Music',
+  'Camera',
+  'Dumbbell',
+  'Heart',
+  'Rocket',
+  'Target',
+  'Layers',
+]
 
 /** Resolve an icon component by name, falling back to a neutral glyph. */
 export function getIcon(name) {
