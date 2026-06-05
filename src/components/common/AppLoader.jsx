@@ -23,7 +23,7 @@ export function AppLoader() {
         transition={{ delay: 0.2 }}
         className="text-sm font-medium tracking-wide text-muted"
       >
-        Defying gravity…
+        Loading your workspace…
       </motion.p>
     </motion.div>
   )

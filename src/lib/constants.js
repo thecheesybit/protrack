@@ -16,5 +16,5 @@ export const MODE_PALETTE = [
 ]
 
 export const STORAGE_KEYS = {
-  theme: 'antigravity:theme',
+  theme: 'protrack:theme',
 }

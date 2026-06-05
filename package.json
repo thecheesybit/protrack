@@ -1,9 +1,9 @@
 {
-  "name": "antigravity",
+  "name": "pro-track",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Antigravity — a radically simplified, auto-adapting all-in-one productivity workspace.",
+  "description": "PRO TRACK — a radically simplified, auto-adapting all-in-one productivity workspace.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

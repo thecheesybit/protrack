@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// Antigravity — every document lives under users/{uid}. A user can only ever
+// PRO TRACK — every document lives under users/{uid}. A user can only ever
 // read or write their own subtree. Nothing is world-readable.
 service cloud.firestore {
   match /databases/{database}/documents {

@@ -58,8 +58,8 @@ export function AuthScreen() {
               <Sparkles className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight">Antigravity</h1>
-              <p className="text-xs text-muted">Your weightless workspace</p>
+              <h1 className="text-xl font-bold tracking-tight">PRO TRACK</h1>
+              <p className="text-xs text-muted">Your calm, all-in-one workspace</p>
             </div>
           </div>
 
