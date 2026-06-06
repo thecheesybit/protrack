@@ -1,5 +1,12 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth, GoogleAuthProvider } from 'firebase/auth'
+import {
+  initializeAuth,
+  getAuth,
+  GoogleAuthProvider,
+  browserLocalPersistence,
+  inMemoryPersistence,
+  indexedDBLocalPersistence,
+} from 'firebase/auth'
 import {
   initializeFirestore,
   getFirestore,
@@ -24,6 +31,15 @@ export const isFirebaseConfigured = Boolean(
   firebaseConfig.apiKey && firebaseConfig.projectId,
 )
 
+// Bundle-time diagnostic: surfaces which env vars made it into the build.
+// Values are NEVER logged — only presence flags — so this is safe in prod.
+console.info('[firebase] config presence', {
+  apiKey: Boolean(firebaseConfig.apiKey),
+  authDomain: Boolean(firebaseConfig.authDomain),
+  projectId: firebaseConfig.projectId || '(missing)',
+  appId: Boolean(firebaseConfig.appId),
+})
+
 let app = null
 let auth = null
 let db = null
@@ -32,7 +48,25 @@ let functions = null
 
 if (isFirebaseConfigured) {
   app = initializeApp(firebaseConfig)
-  auth = getAuth(app)
+  // Persistence priority list — Firebase tries each in order and falls back.
+  // We explicitly include browserLocalPersistence FIRST because the default
+  // IndexedDB persistence can hang on Electron's `file://` protocol (Chromium
+  // scopes IDB per file path, which Firebase Auth's init read doesn't tolerate
+  // well). localStorage works reliably under file://; IDB is the fallback for
+  // browsers where localStorage is constrained; in-memory is the last resort.
+  try {
+    auth = initializeAuth(app, {
+      persistence: [
+        browserLocalPersistence,
+        indexedDBLocalPersistence,
+        inMemoryPersistence,
+      ],
+    })
+  } catch (err) {
+    // initializeAuth throws if called twice — fall back to getAuth.
+    console.warn('[firebase] initializeAuth fell back to getAuth', err)
+    auth = getAuth(app)
+  }
   // Offline-first: a persistent IndexedDB cache serves reads locally (≈0 server
   // reads on reload), queues writes offline, and survives across tabs. This is
   // the backbone of both free-tier compliance and offline resiliency.
