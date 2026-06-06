@@ -103,6 +103,12 @@ jobs:
           git commit -m "chore(release): v$NEW_VERSION [skip ci]"
           git tag "v$NEW_VERSION"
           git push origin HEAD --tags
+          # Keep development in lock-step with master so the next push to
+          # development can still fast-forward into master. Without this
+          # the release-bump commit only lands on master, the branches
+          # diverge, and auto-merge.yml falls back to PR mode forever.
+          git push origin "HEAD:development" || \
+            echo "::warning::Could not fast-forward development — manual rebase may be needed."
 
   deploy-web:
     name: Deploy web → Netlify
