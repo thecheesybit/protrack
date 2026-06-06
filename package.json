@@ -4,10 +4,15 @@
   "version": "0.1.0",
   "type": "module",
   "description": "PRO TRACK — a radically simplified, auto-adapting all-in-one productivity workspace.",
+  "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview --host"
+    "preview": "vite preview --host",
+    "electron:dev": "cross-env ELECTRON=true vite",
+    "electron:build": "cross-env ELECTRON=true vite build && electron-builder",
+    "electron:build:win": "cross-env ELECTRON=true vite build && electron-builder --win",
+    "electron:build:mac": "cross-env ELECTRON=true vite build && electron-builder --mac"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -19,6 +24,7 @@
     "firebase": "^10.13.2",
     "framer-motion": "^11.5.4",
     "lucide-react": "^0.445.0",
+    "qrcode.react": "^4.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hot-toast": "^2.4.1",
@@ -29,8 +35,12 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.20",
+    "cross-env": "^7.0.3",
+    "electron": "^31.7.7",
+    "electron-builder": "^25.1.8",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13",
-    "vite": "^5.4.8"
+    "vite": "^5.4.8",
+    "vite-plugin-electron": "^0.28.8"
   }
 }

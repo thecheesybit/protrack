@@ -21,8 +21,9 @@ export function AuthProvider({ children }) {
     }
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
-        if (firebaseUser) {
-          // Create profile + seed default modes on first login (idempotent).
+        // Anonymous users are only the desktop QR-handshake bootstrap — never
+        // seed a profile/modes for them.
+        if (firebaseUser && !firebaseUser.isAnonymous) {
           await ensureUserDocument(firebaseUser)
         }
         setUser(firebaseUser)

@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase/app'
 import { getAuth, GoogleAuthProvider } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
+import { getFunctions } from 'firebase/functions'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -22,16 +23,18 @@ let app = null
 let auth = null
 let db = null
 let storage = null
+let functions = null
 
 if (isFirebaseConfigured) {
   app = initializeApp(firebaseConfig)
   auth = getAuth(app)
   db = getFirestore(app)
   storage = getStorage(app)
+  functions = getFunctions(app)
 }
 
 // GoogleAuthProvider is a plain config object — safe to build unconditionally.
 export const googleProvider = new GoogleAuthProvider()
 googleProvider.setCustomParameters({ prompt: 'select_account' })
 
-export { app, auth, db, storage }
+export { app, auth, db, storage, functions }

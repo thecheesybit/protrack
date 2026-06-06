@@ -17,5 +17,20 @@ service cloud.firestore {
         allow read, write: if isOwner(userId);
       }
     }
+
+    // Desktop QR auth handshake. The sessionId is an unguessable bearer secret.
+    // The desktop (anonymous auth) creates + reads + deletes its own handshake.
+    // The custom token is written ONLY by the Cloud Function (Admin SDK), which
+    // bypasses these rules — so clients can never write the token field.
+    match /desktopHandshakes/{sessionId} {
+      allow create: if request.auth != null
+        && request.resource.data.desktopUid == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && !('token' in request.resource.data);
+      allow get: if request.auth != null
+        && resource.data.desktopUid == request.auth.uid;
+      allow delete: if request.auth != null
+        && resource.data.desktopUid == request.auth.uid;
+    }
   }
 }

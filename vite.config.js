@@ -1,10 +1,25 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import electron from 'vite-plugin-electron/simple'
 import path from 'node:path'
+
+// Build the Electron layer only when explicitly targeting desktop, so the
+// normal `vite build` for Netlify stays a pure web build.
+const withElectron = process.env.ELECTRON === 'true'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    ...(withElectron
+      ? [
+          electron({
+            main: { entry: 'electron/main.js' },
+            preload: { input: path.join(process.cwd(), 'electron/preload.js') },
+          }),
+        ]
+      : []),
+  ],
   resolve: {
     alias: {
       '@': path.resolve(process.cwd(), './src'),
