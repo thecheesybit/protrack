@@ -7,4 +7,5 @@ export const WIDGETS = [
   { id: 'habits', title: 'Habits', icon: 'ListChecks', span: '' },
   { id: 'todos', title: 'To-dos', icon: 'Flag', span: '' },
   { id: 'analytics', title: 'Analytics', icon: 'BarChart3', span: 'lg:col-span-2' },
+  { id: 'ledger', title: 'History', icon: 'Trophy', span: '' },
 ]

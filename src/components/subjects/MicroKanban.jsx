@@ -14,8 +14,10 @@ import {
 } from '@dnd-kit/core'
 import { Plus, X, GripVertical } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { useStore } from '@/store/useStore'
 import { useTasks } from '@/hooks/useSubjects'
-import { addTask, updateTask, deleteTask } from '@/services/subjectService'
+import { addTask, updateTask, deleteTask, setSubjectProgress } from '@/services/subjectService'
+import { addLedgerEntry } from '@/services/ledgerService'
 import { cn } from '@/utils/cn'
 
 const COLUMNS = [
@@ -120,7 +122,7 @@ function Column({ col, tasks, onAdd, onDelete }) {
   )
 }
 
-export function MicroKanban({ modeId, subjectId }) {
+export function MicroKanban({ modeId, subjectId, subjectName }) {
   const { user } = useAuth()
   const tasks = useTasks(modeId, subjectId)
   const [activeId, setActiveId] = useState(null)
@@ -142,10 +144,39 @@ export function MicroKanban({ modeId, subjectId }) {
     const targetCol = COLUMNS.some((c) => c.id === over.id)
       ? over.id
       : over.data?.current?.column
-    if (task && targetCol && task.column !== targetCol) {
-      updateTask(user.uid, modeId, subjectId, task.id, {
-        column: targetCol,
-        order: Date.now(),
+    if (!task || !targetCol || task.column === targetCol) return
+
+    updateTask(user.uid, modeId, subjectId, task.id, {
+      column: targetCol,
+      order: Date.now(),
+    })
+
+    // Automated progress sync: when a card crosses the "done" boundary, the
+    // parent subject's syllabus % is recomputed from the board (done / total).
+    const crossesDone = targetCol === 'done' || task.column === 'done'
+    if (!crossesDone) return
+
+    const total = tasks.length
+    const doneAfter =
+      tasks.filter((t) => t.id !== task.id && t.column === 'done').length +
+      (targetCol === 'done' ? 1 : 0)
+    const pct = total ? Math.round((doneAfter / total) * 100) : 0
+    setSubjectProgress(user.uid, modeId, subjectId, pct)
+
+    if (targetCol === 'done') {
+      const label = subjectName ? `${subjectName} · ${pct}% complete` : `${pct}% of board complete`
+      useStore.getState().pushIsland({
+        kind: 'progress',
+        title: 'Task completed',
+        detail: label,
+        progress: pct,
+        duration: 4200,
+      })
+      addLedgerEntry(user.uid, {
+        kind: 'task',
+        title: task.title,
+        detail: subjectName ? `Completed in ${subjectName}` : 'Task completed',
+        modeId,
       })
     }
   }

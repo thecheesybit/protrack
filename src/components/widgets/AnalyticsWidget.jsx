@@ -12,6 +12,7 @@ import { Flame, Clock, CalendarCheck, Trophy } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { useFocusSessions } from '@/hooks/useFocusSessions'
 import { WidgetFrame } from './WidgetFrame'
+import { HealthRings } from '@/components/analytics/HealthRings'
 import { ymd, lastNDays } from '@/lib/dates'
 
 const ACCENT = '#818cf8'
@@ -59,6 +60,20 @@ export function AnalyticsWidget({ widget, variant }) {
     }))
   }, [sessions])
 
+  const today = useMemo(() => {
+    const key = ymd()
+    let mins = 0
+    let count = 0
+    sessions.forEach((s) => {
+      const d = toDate(s.startedAt)
+      if (d && ymd(d) === key) {
+        mins += s.durationMin || 0
+        count += 1
+      }
+    })
+    return { mins, count }
+  }, [sessions])
+
   const totalHours = Math.round(((stats?.totalFocusMin || 0) / 60) * 10) / 10
 
   const cards = (
@@ -79,9 +94,14 @@ export function AnalyticsWidget({ widget, variant }) {
       {isHero ? (
         <div className="flex h-full flex-col gap-4">
           {cards}
-          <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-2">
-            <Chart title="Focus minutes · last 14 days" data={perDay} />
-            <Chart title="Peak focus hours" data={perHour} />
+          <div className="flex min-h-0 flex-1 flex-col gap-4 xl:flex-row">
+            <div className="flex shrink-0 items-center justify-center rounded-2xl border border-line/50 bg-surface-2/30 p-4 xl:w-64">
+              <HealthRings todayMins={today.mins} streak={stats?.currentStreak || 0} sessionsToday={today.count} />
+            </div>
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-2">
+              <Chart title="Focus minutes · last 14 days" data={perDay} />
+              <Chart title="Peak focus hours" data={perHour} />
+            </div>
           </div>
         </div>
       ) : (

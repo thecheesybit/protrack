@@ -4,6 +4,7 @@ import { useStore } from '@/store/useStore'
 import { playChime, AmbientPlayer } from '@/lib/audioEngine'
 import { notify, ensureNotificationPermission } from '@/lib/notify'
 import { logFocusSession } from '@/services/focusService'
+import { addLedgerEntry } from '@/services/ledgerService'
 
 /**
  * Mounted once (in Dashboard). Owns the 1s tick interval, the ambient sound
@@ -50,6 +51,12 @@ export function useFocusEngine() {
           durationMin,
           startedAt: st.startedAt ? new Date(st.startedAt) : new Date(),
           hourOfDay: (st.startedAt ? new Date(st.startedAt) : new Date()).getHours(),
+        })
+        await addLedgerEntry(user.uid, {
+          kind: 'focus',
+          title: `${durationMin}-minute focus block`,
+          detail: st.session?.label || 'Deep focus',
+          modeId: st.session?.modeId || useStore.getState().activeModeId,
         })
       } catch (err) {
         console.error('[focus] failed to log session', err)

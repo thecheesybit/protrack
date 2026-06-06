@@ -1,12 +1,13 @@
 import { useState } from 'react'
-import { Plus, Check, Flame, Pencil, ListChecks } from 'lucide-react'
+import { Plus, Check, Flame, Pencil, ListChecks, Sparkles } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useHabits } from '@/hooks/useWellness'
 import { WidgetFrame } from './WidgetFrame'
 import { HabitEditorModal } from '@/components/wellness/HabitEditorModal'
 import { getIcon } from '@/lib/icons'
 import { ymd, computeStreak, lastNDays } from '@/lib/dates'
-import { toggleHabitToday } from '@/services/habitService'
+import { toggleHabitToday, addHabit } from '@/services/habitService'
+import { HABIT_PRESETS } from '@/lib/constants'
 import { cn } from '@/utils/cn'
 
 export function HabitsWidget({ widget, variant }) {
@@ -21,10 +22,42 @@ export function HabitsWidget({ widget, variant }) {
 
   const doneToday = habits.filter((h) => (h.doneDates || []).includes(today)).length
 
+  const existingNames = new Set(habits.map((h) => h.name))
+  const missingPresets = HABIT_PRESETS.filter((p) => !existingNames.has(p.name))
+
   const openCreate = () => {
     setEditing(null)
     setEditorOpen(true)
   }
+
+  const addPreset = (p) => {
+    if (existingNames.has(p.name)) return
+    addHabit(user.uid, { name: p.name, icon: p.icon, color: p.color, order: habits.length })
+  }
+
+  const PresetLibrary = () => (
+    <div className="flex flex-wrap gap-2">
+      {missingPresets.map((p) => {
+        const Icon = getIcon(p.icon)
+        return (
+          <button
+            key={p.name}
+            onClick={() => addPreset(p)}
+            className="flex items-center gap-1.5 rounded-full border border-line/70 px-3 py-1.5 text-xs font-medium transition-colors hover:border-accent/50"
+          >
+            <span
+              className="flex h-5 w-5 items-center justify-center rounded-md"
+              style={{ backgroundColor: `${p.color}22`, color: p.color }}
+            >
+              <Icon className="h-3 w-3" />
+            </span>
+            {p.name}
+            <Plus className="h-3 w-3 text-muted" />
+          </button>
+        )
+      })}
+    </div>
+  )
 
   const Toggle = ({ habit }) => {
     const done = (habit.doneDates || []).includes(today)
@@ -51,18 +84,30 @@ export function HabitsWidget({ widget, variant }) {
         subtitle={`${doneToday}/${habits.length} done today`}
         headerActions={
           isHero ? (
-            <button onClick={openCreate} className="flex items-center gap-1 rounded-lg border border-line bg-surface-2/50 px-2.5 py-1.5 text-xs text-muted hover:text-ink">
-              <Plus className="h-3.5 w-3.5" /> Habit
-            </button>
+            <div className="flex items-center gap-1.5">
+              {missingPresets.length > 0 && (
+                <button
+                  onClick={() => missingPresets.forEach(addPreset)}
+                  title="Add starter habits"
+                  className="flex items-center gap-1 rounded-lg border border-line bg-surface-2/50 px-2.5 py-1.5 text-xs text-muted hover:text-ink"
+                >
+                  <Sparkles className="h-3.5 w-3.5" /> Starter
+                </button>
+              )}
+              <button onClick={openCreate} className="flex items-center gap-1 rounded-lg border border-line bg-surface-2/50 px-2.5 py-1.5 text-xs text-muted hover:text-ink">
+                <Plus className="h-3.5 w-3.5" /> Habit
+              </button>
+            </div>
           ) : null
         }
       >
         {habits.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-line/60 py-6 text-center">
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-line/60 px-4 py-6 text-center">
             <ListChecks className="h-6 w-6 text-muted" />
-            <span className="text-xs text-muted">No habits yet.</span>
+            <span className="text-xs text-muted">Start with an evidence-based habit:</span>
+            <PresetLibrary />
             <button onClick={openCreate} className="text-xs font-medium text-accent hover:underline">
-              + Add a habit
+              or create your own
             </button>
           </div>
         ) : (

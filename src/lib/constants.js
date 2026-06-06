@@ -38,6 +38,17 @@ export const CREATOR = {
   githubUrl: 'https://github.com/thecheesybit',
 }
 
+// Evidence-based starter habits offered as one-tap adds. Icons resolve via
+// lib/icons getIcon().
+export const HABIT_PRESETS = [
+  { name: 'Hydration', icon: 'Droplets', color: '#06b6d4' },
+  { name: 'Core Reading', icon: 'BookOpen', color: '#6366f1' },
+  { name: 'Review Session', icon: 'Brain', color: '#8b5cf6' },
+  { name: 'Exercise', icon: 'Dumbbell', color: '#ef4444' },
+  { name: 'Mindfulness', icon: 'Heart', color: '#ec4899' },
+  { name: 'Sleep Schedule', icon: 'Moon', color: '#f59e0b' },
+]
+
 export const APP_LINKS = {
   repo: 'https://github.com/thecheesybit/protrack',
   releasesLatest: 'https://github.com/thecheesybit/protrack/releases/latest',

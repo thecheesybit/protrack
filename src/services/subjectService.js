@@ -73,6 +73,12 @@ export async function adjustProgress(uid, modeId, subjectId, delta) {
   return updateSubject(uid, modeId, subjectId, { progressPct: increment(delta) })
 }
 
+/** Set an absolute progress percentage — used by the auto Kanban→Subject sync. */
+export async function setSubjectProgress(uid, modeId, subjectId, pct) {
+  const clamped = Math.max(0, Math.min(100, Math.round(pct)))
+  return updateSubject(uid, modeId, subjectId, { progressPct: clamped })
+}
+
 export async function deleteSubject(uid, modeId, subjectId) {
   // Best-effort: clear tasks subcollection, then the subject doc.
   const snap = await getDocs(tasksCol(uid, modeId, subjectId))
