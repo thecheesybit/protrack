@@ -7,6 +7,7 @@ import { WidgetFrame } from './WidgetFrame'
 import { TimetableGrid } from '@/components/timetable/TimetableGrid'
 import { TodayAgenda } from '@/components/timetable/TodayAgenda'
 import { SlotEditorModal } from '@/components/timetable/SlotEditorModal'
+import { NlQuickCapture } from '@/components/calendar/NlQuickCapture'
 import { MODE_PALETTE } from '@/lib/constants'
 import { DAY_START_MIN, todayDow, minutesToLabel, durationLabel } from '@/lib/time'
 import {
@@ -26,6 +27,7 @@ export function TimetableWidget({ widget, variant }) {
 
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingSlot, setEditingSlot] = useState(null)
+  const [captureSeed, setCaptureSeed] = useState(null)
   const [connected, setConnected] = useState(isCalendarConnected())
   const [events, setEvents] = useState([])
 
@@ -112,6 +114,7 @@ export function TimetableWidget({ widget, variant }) {
                 onCreate={openEditor}
                 onOpenSlot={openSlotFocus}
                 onEditSlot={openEditor}
+                onQuickCapture={setCaptureSeed}
               />
             </div>
 
@@ -164,6 +167,14 @@ export function TimetableWidget({ widget, variant }) {
         onClose={() => setEditorOpen(false)}
         modeId={activeModeId}
         slot={editingSlot}
+      />
+
+      <NlQuickCapture
+        open={Boolean(captureSeed)}
+        onClose={() => setCaptureSeed(null)}
+        seed={captureSeed}
+        modeId={activeModeId}
+        defaultColor={defaultColor}
       />
     </>
   )

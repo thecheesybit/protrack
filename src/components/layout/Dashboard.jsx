@@ -15,6 +15,7 @@ import { TopBar } from './TopBar'
 import { ModeSwitcher } from './ModeSwitcher'
 import { BoardCanvas } from './BoardCanvas'
 import { FocusPanel } from '@/components/focus/FocusPanel'
+import { FocusMiniOverlay } from '@/components/focus/FocusMiniOverlay'
 import { AIAssistant } from '@/components/ai/AIAssistant'
 import { SettingsPanel } from '@/components/settings/SettingsPanel'
 import { HydrationReminder } from '@/components/wellness/HydrationReminder'
@@ -108,6 +109,7 @@ export function Dashboard() {
       </motion.button>
 
       <FocusPanel />
+      <FocusMiniOverlay />
       <AIAssistant />
       <SettingsPanel />
       <HydrationReminder />

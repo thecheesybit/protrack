@@ -20,11 +20,13 @@ export function subscribeToTodos(uid, callback) {
   )
 }
 
-export async function addTodo(uid, { text, modeId }) {
+export async function addTodo(uid, { text, modeId, dueAt = null, subjectId = null }) {
   return addDoc(todosCol(uid), {
     text,
     done: false,
     modeId: modeId || null,
+    dueAt: dueAt || null,
+    subjectId: subjectId || null,
     createdAt: serverTimestamp(),
   })
 }

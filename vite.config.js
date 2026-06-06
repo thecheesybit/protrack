@@ -44,6 +44,7 @@ export default defineConfig({
           ],
           'vendor-motion': ['framer-motion'],
           'vendor-charts': ['recharts'],
+          'vendor-nlp': ['chrono-node'],
           'vendor-dnd': [
             '@dnd-kit/core',
             '@dnd-kit/sortable',

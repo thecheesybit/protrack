@@ -12,6 +12,7 @@ import {
   snap,
   clampMin,
 } from '@/lib/time'
+import { useNowMinutes } from '@/hooks/useNowMinutes'
 import { cn } from '@/utils/cn'
 
 const TOTAL_MIN = DAY_END_MIN - DAY_START_MIN
@@ -62,10 +63,19 @@ function SlotBlock({ slot, onOpen, onEdit }) {
   )
 }
 
-/** Full weekly grid with pointer drag-to-create. */
-export function TimetableGrid({ slots, defaultColor, onCreate, onOpenSlot, onEditSlot }) {
+/** Full weekly grid with pointer drag-to-create + click-to-capture. */
+export function TimetableGrid({
+  slots,
+  defaultColor,
+  onCreate,
+  onOpenSlot,
+  onEditSlot,
+  onQuickCapture,
+}) {
   const [drag, setDrag] = useState(null)
   const today = todayDow()
+  const nowMin = useNowMinutes()
+  const nowVisible = nowMin >= DAY_START_MIN && nowMin <= DAY_END_MIN
 
   const hours = []
   for (let m = DAY_START_MIN; m <= DAY_END_MIN; m += 60) hours.push(m)
@@ -89,6 +99,9 @@ export function TimetableGrid({ slots, defaultColor, onCreate, onOpenSlot, onEdi
     setDrag(null)
     if (endMin - startMin >= MIN_SLOT) {
       onCreate({ dayOfWeek: day, startMin, endMin, label: '', color: defaultColor })
+    } else {
+      // A tap (no meaningful drag) opens natural-language quick capture.
+      onQuickCapture?.({ dayOfWeek: day, startMin })
     }
   }
 
@@ -164,12 +177,26 @@ export function TimetableGrid({ slots, defaultColor, onCreate, onOpenSlot, onEdi
                 )}
               </div>
             ))}
+
+            {/* Live "now" flag — moves continuously across the day. */}
+            {nowVisible && (
+              <div
+                className="pointer-events-none absolute left-0 right-0 z-20 flex items-center gap-1"
+                style={{ top: (nowMin - DAY_START_MIN) * PX_PER_MIN }}
+              >
+                <span className="h-2 w-2 shrink-0 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.7)]" />
+                <span className="h-px flex-1 bg-rose-500/60" />
+                <span className="shrink-0 rounded bg-rose-500 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+                  {minutesToLabel(Math.round(nowMin))}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       <p className="border-t border-line/60 pt-2 text-center text-[11px] text-muted">
-        Drag on a day to create · click a session to focus
+        Drag to block · click to capture · click a session to focus
       </p>
     </div>
   )

@@ -30,6 +30,14 @@ export function subscribeToSubjects(uid, modeId, callback) {
   })
 }
 
+/** One-shot subjects fetch (cache-first via persistence) — for pickers. */
+export async function getSubjectsOnce(uid, modeId) {
+  const snap = await getDocs(subjectsCol(uid, modeId))
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+}
+
 export async function addSubject(uid, modeId, subject) {
   return addDoc(subjectsCol(uid, modeId), {
     name: subject.name,

@@ -1,4 +1,4 @@
-import { Play, Pause, RotateCcw, Flame, Clock, CloudRain, Waves, Wind, VolumeX } from 'lucide-react'
+import { Play, Pause, RotateCcw, Flame, Clock, CloudRain, Waves, Wind, VolumeX, TreePine } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { WidgetFrame } from './WidgetFrame'
 import { ForestView } from '@/components/focus/ForestView'
@@ -79,7 +79,7 @@ export function FocusWidget({ widget, variant }) {
     </button>
   )
 
-  const subtitle = `${stats?.currentStreak || 0}-day streak · ${stats?.treesGrown || 0} 🌳`
+  const subtitle = `${stats?.currentStreak || 0}-day streak · ${stats?.treesGrown || 0} trees`
 
   return (
     <WidgetFrame widget={widget} variant={variant} subtitle={subtitle}>
@@ -150,7 +150,7 @@ export function FocusWidget({ widget, variant }) {
             <div className="grid grid-cols-3 gap-2">
               <Stat icon={<Flame className="h-4 w-4" />} label="Streak" value={`${stats?.currentStreak || 0}d`} />
               <Stat icon={<Clock className="h-4 w-4" />} label="Total" value={`${Math.round((stats?.totalFocusMin || 0) / 60)}h`} />
-              <Stat icon={<span>🌳</span>} label="Trees" value={stats?.treesGrown || 0} />
+              <Stat icon={<TreePine className="h-4 w-4" />} label="Trees" value={stats?.treesGrown || 0} />
             </div>
             <div className="mb-2 mt-4 text-xs font-medium text-muted">Your forest</div>
             <div className="min-h-0 flex-1 overflow-y-auto">
