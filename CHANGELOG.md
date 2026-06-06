@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.1.6 — 2026-06-06
+
+- ci: auto-merge now explicitly dispatches release.yml (GITHUB_TOKEN pushes don't trigger workflows) (b1e0dfc)
+- fix: signInWithPopup auth/argument-error — initializeAuth needs an explicit popupRedirectResolver (6eba40f)
+- ci: release pipeline now syncs bump commit to development too — prevents auto-merge divergence (faa5e66)
+- docs: rewrite README with branded landing format [skip ci] (69f6395)
+- feat: gemini model fix, flip clock, priority + notes + reorder (c326773)
+
+
 ## v1.1.5 — 2026-06-06
 
 - feat: lock down DevTools in packaged production builds (a8b3b69)
