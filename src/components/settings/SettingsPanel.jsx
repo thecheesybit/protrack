@@ -246,29 +246,39 @@ export function SettingsPanel() {
           </Section>
         )}
 
-        {/* Changelog */}
-        <Section title="Changelog" icon={<History className="h-4 w-4" />}>
-          <div className="space-y-4">
-            {CHANGELOG.map((release) => (
-              <div key={release.version}>
-                <div className="mb-1.5 flex items-center gap-2">
-                  <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">
-                    v{release.version}
-                  </span>
-                  <span className="text-xs text-muted">{release.date}</span>
-                </div>
-                <ul className="space-y-1">
-                  {release.highlights.map((h) => (
-                    <li key={h} className="flex items-start gap-2 text-xs text-muted">
-                      <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-accent" />
-                      {h}
-                    </li>
-                  ))}
-                </ul>
+        {/* What's new in the current version. CHANGELOG[0] is the newest
+            release (auto-parsed from CHANGELOG.md at build time), so this
+            always reflects whatever version is actually installed. */}
+        {CHANGELOG[0] && (
+          <Section title="What's new" icon={<History className="h-4 w-4" />}>
+            <div>
+              <div className="mb-2 flex items-center gap-2">
+                <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">
+                  v{CHANGELOG[0].version}
+                </span>
+                {CHANGELOG[0].date && (
+                  <span className="text-xs text-muted">{CHANGELOG[0].date}</span>
+                )}
               </div>
-            ))}
-          </div>
-        </Section>
+              <ul className="space-y-1">
+                {CHANGELOG[0].highlights.map((h) => (
+                  <li key={h} className="flex items-start gap-2 text-xs text-muted">
+                    <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-accent" />
+                    {h}
+                  </li>
+                ))}
+              </ul>
+              <a
+                href="https://github.com/thecheesybit/protrack/releases"
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 inline-flex items-center gap-1 text-[11px] text-accent hover:underline"
+              >
+                Full history on GitHub <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
+          </Section>
+        )}
 
         {/* Updates */}
         {isDesktop && (
