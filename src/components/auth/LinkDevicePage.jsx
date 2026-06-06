@@ -14,7 +14,10 @@ import { claimDesktop } from '@/services/deviceLinkService'
  */
 export function LinkDevicePage() {
   const { user, signIn, loading } = useAuth()
-  const sessionId = new URLSearchParams(window.location.search).get('s')
+  const qs = new URLSearchParams(window.location.search)
+  const urlCode = (qs.get('s') || qs.get('code') || '').toUpperCase()
+  const [enteredCode, setEnteredCode] = useState('')
+  const sessionId = (urlCode || enteredCode).trim()
   const [state, setState] = useState('idle') // idle | linking | done | error
   const [message, setMessage] = useState('')
 
@@ -48,11 +51,19 @@ export function LinkDevicePage() {
 
         {!sessionId ? (
           <>
-            <h1 className="text-lg font-bold">Invalid link</h1>
-            <p className="mt-2 text-sm text-muted">
-              This linking code is missing or malformed. Re-scan the QR on your
-              desktop.
+            <h1 className="text-lg font-bold">Enter desktop code</h1>
+            <p className="mb-4 mt-2 text-sm text-muted">
+              Open PRO TRACK on your desktop and copy the 8-character code shown
+              on the sign-in screen.
             </p>
+            <input
+              value={enteredCode}
+              onChange={(e) => setEnteredCode(e.target.value.toUpperCase())}
+              maxLength={9}
+              placeholder="XXXX-XXXX"
+              autoFocus
+              className="w-full rounded-2xl border border-line bg-surface-2/60 px-4 py-3 text-center font-mono text-lg tracking-widest outline-none focus:border-accent"
+            />
           </>
         ) : loading ? (
           <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted" />

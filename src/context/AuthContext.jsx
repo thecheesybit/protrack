@@ -19,6 +19,20 @@ export function AuthProvider({ children }) {
       setLoading(false)
       return
     }
+    // Hard timeout: if Firebase Auth can't reach the identitytoolkit
+    // endpoint (network blip, cold-start, blocked domain), `onAuthStateChanged`
+    // never fires and the boot loader would spin forever. After 6s we force
+    // loading=false so the QR / sign-in screen appears and the user can act.
+    const fallbackTimer = setTimeout(() => {
+      setLoading((prev) => {
+        if (prev) {
+          console.warn('[auth] timeout — proceeding to sign-in screen')
+          setError('Network is slow — taking a moment to load.')
+        }
+        return false
+      })
+    }, 6000)
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
         // Anonymous users are only the desktop QR-handshake bootstrap — never
@@ -32,10 +46,14 @@ export function AuthProvider({ children }) {
         setError(err.message)
         setUser(firebaseUser)
       } finally {
+        clearTimeout(fallbackTimer)
         setLoading(false)
       }
     })
-    return unsubscribe
+    return () => {
+      clearTimeout(fallbackTimer)
+      unsubscribe()
+    }
   }, [])
 
   const signIn = useCallback(async () => {

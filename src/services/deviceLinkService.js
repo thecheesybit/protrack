@@ -26,11 +26,18 @@ function requireAuth() {
   }
 }
 
-/** Cryptographically-random, unguessable session id (acts as a bearer secret). */
+/**
+ * Short, typeable session id — 8 base32 chars (Crockford alphabet, no
+ * ambiguous I/L/O/U). Looks like "K4F7-X9MQ". 32^8 ≈ 1.1e12 combinations;
+ * combined with the 2-minute TTL and Firebase rate-limiting that's plenty
+ * for a single-use handshake bearer secret.
+ */
+const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
 function randomSessionId() {
-  const bytes = new Uint8Array(32)
+  const bytes = new Uint8Array(8)
   crypto.getRandomValues(bytes)
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+  const chars = Array.from(bytes, (b) => ALPHABET[b % ALPHABET.length])
+  return `${chars.slice(0, 4).join('')}-${chars.slice(4, 8).join('')}`
 }
 
 /* ── Desktop side ───────────────────────────────────────── */
