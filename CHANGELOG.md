@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.7 — 2026-06-06
+
+- feat: aggressive auto-update with full event surfacing (0d588c0)
+
+
 ## v1.1.6 — 2026-06-06
 
 - ci: auto-merge now explicitly dispatches release.yml (GITHUB_TOKEN pushes don't trigger workflows) (b1e0dfc)

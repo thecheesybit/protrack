@@ -1,7 +1,7 @@
 {
   "name": "pro-track",
   "private": true,
-  "version": "1.1.6",
+  "version": "1.1.7",
   "type": "module",
   "description": "PRO TRACK — a radically simplified, auto-adapting all-in-one productivity workspace.",
   "main": "dist-electron/main.js",
