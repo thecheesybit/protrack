@@ -16,13 +16,19 @@ import {
 import { getStorage } from 'firebase/storage'
 import { getFunctions } from 'firebase/functions'
 
+// Trim every env value — CI secrets pasted via the GitHub UI commonly carry a
+// trailing newline that turns "my-project" into "my-project\n", which makes
+// Firebase build URLs like "my-project%0A.firebaseapp.com" and silently hangs
+// every auth request. Belt-and-braces guard so the build never breaks on a
+// whitespace artifact again.
+const clean = (v) => (typeof v === 'string' ? v.trim() : v)
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey: clean(import.meta.env.VITE_FIREBASE_API_KEY),
+  authDomain: clean(import.meta.env.VITE_FIREBASE_AUTH_DOMAIN),
+  projectId: clean(import.meta.env.VITE_FIREBASE_PROJECT_ID),
+  storageBucket: clean(import.meta.env.VITE_FIREBASE_STORAGE_BUCKET),
+  messagingSenderId: clean(import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID),
+  appId: clean(import.meta.env.VITE_FIREBASE_APP_ID),
 }
 
 /** True only when the essential config is present, so the app can boot a
