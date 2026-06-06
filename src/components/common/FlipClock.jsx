@@ -1,17 +1,34 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
+import toast from 'react-hot-toast'
 import { useStore } from '@/store/useStore'
 
 /**
- * Floating flip-card clock pinned to the left edge of the workspace. Each
- * digit (hour-tens, hour-ones, minute-tens, minute-ones) is its own card that
- * flips vertically when its value changes — same idea as the classic split-flap
- * train timetable boards. Auto-detects 12h vs 24h from the user's locale and
- * defaults to 12h with AM/PM since that's what was requested.
+ * Floating flip-card clock pinned to the TOP-LEFT corner of the workspace.
+ * Each digit (hour-tens, hour-ones, minute-tens, minute-ones) is its own card
+ * that flips vertically when its value changes — same idea as the classic
+ * split-flap train timetable boards. 12-hour with AM/PM + date.
  *
- * Hidden during focus / fullscreen / when chrome is auto-hidden so it never
- * gets in the way of deep work.
+ * Visibility modes:
+ *  - `pinned` (default) — always visible. Survives focus / fullscreen /
+ *    chrome-hidden.
+ *  - `auto`           — hides during focus / fullscreen / chrome-hidden so
+ *    the clock stays out of the way during deep work.
+ *
+ * Double-click the clock toggles between the two modes. The choice is
+ * persisted to localStorage so it survives restarts.
  */
+
+const MODE_KEY = 'protrack:clockMode'
+
+function readInitialMode() {
+  try {
+    const v = typeof localStorage !== 'undefined' && localStorage.getItem(MODE_KEY)
+    return v === 'auto' ? 'auto' : 'pinned'
+  } catch {
+    return 'pinned'
+  }
+}
 
 function pad2(n) {
   return String(n).padStart(2, '0')
@@ -52,7 +69,6 @@ function Digit({ value }) {
           style={{
             transformOrigin: 'center',
             backfaceVisibility: 'hidden',
-            // Subtle hairline across the middle — split-flap mechanical feel.
             backgroundImage:
               'linear-gradient(to bottom, transparent 49%, rgb(var(--border) / 0.6) 49%, rgb(var(--border) / 0.6) 51%, transparent 51%)',
           }}
@@ -66,30 +82,53 @@ function Digit({ value }) {
 
 export function FlipClock() {
   const [t, setT] = useState(() => formatNow())
+  const [mode, setMode] = useState(readInitialMode)
   const chromeHidden = useStore((s) => s.chromeHidden)
   const fullscreen = useStore((s) => s.fullscreen)
   const focusRunning = useStore((s) => s.status === 'running')
 
   useEffect(() => {
-    // 1s tick is fine — only the digits that actually change re-render thanks
-    // to React's keyed AnimatePresence.
     const id = setInterval(() => setT(formatNow()), 1000)
     return () => clearInterval(id)
   }, [])
 
-  const hidden = chromeHidden || fullscreen || focusRunning
+  const toggleMode = () => {
+    setMode((prev) => {
+      const next = prev === 'pinned' ? 'auto' : 'pinned'
+      try {
+        localStorage.setItem(MODE_KEY, next)
+      } catch {
+        /* private mode — in-memory update still applies */
+      }
+      toast.success(
+        next === 'pinned'
+          ? 'Clock pinned — always visible'
+          : 'Clock auto-hides during focus / fullscreen',
+      )
+      return next
+    })
+  }
+
+  // Auto mode tucks the clock away during deep work; pinned never hides.
+  const hiddenByAuto = mode === 'auto' && (chromeHidden || fullscreen || focusRunning)
 
   return (
     <AnimatePresence>
-      {!hidden && (
+      {!hiddenByAuto && (
         <motion.div
           key="flip-clock"
           initial={{ opacity: 0, x: -16 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -16 }}
           transition={{ duration: 0.4, ease: [0.2, 0, 0, 1] }}
-          className="pointer-events-none fixed left-3 top-1/2 z-20 hidden -translate-y-1/2 select-none flex-col items-center gap-2 rounded-2xl border border-line/50 bg-surface/40 px-3 py-3 shadow-glass backdrop-blur-xl xl:flex"
-          aria-hidden
+          onDoubleClick={toggleMode}
+          title={
+            mode === 'pinned'
+              ? 'Double-click to enable auto-hide'
+              : 'Double-click to pin clock (always visible)'
+          }
+          className="fixed left-3 top-3 z-20 hidden cursor-pointer select-none flex-col items-center gap-2 rounded-2xl border border-line/50 bg-surface/40 px-3 py-3 shadow-glass backdrop-blur-xl transition-colors hover:border-accent/40 xl:flex"
+          aria-label={`Flip clock — ${mode} mode (double-click to toggle)`}
         >
           <div className="flex items-end gap-1">
             <Digit value={t.h1} />
@@ -104,6 +143,13 @@ export function FlipClock() {
             </span>
             <span className="text-[10px] text-muted">{t.dateLabel}</span>
           </div>
+          {/* Visual hint for the mode — tiny dot in the corner */}
+          <span
+            className={`absolute right-2 top-2 h-1.5 w-1.5 rounded-full ${
+              mode === 'pinned' ? 'bg-accent' : 'bg-muted/50'
+            }`}
+            title={mode === 'pinned' ? 'Pinned' : 'Auto-hide'}
+          />
         </motion.div>
       )}
     </AnimatePresence>
