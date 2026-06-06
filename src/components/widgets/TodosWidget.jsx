@@ -21,6 +21,7 @@ import { useTodos } from '@/hooks/useWellness'
 import { WidgetFrame } from './WidgetFrame'
 import { addTodo, updateTodo, deleteTodo, reorderTodos } from '@/services/todoService'
 import { getPriority, nextPriority, PRIORITIES, PRIORITY_ORDER } from '@/lib/priority'
+import { PriorityLegend } from '@/components/common/PriorityLegend'
 import { cn } from '@/utils/cn'
 
 function PriorityDot({ priority, onCycle }) {
@@ -89,7 +90,6 @@ function Row({ t, onToggle, onDelete, onUpdate }) {
         >
           <Check className="h-3 w-3" />
         </button>
-        <PriorityDot priority={t.priority} onCycle={cycleP} />
         <button
           onClick={() => setExpanded((v) => !v)}
           className={cn(
@@ -102,6 +102,7 @@ function Row({ t, onToggle, onDelete, onUpdate }) {
         {t.notes && !expanded && (
           <StickyNote className="h-3 w-3 shrink-0 text-amber-400/80" />
         )}
+        <PriorityDot priority={t.priority} onCycle={cycleP} />
         <button
           onClick={() => onDelete(t.id)}
           className="text-muted opacity-0 transition-opacity hover:text-ink group-hover:opacity-100"
@@ -211,6 +212,8 @@ export function TodosWidget({ widget, variant }) {
             <Plus className="h-4 w-4" />
           </button>
         </div>
+
+        {todos.length > 0 && <PriorityLegend className="mb-2 px-1" />}
 
         <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
           {todos.length === 0 && (

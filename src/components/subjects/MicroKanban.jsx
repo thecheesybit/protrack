@@ -31,6 +31,7 @@ import {
 } from '@/services/subjectService'
 import { addLedgerEntry } from '@/services/ledgerService'
 import { getPriority, nextPriority, PRIORITIES } from '@/lib/priority'
+import { PriorityLegend } from '@/components/common/PriorityLegend'
 import { cn } from '@/utils/cn'
 
 const COLUMNS = [
@@ -106,7 +107,6 @@ function TaskCard({ task, onDelete, onUpdate, dragging }) {
         >
           <GripVertical className="h-3.5 w-3.5" />
         </button>
-        <PriorityDot priority={task.priority} onCycle={cycleP} />
         <button
           onClick={() => setExpanded((v) => !v)}
           className={cn(
@@ -122,6 +122,7 @@ function TaskCard({ task, onDelete, onUpdate, dragging }) {
             aria-label="Has notes"
           />
         )}
+        <PriorityDot priority={task.priority} onCycle={cycleP} />
         <button
           onPointerDown={(e) => e.stopPropagation()}
           onClick={() => onDelete(task.id)}
@@ -333,17 +334,20 @@ export function MicroKanban({ modeId, subjectId, subjectName }) {
       onDragEnd={onDragEnd}
       onDragCancel={() => setActiveId(null)}
     >
-      <div className="flex h-full gap-2">
-        {COLUMNS.map((col) => (
-          <Column
-            key={col.id}
-            col={col}
-            tasks={tasks.filter((t) => t.column === col.id)}
-            onAdd={add}
-            onDelete={del}
-            onUpdate={upd}
-          />
-        ))}
+      <div className="flex h-full flex-col gap-2">
+        <PriorityLegend className="px-1" />
+        <div className="flex min-h-0 flex-1 gap-2">
+          {COLUMNS.map((col) => (
+            <Column
+              key={col.id}
+              col={col}
+              tasks={tasks.filter((t) => t.column === col.id)}
+              onAdd={add}
+              onDelete={del}
+              onUpdate={upd}
+            />
+          ))}
+        </div>
       </div>
 
       {createPortal(
