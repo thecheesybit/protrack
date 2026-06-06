@@ -12,6 +12,7 @@ export const AuthContext = createContext(null)
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [loadingStatus, setLoadingStatus] = useState('Checking authentication…')
   const [error, setError] = useState(null)
 
   useEffect(() => {
@@ -33,11 +34,17 @@ export function AuthProvider({ children }) {
       })
     }, 6000)
 
+    // Slow connection warning: update loadingStatus after 3 seconds
+    const slowConnectionTimer = setTimeout(() => {
+      setLoadingStatus('Network is slow — verifying connection…')
+    }, 3000)
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
         // Anonymous users are only the desktop QR-handshake bootstrap — never
         // seed a profile/modes for them.
         if (firebaseUser && !firebaseUser.isAnonymous) {
+          setLoadingStatus('Verifying user profile…')
           await ensureUserDocument(firebaseUser)
         }
         setUser(firebaseUser)
@@ -47,11 +54,13 @@ export function AuthProvider({ children }) {
         setUser(firebaseUser)
       } finally {
         clearTimeout(fallbackTimer)
+        clearTimeout(slowConnectionTimer)
         setLoading(false)
       }
     })
     return () => {
       clearTimeout(fallbackTimer)
+      clearTimeout(slowConnectionTimer)
       unsubscribe()
     }
   }, [])
@@ -83,6 +92,7 @@ export function AuthProvider({ children }) {
       value={{
         user,
         loading,
+        loadingStatus,
         error,
         signIn,
         signOut,

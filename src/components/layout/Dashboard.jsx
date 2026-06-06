@@ -147,6 +147,44 @@ export function Dashboard() {
       <SettingsPanel />
       <HydrationReminder />
       <SupportModal open={supportOpen} onClose={() => setSupportOpen(false)} />
+      <BackgroundAudioPlayer />
     </div>
+  )
+}
+
+function BackgroundAudioPlayer() {
+  const status = useStore((s) => s.status)
+  const focusAudioUrl = useStore((s) => s.settings?.focusAudioUrl || '')
+  const muted = useStore((s) => s.muted)
+
+  if (status !== 'running' || !focusAudioUrl || muted) return null
+
+  // Check if it's a YouTube URL
+  const youtubeMatch = focusAudioUrl.match(
+    /(?:youtube\.fr\/|youtube\.com\/(?:watch\?v=|embed\/|v\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i
+  )
+
+  if (youtubeMatch) {
+    const videoId = youtubeMatch[1]
+    const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&loop=1&playlist=${videoId}&enablejsapi=1`
+    return (
+      <iframe
+        src={embedUrl}
+        className="sr-only pointer-events-none"
+        allow="autoplay"
+        title="Background Audio Stream"
+        style={{ width: 0, height: 0, border: 0 }}
+      />
+    )
+  }
+
+  // Fallback to standard HTML5 audio for direct audio files/streams
+  return (
+    <audio
+      src={focusAudioUrl}
+      autoPlay
+      loop
+      className="sr-only"
+    />
   )
 }

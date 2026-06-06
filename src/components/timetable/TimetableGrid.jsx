@@ -11,6 +11,7 @@ import {
   minutesToLabel,
   snap,
   clampMin,
+  isSlotOnDay,
 } from '@/lib/time'
 import { useNowMinutes } from '@/hooks/useNowMinutes'
 import { cn } from '@/utils/cn'
@@ -33,16 +34,40 @@ function hexA(hex, a) {
 function SlotBlock({ slot, onOpen, onEdit }) {
   const top = (slot.startMin - DAY_START_MIN) * PX_PER_MIN
   const height = (slot.endMin - slot.startMin) * PX_PER_MIN
+
+  // Custom styles for visual differentiation
+  const isStriped = slot.tagStyle === 'striped' || (!slot.tagStyle && slot.tag?.toLowerCase().includes('lab'))
+  const isDashed = slot.tagStyle === 'dashed' || (!slot.tagStyle && slot.tag?.toLowerCase().includes('revision'))
+  const isDotted = slot.tagStyle === 'dotted'
+
+  const bgStyle = isStriped
+    ? `repeating-linear-gradient(45deg, ${hexA(slot.color, 0.7)}, ${hexA(slot.color, 0.7)} 10px, ${hexA(slot.color, 0.9)} 10px, ${hexA(slot.color, 0.9)} 20px)`
+    : hexA(slot.color, 0.85)
+
   return (
     <div
       onPointerDown={(e) => e.stopPropagation()}
       onClick={onOpen}
-      className="group/slot absolute inset-x-1 cursor-pointer overflow-hidden rounded-lg border-l-2 px-2 py-1 text-left text-white shadow-sm transition-transform hover:z-10 hover:scale-[1.02]"
-      style={{ top, height, backgroundColor: hexA(slot.color, 0.85), borderColor: slot.color }}
+      className={cn(
+        "group/slot absolute inset-x-1 cursor-pointer overflow-hidden rounded-lg border-l-4 px-2 py-1 text-white shadow-sm transition-transform hover:z-10 hover:scale-[1.02]",
+        isDashed && "border-2 border-dashed",
+        isDotted && "border-2 border-dotted",
+      )}
+      style={{
+        top,
+        height,
+        background: bgStyle,
+        borderColor: slot.color,
+      }}
     >
       <div className="flex items-start justify-between gap-1">
         <span className="truncate text-xs font-semibold leading-tight">
           {slot.label || 'Session'}
+          {slot.tag && (
+            <span className="ml-1.5 inline-block rounded bg-black/30 px-1 text-[9px] font-normal uppercase tracking-wider text-white">
+              {slot.tag}
+            </span>
+          )}
         </span>
         <button
           onPointerDown={(e) => e.stopPropagation()}
@@ -156,7 +181,7 @@ export function TimetableGrid({
                 )}
               >
                 {slots
-                  .filter((s) => s.dayOfWeek === day)
+                  .filter((s) => isSlotOnDay(s, day))
                   .map((s) => (
                     <SlotBlock
                       key={s.id}

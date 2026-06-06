@@ -427,6 +427,11 @@ ipcMain.handle('window:toggleFullScreen', () => {
   win.setFullScreen(!win.isFullScreen())
   return win.isFullScreen()
 })
+ipcMain.handle('window:setFullScreen', (_e, flag) => {
+  if (!win) return false
+  win.setFullScreen(flag)
+  return win.isFullScreen()
+})
 ipcMain.handle('window:isFullScreen', () => win?.isFullScreen() ?? false)
 
 /* ── IPC: OS-encrypted session storage (safeStorage) ────── */

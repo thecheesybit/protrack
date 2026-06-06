@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('protrack', {
     close: () => ipcRenderer.invoke('window:close'),
     isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
     toggleFullScreen: () => ipcRenderer.invoke('window:toggleFullScreen'),
+    setFullScreen: (flag) => ipcRenderer.invoke('window:setFullScreen', flag),
     isFullScreen: () => ipcRenderer.invoke('window:isFullScreen'),
     // Main forwards maximize/unmaximize/enter-full-screen/leave-full-screen
     // events so the TitleBar icons always reflect the true window state.

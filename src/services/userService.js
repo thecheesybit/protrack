@@ -17,6 +17,11 @@ import { DEFAULT_MODES } from '@/lib/constants'
  */
 export async function ensureUserDocument(firebaseUser) {
   const userRef = doc(db, 'users', firebaseUser.uid)
+
+  // Fast-path: Check if user doc exists first to avoid transaction overhead.
+  const snap = await getDoc(userRef)
+  if (snap.exists()) return
+
   const modesCol = collection(db, 'users', firebaseUser.uid, 'modes')
 
   // Pre-allocate mode refs so we can point activeModeId at the first one.
@@ -28,8 +33,8 @@ export async function ensureUserDocument(firebaseUser) {
   const firstModeId = modeDocs[0]?.ref.id ?? null
 
   await runTransaction(db, async (tx) => {
-    const snap = await tx.get(userRef)
-    if (snap.exists()) return
+    const txSnap = await tx.get(userRef)
+    if (txSnap.exists()) return
 
     tx.set(userRef, {
       profile: {

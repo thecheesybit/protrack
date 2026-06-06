@@ -1,6 +1,6 @@
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { createMode } from '@/services/modeService'
+import { createMode, deleteMode } from '@/services/modeService'
 import { LEGAL_VERSION } from '@/content/legal'
 
 /**
@@ -16,14 +16,24 @@ import { LEGAL_VERSION } from '@/content/legal'
  *           existingModes: Array<{id:string,name:string}> }} input
  */
 export async function completeOnboarding(uid, { selectedPresets, existingModes }) {
+  const selectedPresetNames = new Set(selectedPresets.map((p) => p.name))
   const byName = new Map(existingModes.map((m) => [m.name, m]))
   let activeModeId = null
   let order = existingModes.length
 
+  // Delete existing modes that were NOT selected in onboarding
+  for (const mode of existingModes) {
+    if (!selectedPresetNames.has(mode.name)) {
+      await deleteMode(uid, mode.id)
+    }
+  }
+
   for (const preset of selectedPresets) {
     const existing = byName.get(preset.name)
     if (existing) {
-      if (!activeModeId) activeModeId = existing.id
+      if (selectedPresetNames.has(preset.name)) {
+        if (!activeModeId) activeModeId = existing.id
+      }
       continue
     }
     const ref = await createMode(uid, {

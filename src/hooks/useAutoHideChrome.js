@@ -46,14 +46,14 @@ export function useAutoHideChrome() {
         hideTimer = 0
         return
       }
-      const immersive = st.status === 'running'
-      const delay = immersive ? 700 : 2200
+      const delay = 7500 // 7.5 seconds of inactivity before auto-hiding
 
       if (lastY <= REVEAL_Y) {
         setChromeHidden(false)
         clearTimeout(hideTimer)
         hideTimer = 0
-      } else if (lastY > HIDE_Y && !hideTimer) {
+      } else if (lastY > HIDE_Y) {
+        clearTimeout(hideTimer)
         hideTimer = setTimeout(() => {
           setChromeHidden(true)
           hideTimer = 0

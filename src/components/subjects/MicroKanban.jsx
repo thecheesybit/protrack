@@ -10,6 +10,7 @@ import {
   pointerWithin,
   rectIntersection,
   closestCenter,
+  useDroppable,
 } from '@dnd-kit/core'
 import {
   SortableContext,
@@ -170,6 +171,7 @@ function TaskCard({ task, onDelete, onUpdate, dragging }) {
 }
 
 function Column({ col, tasks, onAdd, onDelete, onUpdate }) {
+  const { setNodeRef } = useDroppable({ id: col.id })
   const [adding, setAdding] = useState(false)
   const [text, setText] = useState('')
   const [collapsed, setCollapsed] = useState(false)
@@ -206,7 +208,10 @@ function Column({ col, tasks, onAdd, onDelete, onUpdate }) {
 
       {!collapsed && (
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-          <div className="flex min-h-[64px] flex-1 flex-col gap-1.5 overflow-y-auto">
+          <div
+            ref={setNodeRef}
+            className="flex min-h-[64px] flex-1 flex-col gap-1.5 overflow-y-auto"
+          >
             {tasks.map((t) => (
               <TaskCard
                 key={t.id}

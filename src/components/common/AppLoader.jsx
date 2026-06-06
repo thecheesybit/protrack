@@ -1,8 +1,11 @@
 import { motion } from 'framer-motion'
+import { useAuth } from '@/hooks/useAuth'
 import { AuroraBackground } from './AuroraBackground'
 
 /** Full-screen boot loader shown while auth state resolves. */
 export function AppLoader() {
+  const { loadingStatus } = useAuth()
+
   return (
     <motion.div
       key="loader"
@@ -23,7 +26,7 @@ export function AppLoader() {
         transition={{ delay: 0.2 }}
         className="text-sm font-medium tracking-wide text-muted"
       >
-        Loading your workspace…
+        {loadingStatus || 'Loading your workspace…'}
       </motion.p>
     </motion.div>
   )

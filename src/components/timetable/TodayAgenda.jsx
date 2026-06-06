@@ -1,10 +1,10 @@
 import { CalendarDays } from 'lucide-react'
-import { DAY_FULL, todayDow, minutesToLabel, durationLabel } from '@/lib/time'
+import { DAY_FULL, todayDow, minutesToLabel, durationLabel, isSlotOnDay } from '@/lib/time'
 
 /** Compact "today" view shown when the Timetable widget is in the grid. */
 export function TodayAgenda({ slots, onOpenSlot, onAdd }) {
   const today = todayDow()
-  const todays = slots.filter((s) => s.dayOfWeek === today)
+  const todays = slots.filter((s) => isSlotOnDay(s, today))
 
   return (
     <div className="flex flex-1 flex-col">
@@ -36,6 +36,11 @@ export function TodayAgenda({ slots, onOpenSlot, onAdd }) {
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">
                   {s.label || 'Session'}
+                  {s.tag && (
+                    <span className="ml-1.5 inline-block rounded bg-accent/20 text-accent px-1.5 py-0.5 text-[9px] font-normal uppercase tracking-wider">
+                      {s.tag}
+                    </span>
+                  )}
                 </span>
                 <span className="text-[11px] text-muted">
                   {minutesToLabel(s.startMin)} · {durationLabel(s.startMin, s.endMin)}

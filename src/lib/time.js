@@ -70,3 +70,41 @@ export function nextOccurrence(dayOfWeek, startMin, endMin) {
   end.setHours(Math.floor(endMin / 60), endMin % 60, 0, 0)
   return { startISO: start.toISOString(), endISO: end.toISOString() }
 }
+
+/**
+ * Check if a slot is active on a given day index (0 = Monday, 6 = Sunday).
+ */
+export function isSlotOnDay(slot, day) {
+  if (!slot) return false
+  if (!slot.recurrenceType || slot.recurrenceType === 'weekly') {
+    return slot.dayOfWeek === day
+  }
+  if (slot.recurrenceType === 'daily') {
+    return true
+  }
+  if (slot.recurrenceType === 'custom_days') {
+    return Array.isArray(slot.recurrenceDays) && slot.recurrenceDays.includes(day)
+  }
+  if (slot.recurrenceType === 'interval') {
+    if (!slot.recurrenceStartDate || !slot.recurrenceInterval) return false
+    
+    // Get the Date object for the column 'day' of the current week.
+    const now = new Date()
+    const currentDayJs = now.getDay() // 0 = Sun, 1 = Mon ...
+    const currentDayMonIndex = currentDayJs === 0 ? 6 : currentDayJs - 1
+    
+    const targetDate = new Date(now)
+    targetDate.setDate(now.getDate() + (day - currentDayMonIndex))
+    targetDate.setHours(0, 0, 0, 0)
+    
+    const startDate = new Date(slot.recurrenceStartDate)
+    startDate.setHours(0, 0, 0, 0)
+    
+    const diffTime = targetDate.getTime() - startDate.getTime()
+    if (diffTime < 0) return false // Before start date
+    
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24))
+    return diffDays % slot.recurrenceInterval === 0
+  }
+  return false
+}

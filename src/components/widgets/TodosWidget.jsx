@@ -91,7 +91,7 @@ function Row({ t, onToggle, onDelete, onUpdate }) {
           <Check className="h-3 w-3" />
         </button>
         <button
-          onClick={() => setExpanded((v) => !v)}
+          onDoubleClick={() => setExpanded((v) => !v)}
           className={cn(
             'min-w-0 flex-1 truncate text-left text-sm',
             t.done && 'text-muted line-through',
@@ -196,22 +196,27 @@ export function TodosWidget({ widget, variant }) {
   return (
     <WidgetFrame widget={widget} variant={variant} subtitle={`${active.length} open`}>
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="mb-2 flex items-center gap-2">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            submit()
+          }}
+          className="mb-2 flex items-center gap-2"
+        >
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && submit()}
             placeholder="Add a to-do…"
             className="flex-1 rounded-xl border border-line bg-surface-2/60 px-3 py-2 text-sm outline-none focus:border-accent"
           />
           <button
-            onClick={submit}
+            type="submit"
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent text-white"
             aria-label="Add"
           >
             <Plus className="h-4 w-4" />
           </button>
-        </div>
+        </form>
 
         {todos.length > 0 && <PriorityLegend className="mb-2 px-1" />}
 

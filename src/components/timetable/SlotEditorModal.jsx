@@ -20,12 +20,30 @@ import { cn } from '@/utils/cn'
 
 export function SlotEditorModal({ open, onClose, modeId, slot }) {
   const { user } = useAuth()
-  const [draft, setDraft] = useState(slot)
+  const [draft, setDraft] = useState(() => ({
+    recurrenceType: 'weekly',
+    recurrenceDays: [],
+    recurrenceInterval: 1,
+    recurrenceStartDate: new Date().toISOString().split('T')[0],
+    tag: '',
+    tagStyle: 'standard',
+    ...slot,
+  }))
   const [saving, setSaving] = useState(false)
   const isEdit = Boolean(slot?.id)
 
   useEffect(() => {
-    if (open) setDraft(slot)
+    if (open) {
+      setDraft({
+        recurrenceType: 'weekly',
+        recurrenceDays: [],
+        recurrenceInterval: 1,
+        recurrenceStartDate: new Date().toISOString().split('T')[0],
+        tag: '',
+        tagStyle: 'standard',
+        ...slot,
+      })
+    }
   }, [open, slot])
 
   const timeOptions = useMemo(() => {
@@ -51,6 +69,12 @@ export function SlotEditorModal({ open, onClose, modeId, slot }) {
         color: draft.color,
         subjectId: draft.subjectId || null,
         googleEventId: draft.googleEventId || null,
+        recurrenceType: draft.recurrenceType || 'weekly',
+        recurrenceDays: draft.recurrenceDays || [],
+        recurrenceInterval: draft.recurrenceInterval || 1,
+        recurrenceStartDate: draft.recurrenceStartDate || new Date().toISOString().split('T')[0],
+        tag: draft.tag || '',
+        tagStyle: draft.tagStyle || 'standard',
       }
       if (isEdit) await updateSlot(user.uid, modeId, draft.id, payload)
       else await addSlot(user.uid, modeId, payload)
@@ -170,7 +194,7 @@ export function SlotEditorModal({ open, onClose, modeId, slot }) {
       </div>
 
       <label className="mb-2 mt-4 block text-xs font-medium text-muted">Color</label>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 mb-4">
         {MODE_PALETTE.map((c) => (
           <button
             key={c}
@@ -184,6 +208,99 @@ export function SlotEditorModal({ open, onClose, modeId, slot }) {
           />
         ))}
       </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-muted">Tag / Type</label>
+          <input
+            value={draft.tag || ''}
+            onChange={(e) => patch({ tag: e.target.value })}
+            placeholder="e.g. Theory, Lab"
+            className="w-full rounded-xl border border-line bg-surface-2/60 px-3.5 py-2.5 text-sm outline-none focus:border-accent"
+          />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-muted">Tag Style</label>
+          <select
+            value={draft.tagStyle || 'standard'}
+            onChange={(e) => patch({ tagStyle: e.target.value })}
+            className="w-full rounded-xl border border-line bg-surface-2/60 px-2.5 py-2.5 text-sm outline-none focus:border-accent"
+          >
+            <option value="standard">Solid / Standard</option>
+            <option value="striped">Striped (Lab style)</option>
+            <option value="dashed">Dashed Border (Revision style)</option>
+            <option value="dotted">Dotted Border</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="mt-4 border-t border-line/50 pt-4">
+        <label className="mb-1.5 block text-xs font-medium text-muted">Recurrence</label>
+        <select
+          value={draft.recurrenceType || 'weekly'}
+          onChange={(e) => patch({ recurrenceType: e.target.value })}
+          className="w-full rounded-xl border border-line bg-surface-2/60 px-2.5 py-2.5 text-sm outline-none focus:border-accent"
+        >
+          <option value="weekly">Weekly (selected day)</option>
+          <option value="daily">Daily (Mon - Sun)</option>
+          <option value="custom_days">Specific days of week</option>
+          <option value="interval">Every X days</option>
+        </select>
+      </div>
+
+      {draft.recurrenceType === 'custom_days' && (
+        <div className="mt-3">
+          <label className="mb-1.5 block text-[11px] font-medium text-muted">Select days</label>
+          <div className="flex gap-1.5">
+            {DAYS.map((dayLabel, index) => {
+              const active = draft.recurrenceDays?.includes(index)
+              return (
+                <button
+                  key={dayLabel}
+                  type="button"
+                  onClick={() => {
+                    const days = draft.recurrenceDays || []
+                    const nextDays = days.includes(index)
+                      ? days.filter((d) => d !== index)
+                      : [...days, index]
+                    patch({ recurrenceDays: nextDays })
+                  }}
+                  className={cn(
+                    "flex-1 rounded-lg border py-1.5 text-xs transition-colors",
+                    active ? "border-accent bg-accent/25 text-accent font-semibold" : "border-line text-muted hover:text-ink"
+                  )}
+                >
+                  {dayLabel[0]}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {draft.recurrenceType === 'interval' && (
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1.5 block text-[11px] font-medium text-muted">Repeat every (days)</label>
+            <input
+              type="number"
+              min="1"
+              value={draft.recurrenceInterval || 1}
+              onChange={(e) => patch({ recurrenceInterval: Math.max(1, Number(e.target.value)) })}
+              className="w-full rounded-xl border border-line bg-surface-2/60 px-3 py-2 text-sm outline-none focus:border-accent"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-[11px] font-medium text-muted">Starting date</label>
+            <input
+              type="date"
+              value={draft.recurrenceStartDate || new Date().toISOString().split('T')[0]}
+              onChange={(e) => patch({ recurrenceStartDate: e.target.value })}
+              className="w-full rounded-xl border border-line bg-surface-2/60 px-3 py-2 text-sm outline-none focus:border-accent"
+            />
+          </div>
+        </div>
+      )}
 
       {isEdit && (
         <button

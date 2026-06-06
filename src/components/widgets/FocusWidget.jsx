@@ -1,8 +1,13 @@
+import { useState } from 'react'
 import { Play, Pause, RotateCcw, Flame, Clock, CloudRain, Waves, Wind, VolumeX, TreePine } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { WidgetFrame } from './WidgetFrame'
 import { ForestView } from '@/components/focus/ForestView'
 import { cn } from '@/utils/cn'
+import { useAuth } from '@/hooks/useAuth'
+import { updateSettings } from '@/services/userService'
+import { logFailedFocusSession } from '@/services/focusService'
+import { addLedgerEntry } from '@/services/ledgerService'
 
 const PRESETS = [15, 25, 50]
 const AMBIENTS = [
@@ -58,6 +63,70 @@ export function FocusWidget({ widget, variant }) {
   const setDurations = useStore((s) => s.setDurations)
   const setAmbient = useStore((s) => s.setAmbient)
 
+  const { user } = useAuth()
+  const activeModeId = useStore((s) => s.activeModeId)
+  const focusAudioUrl = useStore((s) => s.settings?.focusAudioUrl || '')
+
+  const [exitAttempts, setExitAttempts] = useState(0)
+  const [showExitConfirm, setShowExitConfirm] = useState(false)
+
+  const handleReset = async () => {
+    if (status === 'idle' || phase === 'break') {
+      reset()
+      setExitAttempts(0)
+      setShowExitConfirm(false)
+      return
+    }
+
+    const nextAttempts = exitAttempts + 1
+    setExitAttempts(nextAttempts)
+
+    if (nextAttempts < 3) {
+      setShowExitConfirm(true)
+    } else {
+      setShowExitConfirm(false)
+      setExitAttempts(0)
+
+      const st = useStore.getState()
+      try {
+        const uid = user?.uid
+        if (uid) {
+          await logFailedFocusSession(uid, {
+            modeId: st.session?.modeId || activeModeId,
+            subjectId: st.session?.subjectId || null,
+            startedAt: st.startedAt ? new Date(st.startedAt) : new Date(),
+          })
+          await addLedgerEntry(uid, {
+            kind: 'focus',
+            title: `Focus session failed`,
+            detail: `Plant died/was not planted successfully`,
+            modeId: st.session?.modeId || activeModeId,
+          })
+        }
+      } catch (err) {
+        console.error('[focus] failed to log failed session', err)
+      }
+
+      reset()
+      window.protrack?.window?.setFullScreen?.(false)
+      
+      useStore.getState().pushIsland({
+        kind: 'error',
+        title: 'Session failed',
+        detail: 'The plant died.',
+        duration: 4000,
+      })
+    }
+  }
+
+  const updateFocusAudioUrl = async (url) => {
+    try {
+      await updateSettings(user.uid, { focusAudioUrl: url })
+    } catch (err) {
+      console.error('[focus] failed to save audio URL', err)
+    }
+  }
+
   const isHero = variant === 'hero'
   const phaseTotal = (phase === 'focus' ? focusMin : breakMin) * 60
   const progress = phaseTotal ? 1 - secondsLeft / phaseTotal : 0
@@ -102,7 +171,7 @@ export function FocusWidget({ widget, variant }) {
             <div className="flex items-center gap-2">
               {MainBtn}
               <button
-                onClick={reset}
+                onClick={handleReset}
                 className="flex h-11 w-11 items-center justify-center rounded-2xl border border-line text-muted transition-colors hover:text-ink"
                 aria-label="Reset"
               >
@@ -142,6 +211,20 @@ export function FocusWidget({ widget, variant }) {
                   </button>
                 ))}
               </div>
+
+              {/* Custom Audio URL */}
+              <div className="mt-2 w-full max-w-[240px]">
+                <label className="mb-1 block text-center text-[10px] uppercase tracking-wider text-muted">
+                  Custom Background Audio URL
+                </label>
+                <input
+                  type="text"
+                  value={focusAudioUrl}
+                  onChange={(e) => updateFocusAudioUrl(e.target.value)}
+                  placeholder="e.g. YouTube lo-fi link…"
+                  className="w-full rounded-xl border border-line bg-surface-2/60 px-3 py-1.5 text-xs text-center outline-none focus:border-accent"
+                />
+              </div>
             </div>
           </div>
 
@@ -175,12 +258,43 @@ export function FocusWidget({ widget, variant }) {
               {status === 'idle' ? 'Start' : status === 'running' ? 'Pause' : 'Resume'}
             </button>
             <button
-              onClick={reset}
+              onClick={handleReset}
               className="flex h-9 w-9 items-center justify-center rounded-xl border border-line text-muted hover:text-ink"
               aria-label="Reset"
             >
               <RotateCcw className="h-4 w-4" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {showExitConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md">
+          <div className="edge-light max-w-sm rounded-3xl border border-line bg-surface p-6 text-center shadow-glass-lg">
+            <span className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10 text-amber-500">
+              <TreePine className="h-6 w-6 animate-pulse" />
+            </span>
+            <h3 className="mb-2 text-lg font-bold text-ink">A tree is planting!</h3>
+            <p className="mb-5 text-sm text-muted">
+              Urging you to stay! If you abandon this deep focus session, your plant will die.
+            </p>
+            <div className="mb-4 text-xs font-semibold text-amber-500">
+              Attempt {exitAttempts} of 2 warning pushes.
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowExitConfirm(false)}
+                className="flex-1 rounded-2xl bg-accent py-2.5 font-semibold text-white transition-transform hover:scale-[1.02] active:scale-95"
+              >
+                Keep Focus
+              </button>
+              <button
+                onClick={handleReset}
+                className="rounded-2xl border border-line px-4 py-2.5 text-sm font-semibold text-muted hover:text-ink"
+              >
+                Quit anyway
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -57,3 +57,16 @@ export function subscribeToSessions(uid, callback, max = 300) {
     callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
   )
 }
+
+/** Record a failed focus session. */
+export async function logFailedFocusSession(uid, { modeId, subjectId, startedAt }) {
+  await addDoc(collection(db, 'users', uid, 'focusSessions'), {
+    modeId: modeId || null,
+    subjectId: subjectId || null,
+    durationMin: 0,
+    completed: false,
+    failedReason: 'plant died/was not planted successfully',
+    startedAt: startedAt || serverTimestamp(),
+    createdAt: serverTimestamp(),
+  })
+}

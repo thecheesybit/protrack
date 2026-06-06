@@ -14,6 +14,7 @@ import { addLedgerEntry } from '@/services/ledgerService'
 export function useFocusEngine() {
   const { user } = useAuth()
   const status = useStore((s) => s.status)
+  const phase = useStore((s) => s.phase)
   const ambient = useStore((s) => s.ambient)
   const muted = useStore((s) => s.muted)
   const intervalRef = useRef(null)
@@ -27,6 +28,15 @@ export function useFocusEngine() {
     const player = ambientRef.current
     return () => player.stop()
   }, [])
+
+  // Control full-screen mode for Deep Focus sessions
+  useEffect(() => {
+    if (status === 'running' && phase === 'focus') {
+      window.protrack?.window?.setFullScreen?.(true)
+    } else if (status === 'idle' || phase === 'break') {
+      window.protrack?.window?.setFullScreen?.(false)
+    }
+  }, [status, phase])
 
   const complete = async () => {
     if (completingRef.current) return
