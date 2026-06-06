@@ -1,132 +1,299 @@
-# PRO TRACK
+<div align="center">
 
-A hyper-minimalist, gamified, all-in-one productivity ecosystem. A secure React **web gateway** (Netlify) pairs with a native **Electron desktop app**, both backed by a single **Firebase Spark free-tier** project. Sign-in flows from phone to desktop via a JioHotstar-style QR handshake — Google OAuth never runs inside the desktop's embedded browser.
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:09090e,50:1a1a2e,100:0f3460&height=200&section=header&text=PRO%20TRACK&fontSize=72&fontColor=ffffff&fontAlignY=38&desc=Hyper-minimalist%20%E2%80%A2%20Gamified%20%E2%80%A2%20All-in-one%20Productivity%20Ecosystem&descAlignY=62&descSize=16&animation=fadeIn" width="100%"/>
 
-> **Crafted by [AYUSH KUMAR](https://github.com/thecheesybit).**
+<br/>
 
----
+[![Live App](https://img.shields.io/badge/🌐_Live_App-pro--track--app.netlify.app-09090e?style=for-the-badge&logoColor=white)](https://pro-track-app.netlify.app)
+[![Releases](https://img.shields.io/github/v/release/thecheesybit/protrack?style=for-the-badge&color=0f3460&label=Latest%20Release)](https://github.com/thecheesybit/protrack/releases)
+[![License](https://img.shields.io/badge/License-Personal%20Non--Commercial-e94560?style=for-the-badge)](./LICENSE)
+[![Made with React](https://img.shields.io/badge/React-18-61dafb?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
+[![Powered by Firebase](https://img.shields.io/badge/Firebase-Spark-ffca28?style=for-the-badge&logo=firebase&logoColor=black)](https://firebase.google.com)
 
-## What it does
+<br/>
 
-- **Workspace modes** — partition everything (subjects, timetable, tasks, analytics) by execution scope: UPSC, M.Tech, GATE, and more. The active mode re-tints the entire UI.
-- **Universal Dynamic Island** — one floating, morphing notifier for Pomodoro alerts, hydration nudges, sync state, and live progress.
-- **Chrono-adaptive aesthetics** — surfaces and ambient light shift by time of day (crisp midday, deep obsidian at night) without overriding your light/dark choice.
-- **Pixel-perfect typography** — Compact / Standard / Large display modes scale the entire UI through a single CSS variable. Electron is locked to native device pixels (`zoomFactor: 1.0`, pinch-zoom disabled) for HiDPI sharpness.
-- **Interactive calendar** — click the grid and type natural language ("Revise Polity tomorrow 5pm for 2h") to create a session, a deadline to-do, or a subject-linked task. A live timeline flag tracks the day.
-- **Deep focus** — Pomodoro with ambient soundscapes, a growing forest, and an always-on miniature timer that follows you across modules.
-- **Automated Kanban sync** — drag a task to *Done* and the parent subject's syllabus percentage recalculates instantly.
-- **Apple-style activity rings** + a read-only **achievement ledger**.
-- **Intelligent Habit Engine** — habits with `every-1h`, `every-2h`, `every-4h`, `morning`, or `evening` intervals trigger persistent OS notifications. Missed reminders aggregate as an inline backlog badge on the Habits widget.
-- **AI companion with write access** — the Gemini chat assistant can complete tasks, set subject progress, add to-dos, schedule timetable slots, toggle habits, and create subjects via natural-language commands ("I finished my Calculus study session" → marks the task done + recomputes progress + logs to the ledger).
-- **Window state persistence** — size, position, maximize, and fullscreen all survive restart.
+> **A secure React web gateway + native Electron desktop app, backed by a single Firebase Spark free-tier project.**
+> Sign in from phone to desktop via a JioHotstar-style QR handshake — Google OAuth never runs inside the desktop's embedded browser.
 
-## Native desktop
+<br/>
 
-- Minimize-to-tray background execution; alarms and chimes fire even when minimized (`backgroundThrottling: false`).
-- Global hotkeys: `Ctrl/Cmd+Shift+P` (show/hide), `Ctrl/Cmd+Shift+Space` (pause/resume focus), `Ctrl/Cmd+Shift+F` (fullscreen), `Ctrl/Cmd+Shift+H` (hide to tray), `Ctrl/Cmd+Shift+M` (mute).
-- Hardware-fingerprint device identity bound to the account; session encrypted at rest via OS `safeStorage` (DPAPI / Keychain / libsecret).
-- Automatic over-the-air updates with an enforced update gate.
-- Frameless window with custom chrome, strict min bounds (940×600), HiDPI-locked rendering.
+**Crafted by [AYUSH KUMAR](https://github.com/thecheesybit)**
+
+</div>
 
 ---
 
-## Architecture at a glance
+## ✨ Feature Highlights
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### 🗂️ Workspace Modes
+Partition everything — subjects, timetable, tasks, analytics — by execution scope: **UPSC, M.Tech, GATE**, and more. The active mode re-tints the entire UI in real time.
+
+### 🏝️ Universal Dynamic Island
+One floating, morphing notifier for Pomodoro alerts, hydration nudges, sync state, and live progress — inspired by Apple's Dynamic Island.
+
+### 🌗 Chrono-Adaptive Aesthetics
+Surfaces and ambient light shift by time of day (crisp midday → deep obsidian at night) without overriding your light/dark preference.
+
+### 🔤 Pixel-Perfect Typography
+Compact / Standard / Large display modes cascade through a single CSS variable. Electron is locked to native device pixels (`zoomFactor: 1.0`) for HiDPI sharpness.
+
+### 🕰️ Flip-Card Clock
+Mechanical split-flap clock pinned to the left edge of the workspace — 12-hour with AM/PM + date. Each digit flips when its value changes. Auto-hides during focus.
+
+### 📅 Interactive Calendar
+Click the grid and type natural language — *"Revise Polity tomorrow 5pm for 2h"* — to create sessions, deadlines, or subject-linked tasks. A live timeline flag tracks the day.
+
+</td>
+<td width="50%" valign="top">
+
+### 🎯 Deep Focus
+Pomodoro with ambient soundscapes, a growing forest, and an always-on miniature timer that follows you across every module.
+
+### ✅ Comprehensive Kanban
+Drag a task to *Done* → the parent subject's syllabus % recalculates instantly. Tasks support **priority** (low / medium / high / urgent), **inline notes**, and **same-column reorder** via drag-and-drop.
+
+### 💪 Apple-Style Activity Rings
+Visual progress rings + a read-only **achievement ledger** bounded to 200 entries, forever free-tier safe.
+
+### 🔔 Intelligent Habit Engine
+Habits with `every-1h`, `every-2h`, `every-4h`, `morning`, or `evening` intervals trigger persistent OS notifications. Missed reminders aggregate as an inline backlog badge.
+
+### 📝 Smart To-Dos
+Priority + notes + drag-to-reorder, just like the Kanban. Sort by user order or auto-weight by priority.
+
+### 🤖 AI Companion with Write Access
+The Gemini chat assistant can complete tasks, set subject progress, add to-dos (with priority + notes), schedule timetable slots, toggle habits, and create subjects via natural language — *"I finished my Calculus session"* → marks done + recomputes progress + logs to ledger.
+
+</td>
+</tr>
+</table>
+
+---
+
+## 🖥️ Native Desktop Superpowers
 
 ```
-Phone (web gateway)        Firebase (Spark)            Desktop (Electron)
-  Google OAuth   ───────▶  Auth · Firestore         ◀───────  QR + ID-token sign-in
-                                                              workspace dashboard
+┌─────────────────────────────────────────────────────────────────┐
+│  ELECTRON DESKTOP                                               │
+│                                                                 │
+│  ⌨️  Global Hotkeys           🔒  Hardware Fingerprint          │
+│     Ctrl/Cmd+Shift+P              SHA-256 of hostname +         │
+│     Ctrl/Cmd+Shift+Space          platform + arch + CPU         │
+│     Ctrl/Cmd+Shift+F              + non-internal MACs           │
+│     Ctrl/Cmd+Shift+H                                            │
+│     Ctrl/Cmd+Shift+M          🛡️  safeStorage Encryption        │
+│                                   DPAPI / Keychain / libsecret  │
+│  📡  Minimize-to-Tray         🔄  OTA Auto-Updates              │
+│     Background execution          Enforced update gate          │
+│     Alarms fire even when         GitHub Release feed           │
+│     window is hidden              Auto-merge → auto-release     │
+│                                                                 │
+│  🚫  DevTools Lockdown        💾  Window State Persistence      │
+│     F12 / Ctrl+Shift+I            Size, position, maximize,     │
+│     blocked in packaged           and fullscreen survive        │
+│     production builds             restart                       │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-- **Web (`pro-track-app.netlify.app`)** renders only the marketing landing page and the `/link` mobile-auth gateway — never the functional dashboard.
-- **Desktop** renders the workspace after the QR handshake (mobile writes its Google ID token to a one-shot Firestore handshake doc; the desktop consumes it with `signInWithCredential` and deletes the doc).
-- See [`claude.md`](./claude.md) for the full architectural blueprint, state map, and data model.
-
-## Tech stack
-
-| Layer | Choice |
-|---|---|
-| UI | React 18 + Vite |
-| Styling | Tailwind CSS v3 (CSS-variable theming, `--root-font-size` cascade) |
-| Animation | Framer Motion (shared-layout morphing) |
-| State | Zustand (feature slices) |
-| Backend | Firebase — Google Auth, Firestore (persistent cache) |
-| AI | `@google/generative-ai` with function-calling (write-access tools) |
-| Desktop | Electron + electron-builder + electron-updater |
-| NL parsing | chrono-node |
-| CI/CD | GitHub Actions (multi-OS matrix, version bump, changelog, Netlify deploy) |
-| Deploy | Netlify (web) · GitHub Releases (desktop) |
+- **Frameless window** with custom chrome, strict min bounds `940×600`, HiDPI-locked rendering
+- **Window state persistence** — size, position, maximize, and fullscreen survive restart
+- **`backgroundThrottling: false`** — alarms and chimes fire regardless of window state
+- **8-character code login** as a QR alternative — readable, typeable `XXXX-XXXX` codes for any phone without a working camera
 
 ---
 
-## Install (end users)
+## 🏗️ Architecture
+
+```
+┌─────────────────────┐         ┌──────────────────────┐         ┌───────────────────────┐
+│   📱 Phone           │         │   🔥 Firebase Spark   │         │   🖥️  Desktop          │
+│   Web Gateway        │         │                      │         │   Electron App        │
+│                      │         │  ┌────────────────┐  │         │                       │
+│  pro-track-app       │─────────▶  │   Google Auth  │ ◀─────────│  QR + ID-Token        │
+│  .netlify.app        │         │  └────────────────┘  │         │  sign-in handshake    │
+│                      │         │  ┌────────────────┐  │         │                       │
+│  ✦ Landing Page      │         │  │   Firestore    │ ◀─────────│  Workspace Dashboard  │
+│  ✦ /link Auth Gate   │         │  └────────────────┘  │         │  (post-QR)            │
+│                      │         │                      │         │                       │
+│  ✗ No dashboard      │         │  Persistent cache    │         │  signInWithCredential │
+│    rendered here     │         │  Owner-only rules    │         │  + delete handshake   │
+└─────────────────────┘         └──────────────────────┘         └───────────────────────┘
+```
+
+**The QR handshake flow:**
+1. Mobile writes Google ID token to a one-shot Firestore doc (`8-char sessionId`, 2-min TTL)
+2. Desktop listens → consumes token via `signInWithCredential`
+3. Handshake doc is deleted immediately — single use, zero residue
+
+---
+
+## 🛠️ Tech Stack
+
+<div align="center">
+
+| Layer | Technology | Notes |
+|:------|:-----------|:------|
+| **UI** | React 18 + Vite | Blazing-fast HMR |
+| **Styling** | Tailwind CSS v3 | CSS-variable theming, `--root-font-size` cascade |
+| **Animation** | Framer Motion | Shared-layout morphing + flip-card clock |
+| **Drag & Drop** | @dnd-kit/core + sortable | Kanban + todo reorder |
+| **State** | Zustand | Feature slices, no boilerplate |
+| **Backend** | Firebase Auth + Firestore | Google Auth, persistent local cache |
+| **AI** | `@google/generative-ai` (`gemini-flash-latest`) | Function-calling with full write access |
+| **Desktop** | Electron + electron-builder + electron-updater | Multi-OS builds |
+| **NL Parsing** | chrono-node | *"tomorrow 5pm for 2h"* → Date objects |
+| **CI/CD** | GitHub Actions | Auto-merge dev→master, multi-OS matrix, changelog |
+| **Deploy** | Netlify (web) · GitHub Releases (desktop) | Fully automated |
+
+</div>
+
+---
+
+## 📦 Install
+
+<div align="center">
 
 | Platform | Download |
-|---|---|
-| Windows | latest `.exe` from [Releases](https://github.com/thecheesybit/pro-track/releases) |
-| macOS | latest `.dmg` from [Releases](https://github.com/thecheesybit/pro-track/releases) |
-| Linux | latest `.AppImage` from [Releases](https://github.com/thecheesybit/pro-track/releases) |
+|:--------:|:--------|
+| 🪟 **Windows** | [`.exe` Installer → GitHub Releases](https://github.com/thecheesybit/protrack/releases) |
+| 🍎 **macOS** | [`.dmg` → GitHub Releases](https://github.com/thecheesybit/protrack/releases) |
+| 🐧 **Linux** | [`.AppImage` → GitHub Releases](https://github.com/thecheesybit/protrack/releases) |
 
-After install, scan the QR from your phone (or click **Sign in with Google** on desktop). The app auto-updates from the GitHub release feed.
+</div>
 
-## Develop
+After install → scan the QR from your phone (or enter the 8-char code in the browser, or click **Sign in with Google** on desktop). The app **auto-updates** from the GitHub release feed.
+
+---
+
+## 🚀 Develop Locally
 
 ```bash
+# 1. Clone & install
+git clone https://github.com/thecheesybit/protrack.git
+cd protrack
 npm install
-npm run dev                 # web renderer (browser); use ?desktop=1 to preview the workspace
-npm run electron:dev        # full desktop app against the dev server
+
+# 2. Configure Firebase
+cp .env.example .env   # fill in your Firebase web config (see below)
+
+# 3. Run
+npm run dev                # web renderer in browser (add ?desktop=1 to preview workspace)
+npm run electron:dev       # full desktop app against the dev server
 ```
 
-Create a `.env` (gitignored) with your Firebase web config:
+**`.env` variables:**
 
-```
-VITE_FIREBASE_API_KEY=...
-VITE_FIREBASE_AUTH_DOMAIN=...
-VITE_FIREBASE_PROJECT_ID=...
-VITE_FIREBASE_STORAGE_BUCKET=...
-VITE_FIREBASE_MESSAGING_SENDER_ID=...
-VITE_FIREBASE_APP_ID=...
+```env
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_STORAGE_BUCKET=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_APP_ID=
 VITE_WEB_URL=https://pro-track-app.netlify.app
 ```
 
-## Build & release
+> ⚠️ When pasting values into GitHub Actions secrets, **make sure there are no trailing newlines** — `printf "%s" "value" | gh secret set NAME` is the safe way. A stray `\n` on `projectId` breaks every auth request silently.
 
-Releases are fully automated. A push to `master` triggers `.github/workflows/release.yml`:
+---
 
-1. Bumps `package.json` to the next patch (or honors `workflow_dispatch` choice).
-2. Regenerates `CHANGELOG.md` from conventional commits since the last tag.
-3. Deploys the web build to Netlify (if secrets configured).
-4. Builds Electron installers in parallel for Windows, macOS, Linux.
-5. Publishes a new GitHub Release with all installer assets — auto-update picks them up.
+## 🏭 Build & Release
 
-Required repository secrets:
+Releases are **fully automated**. Two workflows turn any push into a shipped installer:
 
-| Secret | Purpose |
-|---|---|
-| `GITHUB_TOKEN` | provided automatically — used for release publishing |
-| `NETLIFY_AUTH_TOKEN` | optional — enables web deploy |
-| `NETLIFY_SITE_ID` | optional — enables web deploy |
-
-Local one-shot build:
-
-```bash
-npm run build                 # web production build -> dist/
-npm run electron:build:win    # Windows .exe -> release/
-npm run electron:build:mac    # macOS .dmg  -> release/
+```
+push to development
+    │
+    ├─ auto-merge.yml ─── verify build → fast-forward into master
+    │                       │
+    │                       ▼
+    └─────────────► push to master
+                        │
+                        ├─ 1. Bump package.json version
+                        ├─ 2. Regenerate CHANGELOG.md from conventional commits
+                        ├─ 3. Deploy web build → Netlify
+                        └─ 4. Build Electron installers in parallel
+                                 │
+                                 ├─ Windows-latest  → .exe
+                                 ├─ macOS-latest    → .dmg
+                                 └─ Ubuntu-latest   → .AppImage
+                                       │
+                                       └─ 5. Publish GitHub Release
+                                              │
+                                              └─ 🔄 in-app auto-update picks it up
 ```
 
-## Free-tier discipline
+**Required GitHub secrets:**
 
-Firestore persistent local cache means reloads cost ~0 reads; ephemeral state (timer ticks, the timeline flag, the Dynamic Island, NL drafts) never touches the database; writes coalesce via `arrayUnion`/`increment`; the ledger is bounded to 200 entries. A heavy day lands in the low hundreds of ops against the 50k read / 20k write ceiling. **No Cloud Functions or paid plan required.**
+| Secret | Purpose |
+|:-------|:--------|
+| `GITHUB_TOKEN` | Auto-provided — used for release publishing |
+| `VITE_FIREBASE_*` (6 keys) | Baked into the renderer bundle at build time |
+| `NETLIFY_AUTH_TOKEN` | Optional — enables web auto-deploy |
+| `NETLIFY_SITE_ID` | Optional — enables web auto-deploy |
 
-## Security
+**Local one-shot build:**
 
-- Gemini API key: browser `localStorage` only — never uploaded.
-- Desktop session: encrypted locally via `safeStorage` (DPAPI / Keychain / libsecret).
-- QR `sessionId`: 256-bit single-use bearer secret, 2-minute TTL, deleted on claim.
-- Firestore rules: strict owner-only access on `users/{uid}/**`; handshake docs are writeable by any authenticated client (a deliberate trade-off to keep the architecture Spark-plan-compatible — the docs are write-once, single-use, and TTL-bounded).
-- Hardware fingerprint: SHA-256 of hostname + platform + arch + CPU model + non-internal MACs. Raw identifiers never leave the device.
+```bash
+npm run build                  # web production build → dist/
+npm run electron:build:win     # Windows .exe → release/
+npm run electron:build:mac     # macOS .dmg  → release/
+```
 
-## License
+---
 
-Personal, non-commercial use. See the in-app Privacy Policy and Terms.
+## 💸 Free-Tier Discipline
+
+Pro Track is engineered to stay **well within Firebase Spark limits** forever:
+
+```
+Daily Firestore budget (typical heavy day)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Reads   ████░░░░░░░░░░░░░░░░░░░░░░░░░░░  ~200  /  50,000 free
+Writes  ██░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   ~80  /  20,000 free
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+**How:**
+- Firestore persistent local cache → reloads cost ~0 reads
+- Ephemeral state (timer ticks, Dynamic Island, NL drafts, flip-clock ticks) **never touches the database**
+- Writes coalesce via `arrayUnion` / `increment` / batched `writeBatch`
+- Achievement ledger bounded to 200 entries
+- No Cloud Functions. No paid plan. Ever.
+
+---
+
+## 🔐 Security Model
+
+| Surface | Mechanism |
+|:--------|:----------|
+| **Gemini API key** | Browser `localStorage` only — never uploaded to any server |
+| **Desktop session** | Encrypted via `safeStorage` (DPAPI / Keychain / libsecret) |
+| **QR / Code `sessionId`** | 8-char base32 (~1e12 combos), single-use bearer secret, 2-minute TTL, deleted on claim |
+| **Firestore rules** | Strict owner-only access on `users/{uid}/**` |
+| **Hardware fingerprint** | SHA-256 of hostname + platform + arch + CPU model + non-internal MACs. Raw identifiers never leave the device. |
+| **DevTools (production)** | F12, Ctrl/Cmd+Shift+I/J/C, Ctrl/Cmd+Alt+I intercepted at the input-event level; `devtools-opened` is force-closed as a safety net. |
+| **Firebase env values** | Trimmed at runtime so trailing whitespace from pasted secrets can't poison auth URLs. |
+
+> **Handshake trade-off:** QR handshake docs are writeable by any authenticated client — a deliberate Spark-plan trade-off. Mitigated by: write-once, single-use, TTL-bounded, and deleted on claim.
+
+---
+
+## 📄 License
+
+**Personal, non-commercial use only.** See the in-app Privacy Policy and Terms of Service.
+
+---
+
+<div align="center">
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0f3460,50:1a1a2e,100:09090e&height=120&section=footer&animation=fadeIn" width="100%"/>
+
+**Built with obsession by [Ayush Kumar](https://github.com/thecheesybit)**
+*If Pro Track saves your revision session, give it a ⭐*
+
+</div>
