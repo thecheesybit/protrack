@@ -14,14 +14,16 @@ export function useAutoUpdate() {
 
     const st = () => useStore.getState()
     const offs = [
+      u.onChecking?.(() => st().reportUpdateChecking()),
       u.onAvailable((p) => {
         st().reportUpdateAvailable(p?.version)
         // Freeze background work — a running session is paused.
         if (st().status === 'running') st().pause()
       }),
+      u.onNotAvailable?.(() => st().reportUpdateNotAvailable()),
       u.onProgress((p) => st().reportUpdateProgress(p?.percent || 0)),
       u.onDownloaded((p) => st().reportUpdateReady(p?.version)),
-      u.onError(() => st().reportUpdateError()),
+      u.onError((p) => st().reportUpdateError(p?.message)),
     ]
     return () => offs.forEach((off) => typeof off === 'function' && off())
   }, [])

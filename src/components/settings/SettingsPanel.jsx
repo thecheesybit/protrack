@@ -12,6 +12,8 @@ import {
   History,
   Github,
   Type,
+  DownloadCloud,
+  RefreshCw,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
@@ -56,6 +58,31 @@ export function SettingsPanel() {
   const settings = useStore((s) => s.settings)
   const fontScale = useStore((s) => s.fontScale)
   const setFontScale = useStore((s) => s.setFontScale)
+  const updateStatus = useStore((s) => s.updateStatus)
+  const updateVersion = useStore((s) => s.updateVersion)
+  const updateError = useStore((s) => s.updateError)
+  const [checking, setChecking] = useState(false)
+
+  const checkForUpdates = async () => {
+    if (!isDesktop || !desktopBridge?.update?.check) return
+    setChecking(true)
+    try {
+      const res = await desktopBridge.update.check()
+      if (res?.ok) {
+        if (res.version && res.version !== res.currentVersion) {
+          toast.success(`Update available: v${res.version} — downloading…`)
+        } else {
+          toast.success(`You're on the latest version (v${res.currentVersion}).`)
+        }
+      } else {
+        toast.error(res?.error || 'Could not check for updates.')
+      }
+    } catch (err) {
+      toast.error(err.message || 'Update check failed.')
+    } finally {
+      setChecking(false)
+    }
+  }
 
   const [keyInput, setKeyInput] = useState('')
   const [hydration, setHydration] = useState(60)
@@ -242,6 +269,33 @@ export function SettingsPanel() {
             ))}
           </div>
         </Section>
+
+        {/* Updates */}
+        {isDesktop && (
+          <Section title="Updates" icon={<DownloadCloud className="h-4 w-4" />}>
+            <button
+              onClick={checkForUpdates}
+              disabled={checking || updateStatus === 'downloading' || updateStatus === 'ready'}
+              className="flex w-full items-center justify-between rounded-xl border border-line bg-surface-2/40 px-3.5 py-2.5 text-sm transition-colors hover:border-accent/40 disabled:opacity-60"
+            >
+              <span className="flex items-center gap-2">
+                <RefreshCw className={cn('h-3.5 w-3.5', checking && 'animate-spin')} />
+                Check for updates
+              </span>
+              <span className="text-xs text-muted">
+                {updateStatus === 'checking' && 'Checking…'}
+                {updateStatus === 'up-to-date' && 'Up to date'}
+                {updateStatus === 'downloading' && `Downloading v${updateVersion}…`}
+                {updateStatus === 'ready' && `v${updateVersion} ready — restart`}
+                {updateStatus === 'error' && 'Check failed'}
+                {updateStatus === 'idle' && 'Click to check'}
+              </span>
+            </button>
+            {updateError && (
+              <p className="mt-2 text-xs text-rose-400">{updateError}</p>
+            )}
+          </Section>
+        )}
 
         {/* About + creator credit */}
         <Section title="About" icon={<Github className="h-4 w-4" />}>

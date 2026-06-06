@@ -45,10 +45,13 @@ contextBridge.exposeInMainWorld('protrack', {
 
   // Over-the-air auto-update lifecycle. Each subscriber returns an unsubscribe fn.
   update: {
+    onChecking: (cb) => subscribe('update:checking', cb),
     onAvailable: (cb) => subscribe('update:available', cb),
+    onNotAvailable: (cb) => subscribe('update:notAvailable', cb),
     onProgress: (cb) => subscribe('update:progress', cb),
     onDownloaded: (cb) => subscribe('update:downloaded', cb),
     onError: (cb) => subscribe('update:error', cb),
+    check: () => ipcRenderer.invoke('update:check'),
     install: () => ipcRenderer.invoke('update:install'),
   },
 

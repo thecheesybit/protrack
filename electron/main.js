@@ -122,18 +122,62 @@ function toggleWindow() {
  * Over-the-air updates from the GitHub release feed. Older clients download the
  * new build automatically; the renderer's UpdateGate obscures the dashboard and
  * offers a one-click restart. Only runs in packaged builds.
+ *
+ * Hardening (v1.1.6+):
+ *  - Every autoUpdater event is forwarded to the renderer (was just 4) so the
+ *    Settings panel can show real status instead of "did anything happen?".
+ *  - Errors are NO LONGER silently swallowed — they reach the renderer and
+ *    surface on the diagnostics row.
+ *  - Initial check kicks off at ready-to-show with a 15-min retry cadence for
+ *    the first hour, then settles into hourly checks. Trades a bit of bandwidth
+ *    for catching brand-new releases within minutes of publish.
+ *  - Window-focus event also triggers a check (re-activating the app after
+ *    sleep / lock typically means hours have passed).
+ *  - Manual `update:check` IPC handler lets the user force a check from
+ *    Settings without restarting.
  */
 function initAutoUpdate() {
   if (!app.isPackaged) return
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
+
   const send = (channel, payload) => win?.webContents.send(channel, payload)
-  autoUpdater.on('update-available', (info) => send('update:available', { version: info?.version }))
-  autoUpdater.on('download-progress', (p) => send('update:progress', { percent: Math.round(p?.percent || 0) }))
-  autoUpdater.on('update-downloaded', (info) => send('update:downloaded', { version: info?.version }))
-  autoUpdater.on('error', (err) => send('update:error', { message: String(err?.message || err) }))
-  autoUpdater.checkForUpdates().catch(() => {})
-  setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 60 * 60 * 1000)
+
+  autoUpdater.on('checking-for-update', () => send('update:checking', {}))
+  autoUpdater.on('update-available', (info) =>
+    send('update:available', { version: info?.version }),
+  )
+  autoUpdater.on('update-not-available', (info) =>
+    send('update:notAvailable', { version: info?.version }),
+  )
+  autoUpdater.on('download-progress', (p) =>
+    send('update:progress', { percent: Math.round(p?.percent || 0) }),
+  )
+  autoUpdater.on('update-downloaded', (info) =>
+    send('update:downloaded', { version: info?.version }),
+  )
+  autoUpdater.on('error', (err) => {
+    console.error('[autoUpdate] error', err)
+    send('update:error', { message: String(err?.message || err) })
+  })
+
+  const check = () => autoUpdater.checkForUpdates().catch((err) => {
+    console.error('[autoUpdate] check failed', err)
+    send('update:error', { message: String(err?.message || err) })
+  })
+
+  check() // immediate
+  // Aggressive for the first hour (every 15 min) — catches brand-new releases
+  // before the user notices anything is off.
+  const fast = setInterval(check, 15 * 60 * 1000)
+  setTimeout(() => {
+    clearInterval(fast)
+    setInterval(check, 60 * 60 * 1000)
+  }, 60 * 60 * 1000)
+
+  // Re-checking on focus is cheap and catches the case where the user left the
+  // app idle overnight (or the laptop slept through several check intervals).
+  app.on('browser-window-focus', check)
 }
 
 function createWindow() {
@@ -432,5 +476,20 @@ ipcMain.handle('update:install', () => {
     autoUpdater.quitAndInstall()
   } catch (err) {
     console.error('[update:install]', err)
+  }
+})
+
+/* ── IPC: manual update check (triggered from Settings) ─── */
+ipcMain.handle('update:check', async () => {
+  if (!app.isPackaged) return { ok: false, error: 'Dev build — auto-update disabled.' }
+  try {
+    const result = await autoUpdater.checkForUpdates()
+    return {
+      ok: true,
+      version: result?.updateInfo?.version || null,
+      currentVersion: app.getVersion(),
+    }
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) }
   }
 })
