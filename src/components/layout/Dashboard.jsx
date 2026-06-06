@@ -10,6 +10,7 @@ import { BoardCanvas } from './BoardCanvas'
 import { FocusPanel } from '@/components/focus/FocusPanel'
 import { AIAssistant } from '@/components/ai/AIAssistant'
 import { SettingsPanel } from '@/components/settings/SettingsPanel'
+import { HydrationReminder } from '@/components/wellness/HydrationReminder'
 
 /**
  * The single unified dashboard — everything lives here. No nested routing.
@@ -57,6 +58,7 @@ export function Dashboard() {
       <FocusPanel />
       <AIAssistant />
       <SettingsPanel />
+      <HydrationReminder />
     </div>
   )
 }
