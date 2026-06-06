@@ -9,6 +9,7 @@ import { useChronoTheme } from '@/hooks/useChronoTheme'
 import { useDesktopIntegration } from '@/hooks/useDesktopIntegration'
 import { useHabitReminders } from '@/hooks/useHabitReminders'
 import { AuroraBackground } from '@/components/common/AuroraBackground'
+import { FlipClock } from '@/components/common/FlipClock'
 import { DynamicIsland } from '@/components/island/DynamicIsland'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { Spinner } from '@/components/ui/Spinner'
@@ -81,6 +82,7 @@ export function Dashboard() {
   return (
     <div className="relative flex h-full flex-col">
       <AuroraBackground />
+      <FlipClock />
       <DynamicIsland />
 
       <div className={cn(

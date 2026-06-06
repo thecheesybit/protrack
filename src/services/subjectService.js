@@ -101,13 +101,30 @@ export function subscribeToTasks(uid, modeId, subjectId, callback) {
   })
 }
 
-export async function addTask(uid, modeId, subjectId, { title, column }) {
+export async function addTask(uid, modeId, subjectId, { title, column, priority, notes }) {
   return addDoc(tasksCol(uid, modeId, subjectId), {
     title,
     column: column || 'todo',
+    priority: priority || 'medium', // 'low' | 'medium' | 'high' | 'urgent'
+    notes: notes || '',
     order: Date.now(),
     createdAt: serverTimestamp(),
   })
+}
+
+/**
+ * Re-numbers `order` across a list of tasks within a single column. Caller
+ * provides the new ordering. Uses a batch so all updates land atomically.
+ */
+export async function reorderTasks(uid, modeId, subjectId, orderedIds) {
+  if (!orderedIds?.length) return
+  const batch = writeBatch(db)
+  orderedIds.forEach((taskId, index) => {
+    batch.update(doc(tasksCol(uid, modeId, subjectId), taskId), {
+      order: (index + 1) * 1000,
+    })
+  })
+  return batch.commit()
 }
 
 export async function updateTask(uid, modeId, subjectId, taskId, patch) {

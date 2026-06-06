@@ -6,7 +6,10 @@ import { TOOL_DECLARATIONS, executeTool } from '@/services/geminiTools'
  * never written to Firestore or sent anywhere except Google's API.
  */
 const KEY = 'protrack:gemini_key'
-const MODEL = 'gemini-1.5-flash'
+// `gemini-flash-latest` is a stable alias that always points at the current
+// fast Gemini model — survives the periodic deprecation cycles (e.g. the
+// gemini-1.5-flash 404 we hit on 2026-06-07).
+const MODEL = 'gemini-flash-latest'
 
 export function getGeminiKey() {
   return localStorage.getItem(KEY) || ''

@@ -162,6 +162,14 @@ export const TOOL_DECLARATIONS = [
               type: SchemaType.STRING,
               description: '"todo" | "doing" | "done"',
             },
+            priority: {
+              type: SchemaType.STRING,
+              description: '"low" | "medium" | "high" | "urgent"',
+            },
+            notes: {
+              type: SchemaType.STRING,
+              description: 'Optional notes / comments for the task',
+            },
           },
           required: ['subjectName', 'title'],
         },
@@ -180,6 +188,14 @@ export const TOOL_DECLARATIONS = [
             subjectName: {
               type: SchemaType.STRING,
               description: 'Optional subject this to-do belongs to',
+            },
+            priority: {
+              type: SchemaType.STRING,
+              description: '"low" | "medium" | "high" | "urgent"',
+            },
+            notes: {
+              type: SchemaType.STRING,
+              description: 'Optional notes / comments',
             },
           },
           required: ['text'],
@@ -344,21 +360,34 @@ export async function executeTool(name, args, ctx) {
         const subj = findSubject(subjects, args.subjectName)
         if (!subj) return { ok: false, error: `Subject "${args.subjectName}" not found.` }
         const col = ['todo', 'doing', 'done'].includes(args.column) ? args.column : 'todo'
-        await addTask(uid, modeId, subj.id, { title: args.title, column: col })
-        return { ok: true, summary: `Added "${args.title}" to ${subj.name} (${col}).` }
+        const priority = ['low', 'medium', 'high', 'urgent'].includes(args.priority)
+          ? args.priority
+          : 'medium'
+        await addTask(uid, modeId, subj.id, {
+          title: args.title,
+          column: col,
+          priority,
+          notes: args.notes || '',
+        })
+        return { ok: true, summary: `Added "${args.title}" to ${subj.name} (${col}, ${priority}).` }
       }
 
       case 'add_todo': {
         const subj = args.subjectName ? findSubject(subjects, args.subjectName) : null
         const dueAt = args.dueAt ? new Date(args.dueAt) : null
         const dueValid = dueAt && !Number.isNaN(dueAt.getTime()) ? dueAt.toISOString() : null
+        const priority = ['low', 'medium', 'high', 'urgent'].includes(args.priority)
+          ? args.priority
+          : 'medium'
         await addTodo(uid, {
           text: args.text,
           modeId: modeId || null,
           dueAt: dueValid,
           subjectId: subj?.id || null,
+          priority,
+          notes: args.notes || '',
         })
-        return { ok: true, summary: `Added to-do: "${args.text}".` }
+        return { ok: true, summary: `Added to-do: "${args.text}" (${priority}).` }
       }
 
       case 'mark_todo_done': {
