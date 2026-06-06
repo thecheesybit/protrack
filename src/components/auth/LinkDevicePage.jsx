@@ -74,7 +74,7 @@ export function LinkDevicePage() {
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15">
               <Check className="h-6 w-6 text-emerald-400" />
             </div>
-            <h1 className="text-lg font-bold">Desktop unlocked 🎉</h1>
+            <h1 className="text-lg font-bold">Desktop unlocked</h1>
             <p className="mt-2 text-sm text-muted">
               Your computer is signing in now. You can close this tab.
             </p>

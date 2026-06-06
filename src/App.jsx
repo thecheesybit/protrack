@@ -2,23 +2,30 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Toaster } from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
 import { AppLoader } from '@/components/common/AppLoader'
-import { AuthScreen } from '@/components/auth/AuthScreen'
+import { LandingPage } from '@/components/marketing/LandingPage'
 import { QrLoginScreen } from '@/components/auth/QrLoginScreen'
 import { LinkDevicePage } from '@/components/auth/LinkDevicePage'
-import { Dashboard } from '@/components/layout/Dashboard'
+import { Workspace } from '@/components/layout/Workspace'
 import { FirestoreSyncProvider } from '@/providers/FirestoreSyncProvider'
 import { TitleBar } from '@/desktop/TitleBar'
-import { isDesktop } from '@/desktop/isDesktop'
+import { isDesktop, isWorkspaceHost } from '@/desktop/isDesktop'
 
 function Routes() {
   const { user, loading } = useAuth()
 
-  // Phone linking page (web): /link?s=<sessionId>
+  // Mobile auth gateway: /link?s=<sessionId> — the only authenticated surface
+  // the web build exposes (used by the QR handshake).
   if (typeof window !== 'undefined' && window.location.pathname.startsWith('/link')) {
     return <LinkDevicePage key="link" />
   }
 
-  // Anonymous = desktop QR bootstrap only; treat as "not really signed in".
+  // The Netlify web domain is a gateway only — never the functional workspace.
+  // Only the Electron app (or a DEV preview) renders the dashboard.
+  if (!isWorkspaceHost) {
+    return <LandingPage key="landing" />
+  }
+
+  // Anonymous = desktop QR-handshake bootstrap only; treat as "not signed in".
   const realUser = user && !user.isAnonymous ? user : null
 
   return (
@@ -27,7 +34,7 @@ function Routes() {
         <AppLoader key="loader" />
       ) : realUser ? (
         <motion.div
-          key="dashboard"
+          key="workspace"
           initial={{ opacity: 0, scale: 0.99 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0 }}
@@ -35,13 +42,11 @@ function Routes() {
           className="h-full"
         >
           <FirestoreSyncProvider>
-            <Dashboard />
+            <Workspace />
           </FirestoreSyncProvider>
         </motion.div>
-      ) : isDesktop ? (
-        <QrLoginScreen key="qr" />
       ) : (
-        <AuthScreen key="auth" />
+        <QrLoginScreen key="qr" />
       )}
     </AnimatePresence>
   )
