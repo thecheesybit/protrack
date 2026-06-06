@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.1.12 — 2026-06-06
+
+- feat: optimize and make handshake loading screen robust with timeouts and error recovery (b9a61eb)
+- feat: debug, refine, and implement desktop productivity features across 5 modules and handshake optimization (3ad5d1f)
+
+
 ## v1.1.11 — 2026-06-06
 
 - ci: auto-merge self-heals from release/dev race — rebases development on master before ff (4a838e1)
