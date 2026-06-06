@@ -23,6 +23,7 @@ concurrency:
 permissions:
   contents: write
   pull-requests: write
+  actions: write  # required to `gh workflow run release.yml` after promotion
 
 jobs:
   verify-and-merge:
@@ -95,6 +96,31 @@ jobs:
           else
             echo "promoted=false" >> "$GITHUB_OUTPUT"
             echo "::warning::Branches have diverged — fast-forward not possible. Will open a PR for manual review."
+          fi
+
+      - name: Trigger release pipeline
+        # GitHub suppresses workflow triggers from pushes made by GITHUB_TOKEN
+        # (loop prevention), so release.yml's `on: push` won't fire from our
+        # ff-push above. We dispatch it explicitly here, which DOES respect
+        # GITHUB_TOKEN. Only do this when the head commit actually warrants
+        # a release (skip docs-only / [skip ci]).
+        if: steps.merge.outputs.promoted == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          MSG=$(git log -1 --pretty=%B master)
+          if echo "$MSG" | grep -q '\[skip ci\]'; then
+            echo "::notice::Skip-ci marker present — release not dispatched."
+            exit 0
+          fi
+          # Skip if the only files changed are docs / markdown (matches the
+          # paths-ignore in release.yml so behaviour stays consistent).
+          CHANGED=$(git diff-tree --no-commit-id --name-only -r HEAD)
+          if echo "$CHANGED" | grep -qvE '^(docs/|.*\.md$|\.github/.*\.md$)'; then
+            gh workflow run release.yml -f bump=patch --ref master
+            echo "::notice::Release pipeline dispatched (bump=patch)."
+          else
+            echo "::notice::Docs-only change — release not dispatched."
           fi
 
       - name: Open PR when ff is not possible
