@@ -47,7 +47,7 @@ export function playEventSound(event) {
     const now = ac.currentTime
     const SOUNDS = {
       // Soft pop — task/todo added
-      add: () => {
+      'todo-added': () => {
         const osc = ac.createOscillator()
         const g = ac.createGain()
         osc.type = 'sine'
@@ -60,7 +60,7 @@ export function playEventSound(event) {
         osc.stop(now + 0.25)
       },
       // Rising ding — task completed / todo checked
-      complete: () => {
+      'task-complete': () => {
         const osc = ac.createOscillator()
         const g = ac.createGain()
         osc.type = 'triangle'
@@ -71,6 +71,35 @@ export function playEventSound(event) {
         osc.connect(g).connect(ac.destination)
         osc.start(now)
         osc.stop(now + 0.4)
+      },
+      // Deep mechanical resonance — lock initiated
+      'lock-initiated': () => {
+        const osc1 = ac.createOscillator()
+        const osc2 = ac.createOscillator()
+        const g = ac.createGain()
+        osc1.type = 'sine'
+        osc2.type = 'sawtooth'
+        osc1.frequency.setValueAtTime(110, now)
+        osc2.frequency.setValueAtTime(55, now)
+        osc1.frequency.exponentialRampToValueAtTime(55, now + 0.8)
+        osc2.frequency.exponentialRampToValueAtTime(27.5, now + 0.8)
+        
+        g.gain.setValueAtTime(0, now)
+        g.gain.linearRampToValueAtTime(0.3, now + 0.1)
+        g.gain.exponentialRampToValueAtTime(0.001, now + 1.2)
+        
+        const filter = ac.createBiquadFilter()
+        filter.type = 'lowpass'
+        filter.frequency.setValueAtTime(400, now)
+        filter.frequency.exponentialRampToValueAtTime(50, now + 1.0)
+        
+        osc1.connect(filter)
+        osc2.connect(filter)
+        filter.connect(g).connect(ac.destination)
+        osc1.start(now)
+        osc2.start(now)
+        osc1.stop(now + 1.3)
+        osc2.stop(now + 1.3)
       },
       // Short click — drag drop / reorder
       drop: () => {
@@ -133,7 +162,7 @@ export function playEventSound(event) {
   }
 }
 
-/* ── Ambient Soundscapes ──────────────────────────────────────── */
+/* ── Ambient Soundscapes (Multi-Track) ─────────────────────────── */
 
 function makeNoiseBuffer(ac) {
   const buffer = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate)
@@ -147,26 +176,36 @@ function makeNoiseBuffer(ac) {
   return buffer
 }
 
-/** Looping, synthesized ambient soundscape with volume control. */
-export class AmbientPlayer {
+/** Multi-channel, synthesized ambient soundscape mixer with central volume control. */
+export class MultiTrackMixer {
   constructor() {
-    this.nodes = null
-    this.current = 'none'
-    this._masterGain = null
+    this.tracks = new Map() // trackKey -> { nodes: { src, lfo, secondary }, type }
     this._volume = 0.5
+    
+    // We defer creating the master gain until audio context is used, to ensure
+    // we don't prematurely initialize Web Audio.
+    this._masterGain = null
   }
 
-  start(type) {
-    this.stop()
-    if (type === 'none' || !type) {
-      this.current = 'none'
+  _initMaster(ac) {
+    if (!this._masterGain) {
+      this._masterGain = ac.createGain()
+      this._masterGain.gain.value = this._volume
+      this._masterGain.connect(ac.destination)
+    }
+  }
+
+  startTrack(trackKey, type) {
+    this.stopTrack(trackKey)
+    if (type === 'none' || type === 'off' || !type) {
       return
     }
     const ac = audioCtx()
+    this._initMaster(ac)
 
     // Binaural beats use oscillators, not noise
     if (type === 'binaural') {
-      this._startBinaural(ac)
+      this._startBinaural(ac, trackKey)
       return
     }
 
@@ -177,10 +216,6 @@ export class AmbientPlayer {
     const filter = ac.createBiquadFilter()
     const gain = ac.createGain()
     gain.gain.value = 0.0
-
-    const masterGain = ac.createGain()
-    masterGain.gain.value = this._volume
-    this._masterGain = masterGain
 
     const peakVolume = 0.18
     gain.gain.linearRampToValueAtTime(peakVolume, ac.currentTime + 1.5)
@@ -221,7 +256,7 @@ export class AmbientPlayer {
       crackleFilter.frequency.value = 3000
       const crackleGain = ac.createGain()
       crackleGain.gain.value = 0.04
-      secondary.connect(crackleFilter).connect(crackleGain).connect(masterGain)
+      secondary.connect(crackleFilter).connect(crackleGain).connect(this._masterGain)
       secondary.start()
     } else if (type === 'forest') {
       filter.type = 'bandpass'
@@ -237,17 +272,13 @@ export class AmbientPlayer {
       lfo.start()
     }
 
-    src.connect(filter).connect(gain).connect(masterGain).connect(ac.destination)
+    src.connect(filter).connect(gain).connect(this._masterGain)
     src.start()
-    this.nodes = { src, gain, lfo, secondary }
-    this.current = type
+    
+    this.tracks.set(trackKey, { nodes: { src, lfo, secondary }, type })
   }
 
-  _startBinaural(ac) {
-    const masterGain = ac.createGain()
-    masterGain.gain.value = this._volume
-    this._masterGain = masterGain
-
+  _startBinaural(ac, trackKey) {
     const gain = ac.createGain()
     gain.gain.value = 0.0
     gain.gain.linearRampToValueAtTime(0.14, ac.currentTime + 1.5)
@@ -263,17 +294,18 @@ export class AmbientPlayer {
     const merger = ac.createChannelMerger(2)
     oscL.connect(merger, 0, 0) // left channel
     oscR.connect(merger, 0, 1) // right channel
-    merger.connect(gain).connect(masterGain).connect(ac.destination)
+    merger.connect(gain).connect(this._masterGain)
 
     oscL.start()
     oscR.start()
-    this.nodes = { src: oscL, gain, lfo: oscR, secondary: null }
-    this.current = 'binaural'
+    this.tracks.set(trackKey, { nodes: { src: oscL, lfo: oscR, secondary: null }, type: 'binaural' })
   }
 
-  stop() {
-    if (!this.nodes) return
-    const { src, lfo, secondary } = this.nodes
+  stopTrack(trackKey) {
+    const track = this.tracks.get(trackKey)
+    if (!track) return
+    
+    const { src, lfo, secondary } = track.nodes
     try {
       src.stop()
       lfo?.stop()
@@ -281,9 +313,13 @@ export class AmbientPlayer {
     } catch {
       /* already stopped */
     }
-    this.nodes = null
-    this._masterGain = null
-    this.current = 'none'
+    this.tracks.delete(trackKey)
+  }
+
+  stopAll() {
+    for (const trackKey of this.tracks.keys()) {
+      this.stopTrack(trackKey)
+    }
   }
 
   /** Set master volume (0.0–1.0). Can be called while playing. */

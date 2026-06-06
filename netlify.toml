@@ -6,6 +6,10 @@
 [build.environment]
   NODE_VERSION = "22"
 
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
 # SPA fallback — every route resolves to the single unified board.
 [[redirects]]
   from = "/*"

@@ -43,11 +43,19 @@ export function ZenOverlay() {
         // Keep last 30 quotes to avoid repeating within a month
         if (history.length > 30) history = history.slice(history.length - 30)
         
-        let newQuote = await fetchZenQuote(history)
+        let newQuote = null
+        try {
+          const res = await fetch('/zen_quotes.json')
+          const edgeQuotes = await res.json()
+          const available = edgeQuotes.filter(q => !history.find(h => h.text === q.text))
+          newQuote = available.length > 0 ? available[Math.floor(Math.random() * available.length)] : edgeQuotes[Math.floor(Math.random() * edgeQuotes.length)]
+        } catch (err) {
+          console.error('[ZenOverlay] failed to fetch edge quotes', err)
+        }
+        
         if (!active) return
         
         if (!newQuote || !newQuote.text) {
-          // Fallback to hardcoded ones that aren't in recent history if possible
           const available = QUOTES.filter(q => !history.find(h => h.text === q.text))
           newQuote = available.length > 0 ? available[Math.floor(Math.random() * available.length)] : QUOTES[Math.floor(Math.random() * QUOTES.length)]
         }

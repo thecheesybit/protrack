@@ -54,10 +54,10 @@ export function FocusWidget({ widget, variant }) {
   const status = useStore((s) => s.status)
   const phase = useStore((s) => s.phase)
   const secondsLeft = useStore((s) => s.secondsLeft)
-  const focusMin = useStore((s) => s.focusMin)
-  const breakMin = useStore((s) => s.breakMin)
-  const session = useStore((s) => s.session)
-  const ambient = useStore((s) => s.ambient)
+  const customTimerSetting = useStore((s) => s.customTimerSetting)
+  const audioTracks = useStore((s) => s.audioTracks)
+  const setCustomTimer = useStore((s) => s.setCustomTimer)
+  const toggleConcurrentTrack = useStore((s) => s.toggleConcurrentTrack)
   const volume = useStore((s) => s.volume)
   const muted = useStore((s) => s.muted)
   const stats = useStore((s) => s.stats)
@@ -66,9 +66,7 @@ export function FocusWidget({ widget, variant }) {
   const pause = useStore((s) => s.pause)
   const resume = useStore((s) => s.resume)
   const reset = useStore((s) => s.reset)
-  const setDurations = useStore((s) => s.setDurations)
-  const setAmbient = useStore((s) => s.setAmbient)
-  const setVolume = useStore((s) => s.setVolume)
+  const setVolume = useStore((s) => s.adjustTrackVolume)
   const toggleMute = useStore((s) => s.toggleMute)
 
   const { user } = useAuth()
@@ -136,7 +134,7 @@ export function FocusWidget({ widget, variant }) {
   }
 
   const isHero = variant === 'hero'
-  const phaseTotal = (phase === 'focus' ? focusMin : breakMin) * 60
+  const phaseTotal = phase === 'focus' ? customTimerSetting.work : customTimerSetting.break
   const progress = phaseTotal ? 1 - secondsLeft / phaseTotal : 0
   const color = phase === 'break' ? '#10b981' : session?.color || 'rgb(var(--accent))'
 
@@ -187,42 +185,66 @@ export function FocusWidget({ widget, variant }) {
               </button>
             </div>
 
-            {/* presets */}
-            <div className="flex flex-col items-center gap-3">
-              <div className="flex gap-1.5">
-                {PRESETS.map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setDurations(m, breakMin)}
-                    disabled={status !== 'idle'}
-                    className={cn(
-                      'rounded-lg px-3 py-1 text-xs font-medium transition-colors disabled:opacity-40',
-                      focusMin === m ? 'bg-accent/20 text-accent' : 'text-muted hover:text-ink',
-                    )}
-                  >
-                    {m}m
-                  </button>
-                ))}
+            {/* custom timers */}
+            <div className="flex flex-col items-center gap-4">
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  max="120"
+                  value={Math.round(customTimerSetting.work / 60)}
+                  onChange={(e) => setCustomTimer(Number(e.target.value) * 60, customTimerSetting.break)}
+                  disabled={status !== 'idle'}
+                  className="w-16 rounded border border-line bg-surface-2 px-2 py-1 text-center text-xs outline-none focus:border-accent disabled:opacity-50"
+                  aria-label="Work minutes"
+                />
+                <span className="text-xs font-medium text-muted">min</span>
+                <span className="text-xs font-medium text-muted mx-1">/</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="60"
+                  value={Math.round(customTimerSetting.break / 60)}
+                  onChange={(e) => setCustomTimer(customTimerSetting.work, Number(e.target.value) * 60)}
+                  disabled={status !== 'idle'}
+                  className="w-16 rounded border border-line bg-surface-2 px-2 py-1 text-center text-xs outline-none focus:border-accent disabled:opacity-50"
+                  aria-label="Break minutes"
+                />
+                <span className="text-xs font-medium text-muted">min break</span>
               </div>
 
-              {/* ── Ambient 2×4 Grid ── */}
-              <div className="grid grid-cols-4 gap-1.5">
-                {AMBIENTS.map(({ id, label, Icon }) => (
-                  <button
-                    key={id}
-                    onClick={() => setAmbient(id)}
-                    title={label}
-                    className={cn(
-                      'flex h-9 items-center justify-center gap-1 rounded-lg border px-2 transition-all',
-                      ambient === id
-                        ? 'border-accent/50 bg-accent/10 text-accent shadow-glow-sm'
-                        : 'border-line text-muted hover:text-ink hover:border-line/80',
-                    )}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    <span className="text-[10px] font-medium hidden sm:inline">{label}</span>
-                  </button>
-                ))}
+              {/* ── Ambient Tracks (Multi) ── */}
+              <div className="w-full max-w-[260px]">
+                <div className="mb-1 text-center text-[10px] uppercase tracking-wider text-muted">Ambient Tracks</div>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {AMBIENTS.map(({ id, label, Icon }) => {
+                    const isActive = audioTracks.ambient1 === id || audioTracks.ambient2 === id
+                    return (
+                      <button
+                        key={id}
+                        onClick={() => {
+                          if (isActive) {
+                            if (audioTracks.ambient1 === id) toggleConcurrentTrack('ambient1', 'off')
+                            else toggleConcurrentTrack('ambient2', 'off')
+                          } else {
+                            if (!audioTracks.ambient1 || audioTracks.ambient1 === 'off') toggleConcurrentTrack('ambient1', id)
+                            else toggleConcurrentTrack('ambient2', id)
+                          }
+                        }}
+                        title={label}
+                        className={cn(
+                          'flex h-9 items-center justify-center gap-1 rounded-lg border px-2 transition-all',
+                          isActive
+                            ? 'border-accent/50 bg-accent/10 text-accent shadow-glow-sm'
+                            : 'border-line text-muted hover:text-ink hover:border-line/80',
+                        )}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                        <span className="text-[10px] font-medium hidden sm:inline">{label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
 
               {/* ── Volume Control ── */}
@@ -253,15 +275,23 @@ export function FocusWidget({ widget, variant }) {
               {/* Custom Audio URL */}
               <div className="w-full max-w-[260px]">
                 <label className="mb-1 block text-center text-[10px] uppercase tracking-wider text-muted">
-                  Custom Background Audio URL
+                  YouTube Background Stream
                 </label>
-                <input
-                  type="text"
-                  value={focusAudioUrl}
-                  onChange={(e) => updateFocusAudioUrl(e.target.value)}
-                  placeholder="e.g. YouTube lo-fi link…"
-                  className="w-full rounded-xl border border-line bg-surface-2/60 px-3 py-1.5 text-xs text-center outline-none focus:border-accent"
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={focusAudioUrl}
+                    onChange={(e) => updateFocusAudioUrl(e.target.value)}
+                    placeholder="YouTube URL..."
+                    className="w-full flex-1 rounded-xl border border-line bg-surface-2/60 px-3 py-2 text-xs outline-none focus:border-accent"
+                  />
+                  <button 
+                    onClick={() => toggleConcurrentTrack('ytTrack', focusAudioUrl)}
+                    className="flex shrink-0 items-center gap-1 rounded-xl border border-line bg-surface-2 px-3 py-2 text-xs font-semibold text-ink transition-colors hover:bg-surface hover:text-accent"
+                  >
+                    Load Stream
+                  </button>
+                </div>
               </div>
             </div>
           </div>

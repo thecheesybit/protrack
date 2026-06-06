@@ -14,11 +14,14 @@ export const createFocusSlice = (set, get) => ({
   secondsLeft: DEFAULT_FOCUS * 60,
   session: null, // { label, color, subjectId, modeId } | null
   startedAt: null,
-  ambient: 'none', // 'none' | 'rain' | 'waves' | 'wind' | 'whitenoise' | 'cafe' | 'forest' | 'binaural'
-  muted: false, // global mute for chime + ambient (toggled by hotkey)
-  volume: 0.5, // 0.0–1.0 master volume for ambient + background audio
-  justCompleted: 0, // bumps to trigger the tree-grow animation
-  focusLocked: false, // true = entire UI is locked out during session
+  
+  // Phase 1.1: New State payloads
+  focusLocked: false,
+  customTimerSetting: { work: DEFAULT_FOCUS * 60, break: DEFAULT_BREAK * 60 },
+  volume: 0.5,
+  audioTracks: { ambient1: 'off', ambient2: 'off', ytTrack: '' },
+  muted: false,
+  justCompleted: 0,
 
   setDurations: (focusMin, breakMin) =>
     set((s) => ({
@@ -27,22 +30,36 @@ export const createFocusSlice = (set, get) => ({
       secondsLeft: s.status === 'idle' && s.phase === 'focus' ? focusMin * 60 : s.secondsLeft,
     })),
 
-  setAmbient: (ambient) => set({ ambient }),
+  // Phase 1.1 Actions
+  setCustomTimer: (workSec, breakSec) => 
+    set({ customTimerSetting: { work: workSec, break: breakSec } }),
+  
+  adjustTrackVolume: (volume) => set({ volume: Math.max(0, Math.min(1, volume)) }),
+  
+  toggleConcurrentTrack: (trackKey, trackValue) => 
+    set((s) => ({ audioTracks: { ...s.audioTracks, [trackKey]: trackValue } })),
+  
+  setFocusLock: (isLocked) => set({ focusLocked: isLocked }),
 
   setMuted: (muted) => set({ muted }),
   toggleMute: () => set((s) => ({ muted: !s.muted })),
 
-  setVolume: (volume) => set({ volume: Math.max(0, Math.min(1, volume)) }),
-
   startFocus: (session = null) =>
-    set((s) => ({
-      status: 'running',
-      phase: 'focus',
-      session: session || s.session,
-      secondsLeft: s.phase === 'focus' && s.status === 'paused' ? s.secondsLeft : s.focusMin * 60,
-      startedAt: Date.now(),
-      focusLocked: true,
-    })),
+    set((s) => {
+      // Use customTimerSetting if defined and we are just starting
+      const startingSeconds = s.phase === 'focus' && s.status === 'paused' 
+        ? s.secondsLeft 
+        : s.customTimerSetting.work;
+        
+      return {
+        status: 'running',
+        phase: 'focus',
+        session: session || s.session,
+        secondsLeft: startingSeconds,
+        startedAt: Date.now(),
+        focusLocked: true,
+      };
+    }),
 
   pause: () => set({ status: 'paused' }),
   resume: () => set({ status: 'running' }),
@@ -51,7 +68,7 @@ export const createFocusSlice = (set, get) => ({
     set((s) => ({
       status: 'idle',
       phase: 'focus',
-      secondsLeft: s.focusMin * 60,
+      secondsLeft: s.customTimerSetting.work,
       startedAt: null,
       focusLocked: false,
     })),
@@ -59,17 +76,22 @@ export const createFocusSlice = (set, get) => ({
   tick: () =>
     set((s) => ({ secondsLeft: Math.max(0, s.secondsLeft - 1) })),
 
-  /** Move to break phase after a completed focus block. */
   startBreak: () =>
     set((s) => ({
       status: 'running',
       phase: 'break',
-      secondsLeft: s.breakMin * 60,
+      secondsLeft: s.customTimerSetting.break,
       startedAt: Date.now(),
     })),
 
   bumpCompleted: () => set((s) => ({ justCompleted: s.justCompleted + 1 })),
 
   endToIdle: () =>
-    set((s) => ({ status: 'idle', phase: 'focus', secondsLeft: s.focusMin * 60, startedAt: null, focusLocked: false })),
+    set((s) => ({ 
+      status: 'idle', 
+      phase: 'focus', 
+      secondsLeft: s.customTimerSetting.work, 
+      startedAt: null, 
+      focusLocked: false 
+    })),
 })

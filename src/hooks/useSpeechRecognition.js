@@ -14,6 +14,7 @@ export function useSpeechRecognition() {
   const [transcript, setTranscript] = useState('')
   const [interim, setInterim] = useState('')
   const recRef = useRef(null)
+  const shouldBeListening = useRef(false) // The explicit connection lock
 
   useEffect(() => {
     if (!supported) return undefined
@@ -33,11 +34,30 @@ export function useSpeechRecognition() {
       if (finalChunk) setTranscript((t) => (t ? `${t} ${finalChunk}` : finalChunk).trim())
       setInterim(interimChunk)
     }
-    rec.onend = () => setListening(false)
-    rec.onerror = () => setListening(false)
+    
+    // Explicit locking machine: automatically restart if the connection drops unexpectedly
+    rec.onend = () => {
+      if (shouldBeListening.current) {
+        try {
+          rec.start()
+        } catch {
+          setListening(false)
+        }
+      } else {
+        setListening(false)
+      }
+    }
+    
+    rec.onerror = (e) => {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        shouldBeListening.current = false
+        setListening(false)
+      }
+    }
 
     recRef.current = rec
     return () => {
+      shouldBeListening.current = false
       try {
         rec.stop()
       } catch {
@@ -48,16 +68,20 @@ export function useSpeechRecognition() {
   }, [supported])
 
   const start = () => {
-    if (!recRef.current || listening) return
+    if (!recRef.current) return
+    shouldBeListening.current = true
     try {
       recRef.current.start()
       setListening(true)
       setInterim('')
     } catch {
       /* already started */
+      setListening(true)
     }
   }
+  
   const stop = () => {
+    shouldBeListening.current = false
     recRef.current?.stop()
     setListening(false)
   }

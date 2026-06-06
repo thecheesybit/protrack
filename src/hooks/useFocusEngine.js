@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
-import { playChime, AmbientPlayer } from '@/lib/audioEngine'
+import { playChime, playEventSound, MultiTrackMixer } from '@/lib/audioEngine'
 import { notify, ensureNotificationPermission } from '@/lib/notify'
 import { logFocusSession } from '@/services/focusService'
 import { addLedgerEntry } from '@/services/ledgerService'
@@ -20,20 +20,20 @@ export function useFocusEngine() {
   const { user } = useAuth()
   const status = useStore((s) => s.status)
   const phase = useStore((s) => s.phase)
-  const ambient = useStore((s) => s.ambient)
+  const audioTracks = useStore((s) => s.audioTracks)
   const muted = useStore((s) => s.muted)
   const volume = useStore((s) => s.volume)
   const focusLocked = useStore((s) => s.focusLocked)
   const intervalRef = useRef(null)
-  const ambientRef = useRef(null)
+  const mixerRef = useRef(null)
   const completingRef = useRef(false)
 
-  if (!ambientRef.current) ambientRef.current = new AmbientPlayer()
+  if (!mixerRef.current) mixerRef.current = new MultiTrackMixer()
 
   useEffect(() => {
     ensureNotificationPermission()
-    const player = ambientRef.current
-    return () => player.stop()
+    const mixer = mixerRef.current
+    return () => mixer.stopAll()
   }, [])
 
   // ── Fullscreen: only during focus phase, exit on break/idle ──
@@ -49,6 +49,7 @@ export function useFocusEngine() {
   useEffect(() => {
     if (focusLocked) {
       window.protrack?.window?.setAlwaysOnTop?.(true)
+      playEventSound('lock-initiated')
     } else {
       window.protrack?.window?.setAlwaysOnTop?.(false)
     }
@@ -120,14 +121,27 @@ export function useFocusEngine() {
 
   // Ambient soundscape lifecycle (silenced while muted).
   useEffect(() => {
-    const player = ambientRef.current
-    if (status === 'running' && ambient !== 'none' && !muted) player.start(ambient)
-    else player.stop()
-  }, [status, ambient, muted])
+    const mixer = mixerRef.current
+    if (status === 'running' && !muted) {
+      if (audioTracks.ambient1 && audioTracks.ambient1 !== 'off') {
+        mixer.startTrack('ambient1', audioTracks.ambient1)
+      } else {
+        mixer.stopTrack('ambient1')
+      }
+      
+      if (audioTracks.ambient2 && audioTracks.ambient2 !== 'off') {
+        mixer.startTrack('ambient2', audioTracks.ambient2)
+      } else {
+        mixer.stopTrack('ambient2')
+      }
+    } else {
+      mixer.stopAll()
+    }
+  }, [status, audioTracks, muted])
 
   // Sync volume to the ambient player whenever it changes.
   useEffect(() => {
-    ambientRef.current?.setGain?.(volume)
+    mixerRef.current?.setGain?.(volume)
   }, [volume])
 
   // Listen for Electron global hotkey Focus Toggle events.
