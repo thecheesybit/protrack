@@ -86,7 +86,24 @@ jobs:
         id: merge
         run: |
           git fetch origin master:master
-          # Check whether master is an ancestor of development (= ff possible).
+
+          # Self-heal divergence: release.yml's prepare job pushes a version-
+          # bump commit directly to master, which can race with a developer's
+          # next push to development. When that happens, master has commits
+          # development doesn't, and the ff check below fails.
+          #
+          # We rebase development on top of master and force-push it. This
+          # makes master a strict ancestor of development again, so the ff
+          # check downstream succeeds without manual intervention.
+          if ! git merge-base --is-ancestor master development; then
+            echo "::notice::Master is ahead of development — auto-rebasing development on master."
+            git rebase master development || {
+              echo "::error::Rebase conflict — manual intervention required."
+              exit 1
+            }
+            git push origin development --force-with-lease
+          fi
+
           if git merge-base --is-ancestor master development; then
             git checkout master
             git merge --ff-only development
@@ -95,7 +112,7 @@ jobs:
             echo "::notice::development promoted to master via fast-forward."
           else
             echo "promoted=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Branches have diverged — fast-forward not possible. Will open a PR for manual review."
+            echo "::warning::Branches still diverged after rebase — opening PR for review."
           fi
 
       - name: Trigger release pipeline
