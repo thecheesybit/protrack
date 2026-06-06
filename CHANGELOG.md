@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.10 — 2026-06-06
+
+- feat(settings): show only what's new in the current version, link to full GitHub history (88815c2)
+
+
 ## v1.1.9 — 2026-06-06
 
 - feat: changelog auto-syncs to shipped releases (2bb635d)
