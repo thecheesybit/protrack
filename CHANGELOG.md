@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.14 — 2026-06-06
+
+- feat: complete v1.2.0 5-Module Overhaul (dce5757)
+
+
 ## [1.2.0] - PRO TRACK 5-Module Overhaul
 
 ### Added
