@@ -1,40 +1,22 @@
-import { useEffect, useState } from 'react'
-import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core'
-import {
-  SortableContext,
-  horizontalListSortingStrategy,
-  useSortable,
-  arrayMove,
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
+import { useState } from 'react'
 import { Plus, Settings2 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
 import { getIcon } from '@/lib/icons'
-import { reorderModes } from '@/services/modeService'
 import { updateActiveMode } from '@/services/userService'
 import { ModeEditorModal } from '@/components/modes/ModeEditorModal'
 import { cn } from '@/utils/cn'
 
-function SortableModePill({ mode, active, onSelect, onEdit }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: mode.id })
+/**
+ * Static, non-draggable mode pill. Navigation order is determined by
+ * mode.order and can only be changed via Mode Editor in Settings —
+ * eliminating accidental reordering during normal use.
+ */
+function ModePill({ mode, active, onSelect, onEdit }) {
   const Icon = getIcon(mode.icon)
 
   return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn('relative shrink-0', isDragging && 'z-10 opacity-80')}
-      {...attributes}
-      {...listeners}
-    >
+    <div className="relative shrink-0">
       <button
         onClick={onSelect}
         className={cn(
@@ -54,7 +36,6 @@ function SortableModePill({ mode, active, onSelect, onEdit }) {
           <span
             role="button"
             tabIndex={0}
-            onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation()
               onEdit()
@@ -77,38 +58,28 @@ export function ModeSwitcher() {
   const setActiveModeId = useStore((s) => s.setActiveModeId)
   const restoreWidgets = useStore((s) => s.restoreWidgets)
 
-  const [items, setItems] = useState(modes)
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingMode, setEditingMode] = useState(null)
 
-  useEffect(() => setItems(modes), [modes])
+  // Modes are rendered in their persisted order (mode.order ascending)
+  const sortedModes = [...modes].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-  )
+  // Inject a pseudo-mode "All" at the front
+  const allMode = { id: 'all', name: 'All Scopes', icon: 'Globe', accentColor: '#94a3b8' }
 
   const selectMode = async (id) => {
     if (id === activeModeId) return
     setActiveModeId(id) // optimistic
     restoreWidgets() // collapse any focused widget on context switch
     try {
-      await updateActiveMode(user.uid, id)
+      if (id !== 'all') {
+        await updateActiveMode(user.uid, id)
+      } else {
+        // We can just persist 'all' as the active mode. It's safe since it's just a string pointer.
+        await updateActiveMode(user.uid, id)
+      }
     } catch (err) {
       console.error('[mode] failed to persist active mode', err)
-    }
-  }
-
-  const onDragEnd = async ({ active, over }) => {
-    if (!over || active.id === over.id) return
-    const oldIndex = items.findIndex((m) => m.id === active.id)
-    const newIndex = items.findIndex((m) => m.id === over.id)
-    const next = arrayMove(items, oldIndex, newIndex)
-    setItems(next) // optimistic
-    try {
-      await reorderModes(user.uid, next.map((m) => m.id))
-    } catch (err) {
-      console.error('[mode] reorder failed', err)
-      setItems(modes) // rollback
     }
   }
 
@@ -117,6 +88,7 @@ export function ModeSwitcher() {
     setEditorOpen(true)
   }
   const openEdit = (mode) => {
+    if (mode.id === 'all') return // Cannot edit the 'All' mode
     setEditingMode(mode)
     setEditorOpen(true)
   }
@@ -124,26 +96,22 @@ export function ModeSwitcher() {
   return (
     <>
       <div className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-line/70 bg-surface/50 p-1.5 backdrop-blur-xl">
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={onDragEnd}
-        >
-          <SortableContext
-            items={items.map((m) => m.id)}
-            strategy={horizontalListSortingStrategy}
-          >
-            {items.map((mode) => (
-              <SortableModePill
-                key={mode.id}
-                mode={mode}
-                active={mode.id === activeModeId}
-                onSelect={() => selectMode(mode.id)}
-                onEdit={() => openEdit(mode)}
-              />
-            ))}
-          </SortableContext>
-        </DndContext>
+        <ModePill
+          key="all"
+          mode={allMode}
+          active={activeModeId === 'all'}
+          onSelect={() => selectMode('all')}
+          onEdit={() => openEdit(allMode)}
+        />
+        {sortedModes.map((mode) => (
+          <ModePill
+            key={mode.id}
+            mode={mode}
+            active={mode.id === activeModeId}
+            onSelect={() => selectMode(mode.id)}
+            onEdit={() => openEdit(mode)}
+          />
+        ))}
 
         <button
           onClick={openCreate}

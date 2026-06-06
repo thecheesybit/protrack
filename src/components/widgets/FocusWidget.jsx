@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Play, Pause, RotateCcw, Flame, Clock, CloudRain, Waves, Wind, VolumeX, TreePine } from 'lucide-react'
+import { Play, Pause, RotateCcw, Flame, Clock, CloudRain, Waves, Wind, VolumeX, Volume2, TreePine, Headphones, Coffee, Trees, Zap, AudioLines } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { WidgetFrame } from './WidgetFrame'
 import { ForestView } from '@/components/focus/ForestView'
@@ -15,6 +15,10 @@ const AMBIENTS = [
   { id: 'rain', label: 'Rain', Icon: CloudRain },
   { id: 'waves', label: 'Waves', Icon: Waves },
   { id: 'wind', label: 'Wind', Icon: Wind },
+  { id: 'whitenoise', label: 'White Noise', Icon: AudioLines },
+  { id: 'cafe', label: 'Cafe', Icon: Coffee },
+  { id: 'forest', label: 'Forest', Icon: Trees },
+  { id: 'binaural', label: 'Binaural', Icon: Headphones },
 ]
 
 function mmss(sec) {
@@ -54,6 +58,8 @@ export function FocusWidget({ widget, variant }) {
   const breakMin = useStore((s) => s.breakMin)
   const session = useStore((s) => s.session)
   const ambient = useStore((s) => s.ambient)
+  const volume = useStore((s) => s.volume)
+  const muted = useStore((s) => s.muted)
   const stats = useStore((s) => s.stats)
 
   const startFocus = useStore((s) => s.startFocus)
@@ -62,6 +68,8 @@ export function FocusWidget({ widget, variant }) {
   const reset = useStore((s) => s.reset)
   const setDurations = useStore((s) => s.setDurations)
   const setAmbient = useStore((s) => s.setAmbient)
+  const setVolume = useStore((s) => s.setVolume)
+  const toggleMute = useStore((s) => s.toggleMute)
 
   const { user } = useAuth()
   const activeModeId = useStore((s) => s.activeModeId)
@@ -179,8 +187,8 @@ export function FocusWidget({ widget, variant }) {
               </button>
             </div>
 
-            {/* presets + ambient */}
-            <div className="flex flex-col items-center gap-2">
+            {/* presets */}
+            <div className="flex flex-col items-center gap-3">
               <div className="flex gap-1.5">
                 {PRESETS.map((m) => (
                   <button
@@ -196,24 +204,54 @@ export function FocusWidget({ widget, variant }) {
                   </button>
                 ))}
               </div>
-              <div className="flex gap-1.5">
+
+              {/* ── Ambient 2×4 Grid ── */}
+              <div className="grid grid-cols-4 gap-1.5">
                 {AMBIENTS.map(({ id, label, Icon }) => (
                   <button
                     key={id}
                     onClick={() => setAmbient(id)}
                     title={label}
                     className={cn(
-                      'flex h-8 w-8 items-center justify-center rounded-lg border transition-colors',
-                      ambient === id ? 'border-accent/50 text-accent' : 'border-line text-muted hover:text-ink',
+                      'flex h-9 items-center justify-center gap-1 rounded-lg border px-2 transition-all',
+                      ambient === id
+                        ? 'border-accent/50 bg-accent/10 text-accent shadow-glow-sm'
+                        : 'border-line text-muted hover:text-ink hover:border-line/80',
                     )}
                   >
-                    <Icon className="h-4 w-4" />
+                    <Icon className="h-3.5 w-3.5" />
+                    <span className="text-[10px] font-medium hidden sm:inline">{label}</span>
                   </button>
                 ))}
               </div>
 
+              {/* ── Volume Control ── */}
+              <div className="flex w-full max-w-[260px] items-center gap-2">
+                <button
+                  onClick={toggleMute}
+                  className={cn(
+                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors',
+                    muted ? 'border-red-500/30 text-red-400' : 'border-line text-muted hover:text-ink'
+                  )}
+                  title={muted ? 'Unmute' : 'Mute'}
+                >
+                  {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={Math.round(volume * 100)}
+                  onChange={(e) => setVolume(Number(e.target.value) / 100)}
+                  className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-surface-2 accent-accent [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent [&::-webkit-slider-thumb]:shadow-glow-sm"
+                />
+                <span className="w-8 text-right text-[10px] font-medium tabular-nums text-muted">
+                  {Math.round(volume * 100)}%
+                </span>
+              </div>
+
               {/* Custom Audio URL */}
-              <div className="mt-2 w-full max-w-[240px]">
+              <div className="w-full max-w-[260px]">
                 <label className="mb-1 block text-center text-[10px] uppercase tracking-wider text-muted">
                   Custom Background Audio URL
                 </label>

@@ -30,31 +30,34 @@
 <td width="50%" valign="top">
 
 ### 🗂️ Workspace Modes
-Partition everything — subjects, timetable, tasks, analytics — by execution scope: **UPSC, M.Tech, GATE**, and more. The active mode re-tints the entire UI in real time.
+Partition everything — subjects, timetable, tasks, analytics — by execution scope: **UPSC, M.Tech, GATE**, and more. Includes an **"All Scopes"** aggregation mode to view all workspace data in a single flattened dashboard. The active mode re-tints the entire UI in real time.
 
 ### 🏝️ Universal Dynamic Island
 One floating, morphing notifier for Pomodoro alerts, hydration nudges, sync state, and live progress — inspired by Apple's Dynamic Island.
 
 ### 🌗 Chrono-Adaptive Aesthetics
-Surfaces and ambient light shift by time of day (crisp midday → deep obsidian at night) without overriding your light/dark preference.
+Surfaces and ambient light shift by time of day (crisp midday → deep obsidian at night). Added an **"Auto" theme** that natively cross-fades light/dark modes based on local time.
 
 ### 🔤 Pixel-Perfect Typography
 Compact / Standard / Large display modes cascade through a single CSS variable. Electron is locked to native device pixels (`zoomFactor: 1.0`) for HiDPI sharpness.
 
 ### 🕰️ Flip-Card Clock
-Mechanical split-flap clock pinned to the left edge of the workspace — 12-hour with AM/PM + date. Each digit flips when its value changes. Auto-hides during focus.
+Mechanical split-flap clock supporting custom placement (draggable) and scaling (**scroll-to-scale** from 0.5x to 3.0x), with position and scale persisted to localStorage. Auto-hides during focus.
 
 ### 📅 Interactive Calendar
-Click the grid and type natural language — *"Revise Polity tomorrow 5pm for 2h"* — to create sessions, deadlines, or subject-linked tasks. A live timeline flag tracks the day.
+Click the grid and type natural language — *"Revise Polity tomorrow 5pm for 2h"* — to create sessions, deadlines, or subject-linked tasks. Supports advanced recurrence rules and event tagging.
+
+### 🧘 Zen Motivation Overlay
+An elegant, full-screen idle overlay that triggers during user inactivity. Fetches uniquely generated quotes via Gemini (with 30-day deduplication cache) to keep inspiration fresh.
 
 </td>
 <td width="50%" valign="top">
 
 ### 🎯 Deep Focus
-Pomodoro with ambient soundscapes, a growing forest, and an always-on miniature timer that follows you across every module.
+Pomodoro with ambient soundscapes, customized background audio URLs (YouTube/direct), exits restricted via warning prompts, and an always-on miniature timer that follows you across every module.
 
 ### ✅ Comprehensive Kanban
-Drag a task to *Done* → the parent subject's syllabus % recalculates instantly. Tasks support **priority** (low / medium / high / urgent), **inline notes**, and **same-column reorder** via drag-and-drop.
+Drag a task to *Done* → syllabus % recalculates instantly. Tasks support priority, inline notes, drag-and-drop column reordering, empty column drops, glowing hover states, and double-click-to-edit.
 
 ### 💪 Apple-Style Activity Rings
 Visual progress rings + a read-only **achievement ledger** bounded to 200 entries, forever free-tier safe.
@@ -67,6 +70,9 @@ Priority + notes + drag-to-reorder, just like the Kanban. Sort by user order or 
 
 ### 🤖 AI Companion with Write Access
 The Gemini chat assistant can complete tasks, set subject progress, add to-dos (with priority + notes), schedule timetable slots, toggle habits, and create subjects via natural language — *"I finished my Calculus session"* → marks done + recomputes progress + logs to ledger.
+
+### 🔊 AudioFX Synthesized Sounds
+Lightweight Web Audio API synthesizers that generate zero-latency chimes on Todo completion and pops during Kanban moves (toggleable in Settings).
 
 </td>
 </tr>

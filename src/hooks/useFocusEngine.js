@@ -10,6 +10,11 @@ import { addLedgerEntry } from '@/services/ledgerService'
  * Mounted once (in Dashboard). Owns the 1s tick interval, the ambient sound
  * lifecycle, and the on-complete side-effects (chime, notification, persist,
  * grow tree). Keeping this outside the slice keeps state pure and testable.
+ *
+ * Also manages the "focus lock" — when a session starts, fullscreen and
+ * alwaysOnTop are engaged, and the Dashboard shows a lock-screen overlay.
+ * Fullscreen is only active during the focus phase; during break the window
+ * exits fullscreen but focusLocked stays true (the lock-screen stays on).
  */
 export function useFocusEngine() {
   const { user } = useAuth()
@@ -17,6 +22,8 @@ export function useFocusEngine() {
   const phase = useStore((s) => s.phase)
   const ambient = useStore((s) => s.ambient)
   const muted = useStore((s) => s.muted)
+  const volume = useStore((s) => s.volume)
+  const focusLocked = useStore((s) => s.focusLocked)
   const intervalRef = useRef(null)
   const ambientRef = useRef(null)
   const completingRef = useRef(false)
@@ -29,7 +36,7 @@ export function useFocusEngine() {
     return () => player.stop()
   }, [])
 
-  // Control full-screen mode for Deep Focus sessions
+  // ── Fullscreen: only during focus phase, exit on break/idle ──
   useEffect(() => {
     if (status === 'running' && phase === 'focus') {
       window.protrack?.window?.setFullScreen?.(true)
@@ -37,6 +44,15 @@ export function useFocusEngine() {
       window.protrack?.window?.setFullScreen?.(false)
     }
   }, [status, phase])
+
+  // ── Always-on-top: engage when locked, disengage on unlock ──
+  useEffect(() => {
+    if (focusLocked) {
+      window.protrack?.window?.setAlwaysOnTop?.(true)
+    } else {
+      window.protrack?.window?.setAlwaysOnTop?.(false)
+    }
+  }, [focusLocked])
 
   const complete = async () => {
     if (completingRef.current) return
@@ -108,6 +124,11 @@ export function useFocusEngine() {
     if (status === 'running' && ambient !== 'none' && !muted) player.start(ambient)
     else player.stop()
   }, [status, ambient, muted])
+
+  // Sync volume to the ambient player whenever it changes.
+  useEffect(() => {
+    ambientRef.current?.setGain?.(volume)
+  }, [volume])
 
   // Listen for Electron global hotkey Focus Toggle events.
   useEffect(() => {

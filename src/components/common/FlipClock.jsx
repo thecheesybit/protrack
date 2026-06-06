@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { useStore } from '@/store/useStore'
 
 /**
- * Floating flip-card clock pinned to the TOP-LEFT corner of the workspace.
+ * Floating flip-card clock — draggable, visible on ALL screen sizes.
  * Each digit (hour-tens, hour-ones, minute-tens, minute-ones) is its own card
  * that flips vertically when its value changes — same idea as the classic
  * split-flap train timetable boards. 12-hour with AM/PM + date.
@@ -15,11 +15,11 @@ import { useStore } from '@/store/useStore'
  *  - `auto`           — hides during focus / fullscreen / chrome-hidden so
  *    the clock stays out of the way during deep work.
  *
- * Double-click the clock toggles between the two modes. The choice is
- * persisted to localStorage so it survives restarts.
+ * Dragging: Pointer-event-based drag. Position persisted to localStorage.
+ * Double-click toggles pinned/auto mode.
  */
 
-const MODE_KEY = 'protrack:clockMode'
+const SCALE_KEY = 'protrack:clock_scale'
 
 function readInitialMode() {
   try {
@@ -28,6 +28,25 @@ function readInitialMode() {
   } catch {
     return 'pinned'
   }
+}
+
+function readInitialPos() {
+  try {
+    const v = typeof localStorage !== 'undefined' && localStorage.getItem(POS_KEY)
+    if (v) {
+      const parsed = JSON.parse(v)
+      if (typeof parsed.x === 'number' && typeof parsed.y === 'number') return parsed
+    }
+  } catch { /* fallback */ }
+  return { x: 12, y: 12 }
+}
+
+function readInitialScale() {
+  try {
+    const v = typeof localStorage !== 'undefined' && localStorage.getItem(SCALE_KEY)
+    if (v) return parseFloat(v)
+  } catch { /* fallback */ }
+  return 1
 }
 
 function pad2(n) {
@@ -83,23 +102,73 @@ function Digit({ value }) {
 export function FlipClock() {
   const [t, setT] = useState(() => formatNow())
   const [mode, setMode] = useState(readInitialMode)
+  const [pos, setPos] = useState(readInitialPos)
+  const [scale, setScale] = useState(readInitialScale)
   const chromeHidden = useStore((s) => s.chromeHidden)
   const fullscreen = useStore((s) => s.fullscreen)
   const focusRunning = useStore((s) => s.status === 'running')
+  const focusLocked = useStore((s) => s.focusLocked)
+
+  // Drag state refs (not in state to avoid re-renders during drag)
+  const dragging = useRef(false)
+  const dragStart = useRef({ px: 0, py: 0, ox: 0, oy: 0 })
+  const clockRef = useRef(null)
 
   useEffect(() => {
     const id = setInterval(() => setT(formatNow()), 1000)
     return () => clearInterval(id)
   }, [])
 
-  const toggleMode = () => {
+  // Prevent default scroll when hovering over clock to allow scale without scrolling page
+  useEffect(() => {
+    const el = clockRef.current
+    if (!el) return
+    const onWheel = (e) => e.preventDefault()
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
+  const handlePointerDown = useCallback((e) => {
+    // Only primary button
+    if (e.button !== 0) return
+    dragging.current = false
+    dragStart.current = { px: e.clientX, py: e.clientY, ox: pos.x, oy: pos.y }
+    const el = clockRef.current
+    if (el) el.setPointerCapture(e.pointerId)
+  }, [pos])
+
+  const handlePointerMove = useCallback((e) => {
+    const ds = dragStart.current
+    const dx = e.clientX - ds.px
+    const dy = e.clientY - ds.py
+    // Only start dragging after 4px movement (prevents conflict with double-click)
+    if (!dragging.current && Math.abs(dx) + Math.abs(dy) < 4) return
+    dragging.current = true
+
+    // Give a bit more wiggle room for edges if scaled
+    const newX = Math.max(0, Math.min(window.innerWidth - (80 * scale), ds.ox + dx))
+    const newY = Math.max(0, Math.min(window.innerHeight - (80 * scale), ds.oy + dy))
+    setPos({ x: newX, y: newY })
+  }, [scale])
+
+  const handlePointerUp = useCallback(() => {
+    if (dragging.current) {
+      // Persist position
+      try {
+        localStorage.setItem(POS_KEY, JSON.stringify(pos))
+      } catch { /* private mode */ }
+    }
+    dragging.current = false
+  }, [pos])
+
+  const toggleMode = useCallback(() => {
+    // Don't toggle if we were dragging
+    if (dragging.current) return
     setMode((prev) => {
       const next = prev === 'pinned' ? 'auto' : 'pinned'
       try {
         localStorage.setItem(MODE_KEY, next)
-      } catch {
-        /* private mode — in-memory update still applies */
-      }
+      } catch { /* private mode */ }
       toast.success(
         next === 'pinned'
           ? 'Clock pinned — always visible'
@@ -107,28 +176,48 @@ export function FlipClock() {
       )
       return next
     })
-  }
+  }, [])
 
-  // Auto mode tucks the clock away during deep work; pinned never hides.
-  const hiddenByAuto = mode === 'auto' && (chromeHidden || fullscreen || focusRunning)
+  const handleWheel = useCallback((e) => {
+    setScale((prev) => {
+      // deltaY positive means scrolling down, which we'll map to shrinking
+      const ds = e.deltaY > 0 ? -0.1 : 0.1
+      const next = Math.max(0.5, Math.min(3.0, prev + ds))
+      try { localStorage.setItem(SCALE_KEY, next.toString()) } catch {}
+      return Number(next.toFixed(1))
+    })
+  }, [])
+
+  // During focus lock, always show if pinned
+  const hiddenByAuto = mode === 'auto' && !focusLocked && (chromeHidden || fullscreen || focusRunning)
 
   return (
     <AnimatePresence>
       {!hiddenByAuto && (
         <motion.div
+          ref={clockRef}
           key="flip-clock"
-          initial={{ opacity: 0, x: -16 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -16 }}
+          initial={{ opacity: 0, scale: 0.9 * scale }}
+          animate={{ opacity: 1, scale }}
+          exit={{ opacity: 0, scale: 0.9 * scale }}
           transition={{ duration: 0.4, ease: [0.2, 0, 0, 1] }}
           onDoubleClick={toggleMode}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onWheel={handleWheel}
           title={
             mode === 'pinned'
-              ? 'Double-click to enable auto-hide'
-              : 'Double-click to pin clock (always visible)'
+              ? 'Double-click to enable auto-hide · Drag to move · Scroll to resize'
+              : 'Double-click to pin clock · Drag to move · Scroll to resize'
           }
-          className="fixed left-3 top-3 z-20 hidden cursor-pointer select-none flex-col items-center gap-2 rounded-2xl border border-line/50 bg-surface/40 px-3 py-3 shadow-glass backdrop-blur-xl transition-colors hover:border-accent/40 xl:flex"
-          aria-label={`Flip clock — ${mode} mode (double-click to toggle)`}
+          className="fixed z-[55] flex cursor-grab select-none flex-col items-center gap-2 rounded-2xl border border-line/50 bg-surface/40 px-3 py-3 shadow-glass backdrop-blur-xl transition-colors hover:border-accent/40 active:cursor-grabbing touch-none"
+          style={{
+            left: pos.x,
+            top: pos.y,
+            transformOrigin: 'top left', // Scale from the top left corner
+          }}
+          aria-label={`Flip clock — ${mode} mode (double-click to toggle, drag to move, scroll to scale)`}
         >
           <div className="flex items-end gap-1">
             <Digit value={t.h1} />

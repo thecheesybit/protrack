@@ -3,6 +3,7 @@ import {
   onAuthStateChanged,
   signInWithPopup,
   signOut as firebaseSignOut,
+  deleteUser,
 } from 'firebase/auth'
 import { auth, googleProvider, isFirebaseConfigured } from '@/lib/firebase'
 import { ensureUserDocument } from '@/services/userService'
@@ -125,6 +126,18 @@ export function AuthProvider({ children }) {
     await firebaseSignOut(auth)
   }, [])
 
+  const deleteAccount = useCallback(async () => {
+    if (!auth.currentUser) return
+    try {
+      await deleteUser(auth.currentUser)
+    } catch (err) {
+      if (err.code === 'auth/requires-recent-login') {
+        throw new Error('Please sign out and sign back in to verify your identity before deleting your account.')
+      }
+      throw err
+    }
+  }, [])
+
   return (
     <AuthContext.Provider
       value={{
@@ -134,6 +147,7 @@ export function AuthProvider({ children }) {
         error,
         signIn,
         signOut,
+        deleteAccount,
         configured: isFirebaseConfigured,
       }}
     >

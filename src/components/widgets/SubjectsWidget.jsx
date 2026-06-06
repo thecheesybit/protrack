@@ -26,6 +26,10 @@ export function SubjectsWidget({ widget, variant }) {
   }, [subjects, selectedId])
 
   const openCreate = () => {
+    if (activeModeId === 'all') {
+      import('react-hot-toast').then(t => t.default.error('Please select a specific mode to add subjects.'))
+      return
+    }
     setEditingSubject(null)
     setEditorOpen(true)
   }

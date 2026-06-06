@@ -14,9 +14,11 @@ export const createFocusSlice = (set, get) => ({
   secondsLeft: DEFAULT_FOCUS * 60,
   session: null, // { label, color, subjectId, modeId } | null
   startedAt: null,
-  ambient: 'none', // 'none' | 'rain' | 'waves' | 'wind'
+  ambient: 'none', // 'none' | 'rain' | 'waves' | 'wind' | 'whitenoise' | 'cafe' | 'forest' | 'binaural'
   muted: false, // global mute for chime + ambient (toggled by hotkey)
+  volume: 0.5, // 0.0–1.0 master volume for ambient + background audio
   justCompleted: 0, // bumps to trigger the tree-grow animation
+  focusLocked: false, // true = entire UI is locked out during session
 
   setDurations: (focusMin, breakMin) =>
     set((s) => ({
@@ -30,6 +32,8 @@ export const createFocusSlice = (set, get) => ({
   setMuted: (muted) => set({ muted }),
   toggleMute: () => set((s) => ({ muted: !s.muted })),
 
+  setVolume: (volume) => set({ volume: Math.max(0, Math.min(1, volume)) }),
+
   startFocus: (session = null) =>
     set((s) => ({
       status: 'running',
@@ -37,6 +41,7 @@ export const createFocusSlice = (set, get) => ({
       session: session || s.session,
       secondsLeft: s.phase === 'focus' && s.status === 'paused' ? s.secondsLeft : s.focusMin * 60,
       startedAt: Date.now(),
+      focusLocked: true,
     })),
 
   pause: () => set({ status: 'paused' }),
@@ -48,6 +53,7 @@ export const createFocusSlice = (set, get) => ({
       phase: 'focus',
       secondsLeft: s.focusMin * 60,
       startedAt: null,
+      focusLocked: false,
     })),
 
   tick: () =>
@@ -65,5 +71,5 @@ export const createFocusSlice = (set, get) => ({
   bumpCompleted: () => set((s) => ({ justCompleted: s.justCompleted + 1 })),
 
   endToIdle: () =>
-    set((s) => ({ status: 'idle', phase: 'focus', secondsLeft: s.focusMin * 60, startedAt: null })),
+    set((s) => ({ status: 'idle', phase: 'focus', secondsLeft: s.focusMin * 60, startedAt: null, focusLocked: false })),
 })

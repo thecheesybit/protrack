@@ -104,3 +104,30 @@ Transcript:
     throw new Error('Could not parse AI response')
   }
 }
+
+/** Fetch a unique motivational quote using Gemini. */
+export async function fetchZenQuote(recentQuotes = []) {
+  if (!hasGeminiKey()) return null
+  
+  const model = client().getGenerativeModel({
+    model: MODEL,
+    generationConfig: { responseMimeType: 'application/json' },
+  })
+  
+  const avoid = recentQuotes.map(q => `"${q.text}"`).join(', ')
+  const prompt = `Generate a highly profound, calming, and motivational quote for deep focus and productivity.
+It must NOT be any of these recent quotes: [${avoid}].
+Return a JSON object with strictly two keys: "text" (the quote text) and "author" (the person who said it, or "Unknown").
+Do not include any other text.`
+
+  try {
+    const res = await model.generateContent(prompt)
+    const text = res.response.text()
+    const match = text.match(/\{[\s\S]*\}/)
+    if (match) return JSON.parse(match[0])
+    return JSON.parse(text)
+  } catch (err) {
+    console.warn('[gemini] fetchZenQuote failed:', err)
+    return null
+  }
+}

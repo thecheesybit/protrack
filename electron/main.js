@@ -433,6 +433,11 @@ ipcMain.handle('window:setFullScreen', (_e, flag) => {
   return win.isFullScreen()
 })
 ipcMain.handle('window:isFullScreen', () => win?.isFullScreen() ?? false)
+ipcMain.handle('window:setAlwaysOnTop', (_e, flag) => {
+  if (!win) return false
+  win.setAlwaysOnTop(Boolean(flag), 'screen-saver')
+  return win.isAlwaysOnTop()
+})
 
 /* ── IPC: OS-encrypted session storage (safeStorage) ────── */
 ipcMain.handle('secure:set', (_e, value) => {

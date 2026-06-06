@@ -25,9 +25,19 @@ export function useChronoTheme() {
   useEffect(() => {
     const apply = () => {
       const band = bandForHour(new Date().getHours())
-      if (document.documentElement.dataset.chrono !== band) {
-        document.documentElement.dataset.chrono = band
+      const root = document.documentElement
+      
+      if (root.dataset.chrono !== band) {
+        root.dataset.chrono = band
       }
+
+      // Enforce auto theme based on time of day
+      const savedTheme = localStorage.getItem('protrack:theme')
+      if (savedTheme === 'auto') {
+        const isDay = band === 'dawn' || band === 'day'
+        root.classList.toggle('dark', !isDay)
+      }
+
       setChronoBand(band)
     }
     apply()

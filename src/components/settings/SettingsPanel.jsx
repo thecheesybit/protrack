@@ -3,6 +3,7 @@ import {
   Settings,
   Sun,
   Moon,
+  Sunrise,
   Bell,
   KeyRound,
   Check,
@@ -14,6 +15,8 @@ import {
   Type,
   DownloadCloud,
   RefreshCw,
+  AlertTriangle,
+  Volume2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
@@ -87,6 +90,7 @@ export function SettingsPanel() {
   const [keyInput, setKeyInput] = useState('')
   const [hydration, setHydration] = useState(60)
   const [notifOn, setNotifOn] = useState(false)
+  const [soundsOn, setSoundsOn] = useState(() => localStorage.getItem('protrack:sounds') !== 'false')
   const [appInfo, setAppInfo] = useState(null)
 
   useEffect(() => {
@@ -124,6 +128,12 @@ export function SettingsPanel() {
     )
   }
 
+  const toggleSounds = () => {
+    const next = !soundsOn
+    setSoundsOn(next)
+    localStorage.setItem('protrack:sounds', next ? 'true' : 'false')
+  }
+
   return (
     <Sheet
       open={open}
@@ -133,13 +143,13 @@ export function SettingsPanel() {
     >
       <div className="min-h-0 flex-1 overflow-y-auto">
         {/* Appearance */}
-        <Section title="Appearance" icon={theme === 'dark' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}>
+        <Section title="Appearance" icon={theme === 'dark' ? <Moon className="h-4 w-4" /> : theme === 'auto' ? <Sunrise className="h-4 w-4" /> : <Sun className="h-4 w-4" />}>
           <button
             onClick={toggleTheme}
             className="flex w-full items-center justify-between rounded-xl border border-line bg-surface-2/40 px-3.5 py-2.5 text-sm"
           >
             <span>Theme</span>
-            <span className="font-medium capitalize text-accent">{theme}</span>
+            <span className="font-medium capitalize text-accent">{theme === 'auto' ? 'Auto (Time of Day)' : theme}</span>
           </button>
         </Section>
 
@@ -222,18 +232,29 @@ export function SettingsPanel() {
           </div>
         </Section>
 
-        {/* Notifications */}
-        <Section title="Notifications" icon={<Bell className="h-4 w-4" />}>
-          <button
-            onClick={enableNotifications}
-            disabled={notifOn}
-            className="flex w-full items-center justify-between rounded-xl border border-line bg-surface-2/40 px-3.5 py-2.5 text-sm disabled:opacity-70"
-          >
-            <span>Desktop notifications</span>
-            <span className={cn('font-medium', notifOn ? 'text-emerald-400' : 'text-accent')}>
-              {notifOn ? 'Enabled' : 'Enable'}
-            </span>
-          </button>
+        {/* Notifications & Sounds */}
+        <Section title="Notifications & Sounds" icon={<Bell className="h-4 w-4" />}>
+          <div className="space-y-2">
+            <button
+              onClick={enableNotifications}
+              disabled={notifOn}
+              className="flex w-full items-center justify-between rounded-xl border border-line bg-surface-2/40 px-3.5 py-2.5 text-sm disabled:opacity-70"
+            >
+              <span>Desktop notifications</span>
+              <span className={cn('font-medium', notifOn ? 'text-emerald-400' : 'text-accent')}>
+                {notifOn ? 'Enabled' : 'Enable'}
+              </span>
+            </button>
+            <button
+              onClick={toggleSounds}
+              className="flex w-full items-center justify-between rounded-xl border border-line bg-surface-2/40 px-3.5 py-2.5 text-sm"
+            >
+              <span className="flex items-center gap-2">UI Sound Effects</span>
+              <span className={cn('font-medium', soundsOn ? 'text-emerald-400' : 'text-muted')}>
+                {soundsOn ? 'Enabled' : 'Muted'}
+              </span>
+            </button>
+          </div>
         </Section>
 
         {/* Global shortcuts (desktop) */}
@@ -323,6 +344,28 @@ export function SettingsPanel() {
             Crafted by {CREATOR.name}
             <ExternalLink className="h-3 w-3" />
           </a>
+        </Section>
+
+        {/* Account */}
+        <Section title="Account" icon={<AlertTriangle className="h-4 w-4 text-rose-400" />}>
+          <p className="text-xs text-muted mb-3">
+            Permanently delete your account and all associated data. This action cannot be undone.
+          </p>
+          <button
+            onClick={async () => {
+              if (window.confirm('Are you absolutely sure you want to delete your account? This will erase all your data.')) {
+                try {
+                  await useAuth().deleteAccount()
+                  toast.success('Account deleted.')
+                } catch (err) {
+                  toast.error(err.message || 'Failed to delete account.')
+                }
+              }
+            }}
+            className="flex w-full items-center justify-center rounded-xl border border-rose-500/20 bg-rose-500/10 px-3.5 py-2 text-sm text-rose-500 transition-colors hover:bg-rose-500/20"
+          >
+            Delete Account
+          </button>
         </Section>
 
         <div className="px-5 py-4 text-center text-xs text-muted">

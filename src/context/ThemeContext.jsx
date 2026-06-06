@@ -6,10 +6,8 @@ export const ThemeContext = createContext(null)
 function getInitialTheme() {
   if (typeof window === 'undefined') return 'dark'
   const saved = localStorage.getItem(STORAGE_KEYS.theme)
-  if (saved === 'light' || saved === 'dark') return saved
-  // Default to dark (the app's signature look), but respect explicit OS light.
-  const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches
-  return prefersLight ? 'light' : 'dark'
+  if (saved === 'light' || saved === 'dark' || saved === 'auto') return saved
+  return 'dark'
 }
 
 export function ThemeProvider({ children }) {
@@ -17,17 +15,25 @@ export function ThemeProvider({ children }) {
 
   useEffect(() => {
     const root = document.documentElement
-    root.classList.toggle('dark', theme === 'dark')
+    
+    if (theme === 'auto') {
+       const band = root.dataset.chrono || 'night'
+       const isDay = band === 'dawn' || band === 'day'
+       root.classList.toggle('dark', !isDay)
+    } else {
+       root.classList.toggle('dark', theme === 'dark')
+    }
+    
     localStorage.setItem(STORAGE_KEYS.theme, theme)
   }, [theme])
 
   const toggleTheme = useCallback(
-    () => setTheme((t) => (t === 'dark' ? 'light' : 'dark')),
+    () => setTheme((t) => (t === 'dark' ? 'light' : t === 'light' ? 'auto' : 'dark')),
     [],
   )
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   )

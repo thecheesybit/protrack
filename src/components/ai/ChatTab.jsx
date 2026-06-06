@@ -1,12 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Sparkles, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react'
+import { Send, Sparkles, AlertTriangle, CheckCircle2, XCircle, Mic, MicOff } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { useAuth } from '@/hooks/useAuth'
 import { useSubjects } from '@/hooks/useSubjects'
 import { useTimetable } from '@/hooks/useTimetable'
 import { useHabits, useTodos } from '@/hooks/useWellness'
 import { chatWithGemini, hasGeminiKey } from '@/services/geminiService'
+import { useSpeechRecognition } from '@/hooks/useSpeechRecognition'
 import { todayDow } from '@/lib/time'
+import { CommandMatrix } from './CommandMatrix'
 
 const SUGGESTIONS = [
   'Analyze my progress',
@@ -29,11 +31,24 @@ export function ChatTab({ onOpenSettings }) {
   const [loading, setLoading] = useState(false)
   const scrollRef = useRef(null)
 
+  const { supported, listening, transcript, interim, start, stop, reset: resetSpeech, setText } = useSpeechRecognition()
+
   const activeMode = modes.find((m) => m.id === activeModeId)
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, loading])
+
+  // When speech recognition finalizes text, pipe it into the input
+  useEffect(() => {
+    if (transcript) {
+      setInput((prev) => {
+        const sep = prev && !prev.endsWith(' ') ? ' ' : ''
+        return prev + sep + transcript
+      })
+      resetSpeech()
+    }
+  }, [transcript, resetSpeech])
 
   const buildContext = () => {
     const today = todayDow()
@@ -61,6 +76,8 @@ export function ChatTab({ onOpenSettings }) {
     const content = (text ?? input).trim()
     if (!content || loading) return
     if (!hasGeminiKey()) return
+    // Stop listening if voice was active
+    if (listening) stop()
     const next = [...messages, { role: 'user', text: content }]
     setMessages(next)
     setInput('')
@@ -78,6 +95,14 @@ export function ChatTab({ onOpenSettings }) {
       setMessages((m) => [...m, { role: 'assistant', text: `Error: ${err.message}` }])
     } finally {
       setLoading(false)
+    }
+  }
+
+  const toggleMic = () => {
+    if (listening) {
+      stop()
+    } else {
+      start()
     }
   }
 
@@ -102,7 +127,7 @@ export function ChatTab({ onOpenSettings }) {
     <div className="flex min-h-0 flex-1 flex-col">
       <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
         {messages.length === 0 && (
-          <div className="flex flex-col items-center gap-3 py-8 text-center">
+          <div className="flex flex-col items-center gap-3 py-4 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent">
               <Sparkles className="h-6 w-6" />
             </div>
@@ -121,6 +146,8 @@ export function ChatTab({ onOpenSettings }) {
                 </button>
               ))}
             </div>
+            {/* Command Matrix */}
+            <CommandMatrix onSelect={(cmd) => setInput(cmd)} />
           </div>
         )}
 
@@ -169,7 +196,27 @@ export function ChatTab({ onOpenSettings }) {
       </div>
 
       <div className="border-t border-line/60 p-3">
+        {/* Interim speech preview */}
+        {listening && interim && (
+          <div className="mb-2 rounded-lg bg-accent/5 px-3 py-1.5 text-xs text-accent italic">
+            {interim}…
+          </div>
+        )}
         <div className="flex items-end gap-2">
+          {supported && (
+            <button
+              onClick={toggleMic}
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-all ${
+                listening
+                  ? 'animate-pulse border-red-500/50 bg-red-500/10 text-red-400'
+                  : 'border-line text-muted hover:text-ink hover:border-accent/40'
+              }`}
+              aria-label={listening ? 'Stop listening' : 'Start voice input'}
+              title={listening ? 'Listening… click to stop' : 'Voice input'}
+            >
+              {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            </button>
+          )}
           <textarea
             rows={1}
             value={input}
@@ -180,7 +227,7 @@ export function ChatTab({ onOpenSettings }) {
                 send()
               }
             }}
-            placeholder="Ask your companion…"
+            placeholder={listening ? 'Listening…' : 'Ask your companion…'}
             className="max-h-28 flex-1 resize-none rounded-xl border border-line bg-surface-2/60 px-3.5 py-2.5 text-sm outline-none focus:border-accent"
           />
           <button

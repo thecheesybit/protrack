@@ -22,6 +22,7 @@ import { WidgetFrame } from './WidgetFrame'
 import { addTodo, updateTodo, deleteTodo, reorderTodos } from '@/services/todoService'
 import { getPriority, nextPriority, PRIORITIES, PRIORITY_ORDER } from '@/lib/priority'
 import { PriorityLegend } from '@/components/common/PriorityLegend'
+import { playPop, playSuccess } from '@/lib/audioFX'
 import { cn } from '@/utils/cn'
 
 function PriorityDot({ priority, onCycle }) {
@@ -40,7 +41,7 @@ function PriorityDot({ priority, onCycle }) {
   )
 }
 
-function Row({ t, onToggle, onDelete, onUpdate }) {
+function Row({ t, index, onToggle, onDelete, onUpdate }) {
   const {
     attributes,
     listeners,
@@ -93,11 +94,12 @@ function Row({ t, onToggle, onDelete, onUpdate }) {
         <button
           onDoubleClick={() => setExpanded((v) => !v)}
           className={cn(
-            'min-w-0 flex-1 truncate text-left text-sm',
+            'min-w-0 flex-1 truncate text-left text-sm flex items-center',
             t.done && 'text-muted line-through',
           )}
         >
-          {t.text}
+          <span className="text-muted/50 font-mono text-xs mr-2 select-none shrink-0">{index + 1}.</span>
+          <span>{t.text}</span>
         </button>
         {t.notes && !expanded && (
           <StickyNote className="h-3 w-3 shrink-0 text-amber-400/80" />
@@ -174,13 +176,17 @@ export function TodosWidget({ widget, variant }) {
     if (!value) return
     setText('')
     try {
+      playPop()
       await addTodo(user.uid, { text: value, modeId: activeModeId })
     } catch (err) {
       console.error('[todo] add failed', err)
     }
   }
 
-  const onToggle = (t) => updateTodo(user.uid, t.id, { done: !t.done })
+  const onToggle = (t) => {
+    if (!t.done) playSuccess()
+    updateTodo(user.uid, t.id, { done: !t.done })
+  }
   const onDelete = (id) => deleteTodo(user.uid, id)
   const onUpdate = (id, patch) => updateTodo(user.uid, id, patch)
 
@@ -232,10 +238,11 @@ export function TodosWidget({ widget, variant }) {
               items={active.map((t) => t.id)}
               strategy={verticalListSortingStrategy}
             >
-              {active.map((t) => (
+              {active.map((t, idx) => (
                 <Row
                   key={t.id}
                   t={t}
+                  index={idx}
                   onToggle={onToggle}
                   onDelete={onDelete}
                   onUpdate={(patch) => onUpdate(t.id, patch)}

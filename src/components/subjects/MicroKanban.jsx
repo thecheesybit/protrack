@@ -33,6 +33,7 @@ import {
 import { addLedgerEntry } from '@/services/ledgerService'
 import { getPriority, nextPriority, PRIORITIES } from '@/lib/priority'
 import { PriorityLegend } from '@/components/common/PriorityLegend'
+import { playPop, playSuccess } from '@/lib/audioFX'
 import { cn } from '@/utils/cn'
 
 const COLUMNS = [
@@ -65,7 +66,7 @@ function PriorityDot({ priority, onCycle }) {
   )
 }
 
-function TaskCard({ task, onDelete, onUpdate, dragging }) {
+function TaskCard({ task, index, onDelete, onUpdate, dragging }) {
   const {
     attributes,
     listeners,
@@ -109,13 +110,14 @@ function TaskCard({ task, onDelete, onUpdate, dragging }) {
           <GripVertical className="h-3.5 w-3.5" />
         </button>
         <button
-          onClick={() => setExpanded((v) => !v)}
+          onDoubleClick={() => setExpanded((v) => !v)}
           className={cn(
-            'min-w-0 flex-1 break-words text-left',
+            'min-w-0 flex-1 break-words text-left flex items-start gap-1.5',
             task.column === 'done' && 'text-muted line-through',
           )}
         >
-          {task.title}
+          <span className="text-muted/50 font-mono text-[10px] mt-0.5 select-none shrink-0">{index + 1}.</span>
+          <span>{task.title}</span>
         </button>
         {task.notes && !expanded && (
           <StickyNote
@@ -171,13 +173,16 @@ function TaskCard({ task, onDelete, onUpdate, dragging }) {
 }
 
 function Column({ col, tasks, onAdd, onDelete, onUpdate }) {
-  const { setNodeRef } = useDroppable({ id: col.id })
+  const { setNodeRef, isOver } = useDroppable({ id: col.id })
   const [adding, setAdding] = useState(false)
   const [text, setText] = useState('')
   const [collapsed, setCollapsed] = useState(false)
 
   const submit = () => {
-    if (text.trim()) onAdd(text.trim(), col.id)
+    if (text.trim()) {
+      playPop()
+      onAdd(text.trim(), col.id)
+    }
     setText('')
     setAdding(false)
   }
@@ -188,7 +193,8 @@ function Column({ col, tasks, onAdd, onDelete, onUpdate }) {
     <div
       data-column-id={col.id}
       className={cn(
-        'flex min-h-0 flex-1 flex-col rounded-xl border border-line/50 bg-surface-2/30 p-2 transition-colors',
+        'flex min-h-0 flex-1 flex-col rounded-xl border border-line/50 bg-surface-2/30 p-2 transition-all duration-200',
+        isOver && 'ring-2 ring-accent/40 shadow-glow bg-surface-2/50',
       )}
     >
       <button
@@ -212,10 +218,11 @@ function Column({ col, tasks, onAdd, onDelete, onUpdate }) {
             ref={setNodeRef}
             className="flex min-h-[64px] flex-1 flex-col gap-1.5 overflow-y-auto"
           >
-            {tasks.map((t) => (
+            {tasks.map((t, idx) => (
               <TaskCard
                 key={t.id}
                 task={t}
+                index={idx}
                 onDelete={onDelete}
                 onUpdate={(patch) => onUpdate(t.id, patch)}
               />
@@ -283,6 +290,8 @@ export function MicroKanban({ modeId, subjectId, subjectName }) {
 
     // Case 1: dropping on a different column → move + recompute progress.
     if (task.column !== targetCol) {
+      if (targetCol === 'done') playSuccess()
+      
       updateTask(user.uid, modeId, subjectId, task.id, {
         column: targetCol,
         order: Date.now(),

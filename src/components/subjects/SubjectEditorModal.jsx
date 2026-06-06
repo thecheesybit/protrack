@@ -8,8 +8,9 @@ import { MODE_PALETTE } from '@/lib/constants'
 import { addSubject, updateSubject, deleteSubject } from '@/services/subjectService'
 import { cn } from '@/utils/cn'
 
-export function SubjectEditorModal({ open, onClose, modeId, subject, order, onDeleted }) {
+export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject, order, onDeleted }) {
   const { user } = useAuth()
+  const modeId = subject?._modeId || propModeId
   const isEdit = Boolean(subject?.id)
   const [draft, setDraft] = useState({ name: '', color: MODE_PALETTE[0], targetHours: 0 })
   const [saving, setSaving] = useState(false)

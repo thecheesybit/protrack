@@ -59,6 +59,10 @@ export function TimetableWidget({ widget, variant }) {
   }
 
   const openEditor = (slot) => {
+    if (!slot.id && activeModeId === 'all') {
+      toast.error('Please select a specific mode to add sessions.')
+      return
+    }
     setEditingSlot(slot)
     setEditorOpen(true)
   }

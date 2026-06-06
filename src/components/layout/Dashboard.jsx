@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { useStore } from '@/store/useStore'
 import { useFocusEngine } from '@/hooks/useFocusEngine'
@@ -10,6 +10,7 @@ import { useDesktopIntegration } from '@/hooks/useDesktopIntegration'
 import { useHabitReminders } from '@/hooks/useHabitReminders'
 import { AuroraBackground } from '@/components/common/AuroraBackground'
 import { FlipClock } from '@/components/common/FlipClock'
+import { ZenOverlay } from '@/components/common/ZenOverlay'
 import { DynamicIsland } from '@/components/island/DynamicIsland'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { Spinner } from '@/components/ui/Spinner'
@@ -19,6 +20,7 @@ import { ModeSwitcher } from './ModeSwitcher'
 import { BoardCanvas } from './BoardCanvas'
 import { FocusPanel } from '@/components/focus/FocusPanel'
 import { FocusMiniOverlay } from '@/components/focus/FocusMiniOverlay'
+import { FocusLockScreen } from '@/components/focus/FocusLockScreen'
 import { AIAssistant } from '@/components/ai/AIAssistant'
 import { SettingsPanel } from '@/components/settings/SettingsPanel'
 import { HydrationReminder } from '@/components/wellness/HydrationReminder'
@@ -35,6 +37,7 @@ export function Dashboard() {
   const setSupportOpen = useStore((s) => s.setSupportOpen)
   const chromeHidden = useStore((s) => s.chromeHidden)
   const fullscreen = useStore((s) => s.fullscreen)
+  const focusLocked = useStore((s) => s.focusLocked)
   const immersive = useStore((s) => s.status === 'running')
   useFocusEngine() // drives the Pomodoro tick, sound, notifications, and stats
   useModeAccent() // re-tints the whole UI to the active mode's accent color
@@ -45,10 +48,28 @@ export function Dashboard() {
   useHabitReminders() // schedules per-interval reminder notifications for habits
 
   // Global shortcuts: Esc unwinds overlays/maximize; ⌘/Ctrl+K opens the AI.
+  // When focus is locked, suppress all shortcuts except focus-related ones.
   useEffect(() => {
     const onKey = (e) => {
+      const st = useStore.getState()
+
+      // When focus is locked, block almost everything
+      if (st.focusLocked) {
+        // Allow Escape only to trigger the quit confirmation (handled by FocusWidget)
+        if (e.key === 'Escape') return
+        // Block Ctrl+K, F, and other navigation shortcuts
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+          e.preventDefault()
+          return
+        }
+        if (e.key.toLowerCase() === 'f' && !e.target.tagName.match(/INPUT|TEXTAREA/) && !e.target.isContentEditable) {
+          e.preventDefault()
+          return
+        }
+        return
+      }
+
       if (e.key === 'Escape') {
-        const st = useStore.getState()
         if (st.focusContext) st.closeFocus()
         else if (st.aiOpen) st.setAiOpen(false)
         else if (st.settingsOpen) st.setSettingsOpen(false)
@@ -61,7 +82,6 @@ export function Dashboard() {
         useStore.getState().setAiOpen(true)
       }
       if (e.key.toLowerCase() === 'f') {
-        const st = useStore.getState()
         if (st.fullscreen || st.status === 'idle') {
           if (
             e.target.tagName === 'INPUT' ||
@@ -82,64 +102,73 @@ export function Dashboard() {
   return (
     <div className="relative flex h-full flex-col">
       <AuroraBackground />
+      <ZenOverlay />
       <FlipClock />
       <DynamicIsland />
 
-      <div className={cn(
-        "mx-auto flex h-full w-full flex-col transition-all duration-300",
-        fullscreen ? "max-w-7xl px-6 py-6" : "max-w-7xl px-4 py-5 sm:px-6 sm:py-6"
-      )}>
-        {/* Ambient chrome — collapses (height + fade) when the cursor leaves
-            the top edge; snappier during a Pomodoro for deep focus. */}
-        <motion.div
-          initial={false}
-          animate={{ height: chromeHidden ? 0 : 'auto', opacity: chromeHidden ? 0 : 1 }}
-          transition={{ duration: 0.35, ease: [0.2, 0, 0, 1] }}
-          className="overflow-hidden"
-        >
-          <div className="flex flex-col gap-5 pb-5">
-            <TopBar />
+      {/* Focus Lock Screen — full-viewport overlay when session is active */}
+      <FocusLockScreen />
+
+      {/* Normal dashboard content — hidden when focus is locked */}
+      {!focusLocked && (
+        <>
+          <div className={cn(
+            "mx-auto flex h-full w-full flex-col transition-all duration-300",
+            fullscreen ? "max-w-7xl px-6 py-6" : "max-w-7xl px-4 py-5 sm:px-6 sm:py-6"
+          )}>
+            {/* Ambient chrome — collapses (height + fade) when the cursor leaves
+                the top edge; snappier during a Pomodoro for deep focus. */}
             <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.05 }}
+              initial={false}
+              animate={{ height: chromeHidden ? 0 : 'auto', opacity: chromeHidden ? 0 : 1 }}
+              transition={{ duration: 0.35, ease: [0.2, 0, 0, 1] }}
+              className="overflow-hidden"
             >
-              <ModeSwitcher />
+              <div className="flex flex-col gap-5 pb-5">
+                <TopBar />
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.05 }}
+                >
+                  <ModeSwitcher />
+                </motion.div>
+              </div>
             </motion.div>
+
+            <main className={cn(
+              "min-h-0 flex-1 overflow-y-auto",
+              fullscreen ? "pb-6" : "pb-20"
+            )}>
+              {modesLoading ? (
+                <div className="flex h-full items-center justify-center">
+                  <Spinner className="h-8 w-8" />
+                </div>
+              ) : (
+                <ErrorBoundary>
+                  <BoardCanvas />
+                </ErrorBoundary>
+              )}
+            </main>
           </div>
-        </motion.div>
 
-        <main className={cn(
-          "min-h-0 flex-1 overflow-y-auto",
-          fullscreen ? "pb-6" : "pb-20"
-        )}>
-          {modesLoading ? (
-            <div className="flex h-full items-center justify-center">
-              <Spinner className="h-8 w-8" />
-            </div>
-          ) : (
-            <ErrorBoundary>
-              <BoardCanvas />
-            </ErrorBoundary>
-          )}
-        </main>
-      </div>
-
-      {/* Floating AI companion — recedes into a minimal trigger during focus */}
-      <motion.button
-        onClick={() => setAiOpen(true)}
-        animate={{
-          scale: immersive ? 0.82 : 1,
-          opacity: immersive ? 0.45 : 1,
-        }}
-        whileHover={{ scale: immersive ? 0.95 : 1.05, opacity: 1 }}
-        whileTap={{ scale: 0.92 }}
-        transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-        className="fixed bottom-6 right-6 z-30 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-accent-2 text-white shadow-glow"
-        aria-label="Open AI companion"
-      >
-        <Sparkles className="h-6 w-6" />
-      </motion.button>
+          {/* Floating AI companion — recedes into a minimal trigger during focus */}
+          <motion.button
+            onClick={() => setAiOpen(true)}
+            animate={{
+              scale: immersive ? 0.82 : 1,
+              opacity: immersive ? 0.45 : 1,
+            }}
+            whileHover={{ scale: immersive ? 0.95 : 1.05, opacity: 1 }}
+            whileTap={{ scale: 0.92 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+            className="fixed bottom-6 right-6 z-30 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-accent-2 text-white shadow-glow"
+            aria-label="Open AI companion"
+          >
+            <Sparkles className="h-6 w-6" />
+          </motion.button>
+        </>
+      )}
 
       <FocusPanel />
       <FocusMiniOverlay />
@@ -156,6 +185,9 @@ function BackgroundAudioPlayer() {
   const status = useStore((s) => s.status)
   const focusAudioUrl = useStore((s) => s.settings?.focusAudioUrl || '')
   const muted = useStore((s) => s.muted)
+  const volume = useStore((s) => s.volume)
+  const iframeRef = useRef(null)
+  const audioRef = useRef(null)
 
   if (status !== 'running' || !focusAudioUrl || muted) return null
 
@@ -166,25 +198,59 @@ function BackgroundAudioPlayer() {
 
   if (youtubeMatch) {
     const videoId = youtubeMatch[1]
-    const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&loop=1&playlist=${videoId}&enablejsapi=1`
+    const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&loop=1&playlist=${videoId}&enablejsapi=1&origin=${window.location.origin}`
     return (
-      <iframe
-        src={embedUrl}
-        className="sr-only pointer-events-none"
-        allow="autoplay"
-        title="Background Audio Stream"
-        style={{ width: 0, height: 0, border: 0 }}
-      />
+      <YTVolumeSync iframeRef={iframeRef} volume={volume}>
+        <iframe
+          ref={iframeRef}
+          src={embedUrl}
+          className="sr-only pointer-events-none"
+          allow="autoplay"
+          title="Background Audio Stream"
+          style={{ width: 0, height: 0, border: 0 }}
+        />
+      </YTVolumeSync>
     )
   }
 
   // Fallback to standard HTML5 audio for direct audio files/streams
   return (
-    <audio
-      src={focusAudioUrl}
-      autoPlay
-      loop
-      className="sr-only"
-    />
+    <AudioVolumeSync audioRef={audioRef} volume={volume}>
+      <audio
+        ref={audioRef}
+        src={focusAudioUrl}
+        autoPlay
+        loop
+        className="sr-only"
+      />
+    </AudioVolumeSync>
   )
+}
+
+/** Syncs volume to YouTube iframe via postMessage */
+function YTVolumeSync({ iframeRef, volume, children }) {
+  useEffect(() => {
+    const iframe = iframeRef.current
+    if (!iframe?.contentWindow) return
+    try {
+      iframe.contentWindow.postMessage(JSON.stringify({
+        event: 'command',
+        func: 'setVolume',
+        args: [Math.round(volume * 100)],
+      }), '*')
+    } catch {
+      /* cross-origin — expected until YouTube API is ready */
+    }
+  }, [volume, iframeRef])
+  return children
+}
+
+/** Syncs volume to a regular <audio> element */
+function AudioVolumeSync({ audioRef, volume, children }) {
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = volume
+    }
+  }, [volume, audioRef])
+  return children
 }

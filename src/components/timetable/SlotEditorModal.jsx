@@ -18,8 +18,9 @@ import {
 } from '@/services/calendarService'
 import { cn } from '@/utils/cn'
 
-export function SlotEditorModal({ open, onClose, modeId, slot }) {
+export function SlotEditorModal({ open, onClose, modeId: propModeId, slot }) {
   const { user } = useAuth()
+  const modeId = slot?._modeId || propModeId
   const [draft, setDraft] = useState(() => ({
     recurrenceType: 'weekly',
     recurrenceDays: [],

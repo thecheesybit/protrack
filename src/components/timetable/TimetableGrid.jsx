@@ -203,19 +203,39 @@ export function TimetableGrid({
               </div>
             ))}
 
-            {/* Live "now" flag — moves continuously across the day. */}
-            {nowVisible && (
-              <div
-                className="pointer-events-none absolute left-0 right-0 z-20 flex items-center gap-1"
-                style={{ top: (nowMin - DAY_START_MIN) * PX_PER_MIN }}
-              >
-                <span className="h-2 w-2 shrink-0 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.7)]" />
-                <span className="h-px flex-1 bg-rose-500/60" />
-                <span className="shrink-0 rounded bg-rose-500 px-1.5 py-0.5 text-[9px] font-semibold text-white">
-                  {minutesToLabel(Math.round(nowMin))}
-                </span>
-              </div>
-            )}
+            {/* Live "now" flag + chrono-passage indicator. */}
+            {nowVisible && (() => {
+              const passedPercent = Math.round(((nowMin - DAY_START_MIN) / TOTAL_MIN) * 100)
+              const remainingHours = ((DAY_END_MIN - nowMin) / 60).toFixed(1)
+              const nowTop = (nowMin - DAY_START_MIN) * PX_PER_MIN
+              return (
+                <>
+                  {/* Today's column — elapsed time overlay gradient */}
+                  <div
+                    className="pointer-events-none absolute z-[5]"
+                    style={{
+                      left: `${(today / 7) * 100}%`,
+                      width: `${(1 / 7) * 100}%`,
+                      top: 0,
+                      height: nowTop,
+                      background: 'linear-gradient(to bottom, rgba(16,185,129,0.04), rgba(245,158,11,0.06), rgba(244,63,94,0.08))',
+                      borderBottom: '2px solid rgba(244,63,94,0.3)',
+                    }}
+                  />
+                  {/* Now line spanning all columns */}
+                  <div
+                    className="pointer-events-none absolute left-0 right-0 z-20 flex items-center gap-1"
+                    style={{ top: nowTop }}
+                  >
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.7)] animate-pulse" />
+                    <span className="h-px flex-1 bg-gradient-to-r from-rose-500/60 to-rose-500/20" />
+                    <span className="shrink-0 rounded-lg bg-rose-500 px-2 py-0.5 text-[9px] font-semibold text-white shadow-sm">
+                      {minutesToLabel(Math.round(nowMin))} · {passedPercent}% · {remainingHours}h left
+                    </span>
+                  </div>
+                </>
+              )
+            })()}
           </div>
         </div>
       </div>

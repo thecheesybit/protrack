@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.2.0 — 2026-06-07
+
+### Added
+- **"All Scopes" Mode**: Unified mode aggregation that displays subjects, tasks, and timetable slots across all created modes on the client side.
+- **Draggable & Resizable FlipClock**: Mechanical split-flap clock supporting custom scaling (scroll to zoom, 0.5x to 3.0x) with persisted position/scale in local storage.
+- **Gemini-Powered Zen Overlay**: Idle motivation overlay that fetches uniquely generated quotes via Gemini with a 30-day deduplication cache to keep inspiration fresh.
+- **Synthesized UI Sounds (AudioFX)**: Lightweight Web Audio API synthesizer for task completion chimes and Kanban card movement pops (with toggle in Settings).
+- **Chrono-Adaptive "Auto" Theme**: Automatic theme switching that shifts between light and dark modes based on local time of day bands.
+- **Permanent Account Deletion**: Secure account deletion protocol directly wired via Firebase Auth.
+- **Advanced Recurrence & Tagging**: Support for daily, weekly, custom days, and interval-based recurrence for calendar slots, plus custom stylized tag badges.
+- **Enhanced Kanban UX**: Column droppability on empty columns, glowing hover states, and double-click-to-edit cards to prevent accidental drag triggers.
+- **Robust Loading Handshake**: Dynamic boot screen messages, 12s auth handshake timeout, instant mobile-to-desktop linking feedback, and offline/error recovery buttons.
+
+### Fixed
+- Fixed `FlipClock` drag boundary calculation failing when scaled.
+- Fixed `ZenOverlay` React race condition on unmount while waiting for Gemini API.
+- Fixed Firebase listener snapshot issue (`loadedCount++` duplicating load state) by using `Set` tracking for timetable slots and subject updates.
+
 ## v1.1.12 — 2026-06-06
 
 - feat: optimize and make handshake loading screen robust with timeouts and error recovery (b9a61eb)
