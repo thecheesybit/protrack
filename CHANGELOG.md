@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.15 — 2026-06-06
+
+- feat: enforce architectural alignment, calendar credentials storage, settings restructuring, and kanban fixes (d779a86)
+
+
 ## v1.1.14 — 2026-06-06
 
 - feat: complete v1.2.0 5-Module Overhaul (dce5757)
