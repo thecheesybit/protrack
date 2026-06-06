@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.2 — 2026-06-06
+
+- fix: auth-loader timeout + 8-char code login fallback (8d46866)
+
+
 ## v1.1.1 — 2026-06-06
 
 - fix: never crash when Firebase config is missing at build time (591a1f7)
