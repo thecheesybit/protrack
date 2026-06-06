@@ -5,7 +5,9 @@ import { useFocusEngine } from '@/hooks/useFocusEngine'
 import { useModeAccent } from '@/hooks/useModeAccent'
 import { useAutoHideChrome } from '@/hooks/useAutoHideChrome'
 import { useConnectivity } from '@/hooks/useConnectivity'
+import { useChronoTheme } from '@/hooks/useChronoTheme'
 import { AuroraBackground } from '@/components/common/AuroraBackground'
+import { DynamicIsland } from '@/components/island/DynamicIsland'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { Spinner } from '@/components/ui/Spinner'
 import { Sparkles } from 'lucide-react'
@@ -28,7 +30,8 @@ export function Dashboard() {
   useFocusEngine() // drives the Pomodoro tick, sound, notifications, and stats
   useModeAccent() // re-tints the whole UI to the active mode's accent color
   useAutoHideChrome() // top nav springs away when the cursor leaves the top edge
-  useConnectivity() // elegant offline toast; writes queue + replay via persistence
+  useConnectivity() // sync status surfaced via the Dynamic Island; writes replay on reconnect
+  useChronoTheme() // time-of-day palette/shadow modulation (data-chrono band)
 
   // Global shortcuts: Esc unwinds overlays/maximize; ⌘/Ctrl+K opens the AI.
   useEffect(() => {
@@ -52,6 +55,7 @@ export function Dashboard() {
   return (
     <div className="relative flex h-full flex-col">
       <AuroraBackground />
+      <DynamicIsland />
 
       <div className="mx-auto flex h-full w-full max-w-7xl flex-col px-4 py-5 sm:px-6 sm:py-6">
         {/* Ambient chrome — collapses (height + fade) when the cursor leaves

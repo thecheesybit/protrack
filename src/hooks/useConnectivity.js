@@ -1,27 +1,39 @@
 import { useEffect, useRef } from 'react'
-import toast from 'react-hot-toast'
+import { useStore } from '@/store/useStore'
 
 /**
- * Watches online/offline transitions and surfaces an elegant, non-intrusive
- * toast. Writes still succeed offline (queued by Firestore persistence) and
- * replay on reconnect — no crash, no blocking spinner.
+ * Watches online/offline transitions and surfaces sync state through the
+ * Dynamic Island (one canonical notifier — no duplicate toasts, no emoji).
+ * Writes still succeed offline (queued by Firestore persistence) and replay on
+ * reconnect, so the offline banner is informational, never blocking.
  */
 export function useConnectivity() {
   const wasOffline = useRef(false)
+  const offlineEventId = useRef(null)
 
   useEffect(() => {
     const goOffline = () => {
+      if (wasOffline.current) return
       wasOffline.current = true
-      toast('You’re offline — changes will sync when you reconnect.', {
-        id: 'connectivity',
-        icon: '☁️',
-        duration: Infinity,
+      offlineEventId.current = useStore.getState().pushIsland({
+        kind: 'sync-offline',
+        title: 'You are offline',
+        detail: 'Changes will sync when you reconnect.',
+        sticky: true,
       })
     }
     const goOnline = () => {
       if (!wasOffline.current) return
       wasOffline.current = false
-      toast.success('Back online — syncing.', { id: 'connectivity', duration: 2500 })
+      const { dismissIsland, pushIsland } = useStore.getState()
+      if (offlineEventId.current != null) dismissIsland(offlineEventId.current)
+      offlineEventId.current = null
+      pushIsland({
+        kind: 'sync-online',
+        title: 'Back online',
+        detail: 'Syncing your changes.',
+        duration: 2500,
+      })
     }
 
     window.addEventListener('offline', goOffline)

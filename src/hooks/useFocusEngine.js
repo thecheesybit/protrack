@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react'
-import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
 import { playChime, AmbientPlayer } from '@/lib/audioEngine'
@@ -37,8 +36,13 @@ export function useFocusEngine() {
     if (st.phase === 'focus') {
       const durationMin = st.focusMin
       st.bumpCompleted()
-      notify('Focus complete 🌳', 'Great work! Time for a short break.')
-      toast.success('Session complete — a tree grew 🌳')
+      notify('Focus complete', 'Great work. Time for a short break.')
+      st.pushIsland({
+        kind: 'success',
+        title: 'Focus session complete',
+        detail: 'A tree grew. Time for a short break.',
+        duration: 5000,
+      })
       try {
         await logFocusSession(user.uid, {
           modeId: st.session?.modeId || useStore.getState().activeModeId,
@@ -53,7 +57,12 @@ export function useFocusEngine() {
       st.startBreak()
     } else {
       notify('Break over', 'Ready for another deep focus session?')
-      toast('Break over — ready to focus?')
+      st.pushIsland({
+        kind: 'focus',
+        title: 'Break over',
+        detail: 'Ready for another deep focus session?',
+        duration: 4500,
+      })
       st.endToIdle()
     }
     completingRef.current = false

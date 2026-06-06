@@ -32,6 +32,50 @@
   --accent-hex: #818cf8;
 }
 
+/* ─────────────────────────────────────────────────────────────
+   Chrono-adaptive bands — a subtle time-of-day layer driven by
+   useChronoTheme writing `data-chrono` on <html>. It MODULATES the
+   active theme (surface depth + ambient aurora intensity); it never
+   flips the user's explicit light/dark choice. The 0.45s body color
+   transition makes band changes glide rather than snap.
+   ───────────────────────────────────────────────────────────── */
+:root {
+  --aurora-opacity: 1;
+}
+:root[data-chrono='day'] {
+  --aurora-opacity: 0.8;
+}
+:root[data-chrono='dusk'] {
+  --aurora-opacity: 1;
+}
+:root[data-chrono='night'] {
+  --aurora-opacity: 0.62;
+}
+
+/* Dark theme: lift midday for crisp readability, sink to pure obsidian
+   at night to reduce eye strain. */
+.dark[data-chrono='day'] {
+  --bg: 11 13 18;
+  --surface: 19 21 28;
+  --surface-2: 27 30 39;
+}
+.dark[data-chrono='dusk'] {
+  --bg: 8 9 14;
+  --surface: 16 17 24;
+}
+.dark[data-chrono='night'] {
+  --bg: 4 5 8;
+  --surface: 12 13 18;
+  --surface-2: 18 19 26;
+}
+
+/* Light theme: gently soften surfaces after dark to ease night use. */
+:root[data-chrono='night']:not(.dark) {
+  --bg: 240 241 245;
+  --surface: 248 249 251;
+  --surface-2: 237 239 244;
+}
+
 @layer base {
   * {
     @apply border-line;
