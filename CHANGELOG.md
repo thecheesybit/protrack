@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.1 — 2026-06-06
+
+- fix: never crash when Firebase config is missing at build time (591a1f7)
+
+
 ## v1.1.0 — 2026-06-06
 
 - ci: dispatch-only trigger for the first v1.1.0 release (8b3d01f)
