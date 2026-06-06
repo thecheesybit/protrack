@@ -178,6 +178,29 @@ function createWindow() {
     win.webContents.setZoomFactor(1.0)
   })
 
+  // Lock down DevTools in packaged production builds. We intercept the
+  // common keyboard shortcuts (F12, Ctrl/Cmd+Shift+I, Ctrl/Cmd+Shift+J,
+  // Ctrl/Cmd+Shift+C, Ctrl/Cmd+Alt+I) at the input-event level AND
+  // listen for `devtools-opened` as a final safety net to close any
+  // DevTools window opened via a path we missed (e.g. context menu).
+  // Dev mode keeps full access so the team can still debug locally.
+  if (!isDev) {
+    win.webContents.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown') return
+      const key = (input.key || '').toLowerCase()
+      const blockedFn = key === 'f12'
+      const blockedShift = (input.control || input.meta) && input.shift &&
+        ['i', 'j', 'c'].includes(key)
+      const blockedAlt = (input.control || input.meta) && input.alt && key === 'i'
+      if (blockedFn || blockedShift || blockedAlt) {
+        event.preventDefault()
+      }
+    })
+    win.webContents.on('devtools-opened', () => {
+      win.webContents.closeDevTools()
+    })
+  }
+
   // Auto-approve first-party permission requests (microphone for the voice
   // assistant, notifications, etc.) so the user is never blocked by a prompt.
   const ses = win.webContents.session
