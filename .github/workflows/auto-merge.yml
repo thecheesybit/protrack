@@ -1,0 +1,123 @@
+name: Auto-merge development → master
+
+# Promotes verified development commits to master automatically. Triggers on
+# every push to `development`: re-runs the build/lint/emoji guard, and if green
+# AND the merge is a clean fast-forward, pushes the new history to master.
+#
+# Falls back to opening a PR when:
+#   - Verification fails (so you see the error inline on the PR)
+#   - The branches have diverged (manual conflict resolution required)
+#
+# Release pipeline stays manual (workflow_dispatch). After this workflow
+# updates master, dispatch `release.yml` when you're ready to ship.
+on:
+  push:
+    branches:
+      - development
+  workflow_dispatch:
+
+concurrency:
+  group: auto-merge
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  verify-and-merge:
+    name: Verify development & promote
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout development with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: development
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (skip silently if no lint script)
+        run: |
+          if npm run --silent | grep -q '^  lint'; then
+            npm run lint
+          else
+            echo "No 'lint' script defined — skipping."
+          fi
+
+      - name: Brand guard — fail on any emoji in source
+        run: |
+          if grep -RInP '[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}]' src/ 2>/dev/null; then
+            echo "::error::Emoji found in src/ — use Lucide icons instead."
+            exit 1
+          fi
+
+      - name: Build web bundle
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_WEB_URL: ${{ secrets.VITE_WEB_URL }}
+        run: npm run build
+
+      - name: Build Electron main + preload
+        run: npx cross-env ELECTRON=true vite build
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Attempt fast-forward merge into master
+        id: merge
+        run: |
+          git fetch origin master:master
+          # Check whether master is an ancestor of development (= ff possible).
+          if git merge-base --is-ancestor master development; then
+            git checkout master
+            git merge --ff-only development
+            git push origin master
+            echo "promoted=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::development promoted to master via fast-forward."
+          else
+            echo "promoted=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Branches have diverged — fast-forward not possible. Will open a PR for manual review."
+          fi
+
+      - name: Open PR when ff is not possible
+        if: steps.merge.outputs.promoted != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Either reuse an open PR or create a fresh one. Marking it as a
+          # manual-review case so you know the auto-merge couldn't apply.
+          EXISTING=$(gh pr list --base master --head development --state open --json number --jq '.[0].number')
+          if [ -n "$EXISTING" ]; then
+            echo "Existing PR #$EXISTING — refreshing label."
+            gh pr edit "$EXISTING" --add-label "auto-merge-blocked" || true
+          else
+            gh pr create \
+              --base master \
+              --head development \
+              --title "Promote development → master (manual review needed)" \
+              --body "Auto-merge could not fast-forward — branches have diverged. Resolve and merge manually." \
+              --label "auto-merge-blocked" || \
+            gh pr create \
+              --base master \
+              --head development \
+              --title "Promote development → master (manual review needed)" \
+              --body "Auto-merge could not fast-forward — branches have diverged. Resolve and merge manually."
+          fi

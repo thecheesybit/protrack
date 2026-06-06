@@ -4,9 +4,14 @@ name: CI
 # is owned by the release pipeline) and every PR. Keeps `development` honest
 # and prevents broken commits from reaching `master`.
 on:
+  # `development` is verified by auto-merge.yml (which also promotes it to
+  # master on success), so we skip it here to avoid running the same checks
+  # twice on every push. Feature branches and PRs still flow through this
+  # workflow.
   push:
     branches-ignore:
       - master
+      - development
   pull_request:
     branches:
       - master
