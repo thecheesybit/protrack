@@ -3,6 +3,7 @@ import { createUiSlice } from './slices/uiSlice'
 import { createModeSlice } from './slices/modeSlice'
 import { createUserSlice } from './slices/userSlice'
 import { createFocusSlice } from './slices/focusSlice'
+import { createChromeSlice } from './slices/chromeSlice'
 
 /**
  * Single Zustand store composed from feature slices. Realtime Firestore
@@ -14,4 +15,5 @@ export const useStore = create((...a) => ({
   ...createModeSlice(...a),
   ...createUserSlice(...a),
   ...createFocusSlice(...a),
+  ...createChromeSlice(...a),
 }))

@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { useStore } from '@/store/useStore'
 import { useFocusEngine } from '@/hooks/useFocusEngine'
 import { useModeAccent } from '@/hooks/useModeAccent'
+import { useAutoHideChrome } from '@/hooks/useAutoHideChrome'
 import { AuroraBackground } from '@/components/common/AuroraBackground'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { Spinner } from '@/components/ui/Spinner'
@@ -21,8 +22,11 @@ import { HydrationReminder } from '@/components/wellness/HydrationReminder'
 export function Dashboard() {
   const modesLoading = useStore((s) => s.modesLoading)
   const setAiOpen = useStore((s) => s.setAiOpen)
+  const chromeHidden = useStore((s) => s.chromeHidden)
+  const immersive = useStore((s) => s.status === 'running')
   useFocusEngine() // drives the Pomodoro tick, sound, notifications, and stats
   useModeAccent() // re-tints the whole UI to the active mode's accent color
+  useAutoHideChrome() // top nav springs away when the cursor leaves the top edge
 
   // Global shortcuts: Esc unwinds overlays/maximize; ⌘/Ctrl+K opens the AI.
   useEffect(() => {
@@ -47,15 +51,25 @@ export function Dashboard() {
     <div className="relative flex h-full flex-col">
       <AuroraBackground />
 
-      <div className="mx-auto flex h-full w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 sm:py-6">
-        <TopBar />
-
+      <div className="mx-auto flex h-full w-full max-w-7xl flex-col px-4 py-5 sm:px-6 sm:py-6">
+        {/* Ambient chrome — collapses (height + fade) when the cursor leaves
+            the top edge; snappier during a Pomodoro for deep focus. */}
         <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 }}
+          initial={false}
+          animate={{ height: chromeHidden ? 0 : 'auto', opacity: chromeHidden ? 0 : 1 }}
+          transition={{ duration: 0.35, ease: [0.2, 0, 0, 1] }}
+          className="overflow-hidden"
         >
-          <ModeSwitcher />
+          <div className="flex flex-col gap-5 pb-5">
+            <TopBar />
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.05 }}
+            >
+              <ModeSwitcher />
+            </motion.div>
+          </div>
         </motion.div>
 
         <main className="min-h-0 flex-1 overflow-y-auto pb-20">
@@ -71,14 +85,21 @@ export function Dashboard() {
         </main>
       </div>
 
-      {/* Floating AI companion */}
-      <button
+      {/* Floating AI companion — recedes into a minimal trigger during focus */}
+      <motion.button
         onClick={() => setAiOpen(true)}
-        className="fixed bottom-6 right-6 z-30 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-accent-2 text-white shadow-glow transition-transform hover:scale-105 active:scale-95"
+        animate={{
+          scale: immersive ? 0.82 : 1,
+          opacity: immersive ? 0.45 : 1,
+        }}
+        whileHover={{ scale: immersive ? 0.95 : 1.05, opacity: 1 }}
+        whileTap={{ scale: 0.92 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+        className="fixed bottom-6 right-6 z-30 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-accent-2 text-white shadow-glow"
         aria-label="Open AI companion"
       >
         <Sparkles className="h-6 w-6" />
-      </button>
+      </motion.button>
 
       <FocusPanel />
       <AIAssistant />

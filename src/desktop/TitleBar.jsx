@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { motion } from 'framer-motion'
 import { Minus, Square, Copy, X } from 'lucide-react'
 import { desktopBridge } from './isDesktop'
+import { useStore } from '@/store/useStore'
 import { Logo } from '@/components/common/Logo'
 
 /**
@@ -9,6 +11,7 @@ import { Logo } from '@/components/common/Logo'
  */
 export function TitleBar() {
   const [maximized, setMaximized] = useState(false)
+  const hidden = useStore((s) => s.chromeHidden)
 
   const ctrl = desktopBridge?.window
   const onMinimize = () => ctrl?.minimize()
@@ -16,8 +19,14 @@ export function TitleBar() {
   const onClose = () => ctrl?.close()
 
   return (
+    <motion.div
+      initial={false}
+      animate={{ height: hidden ? 0 : 36 }}
+      transition={{ type: 'spring', stiffness: 520, damping: 42 }}
+      className="shrink-0 overflow-hidden"
+    >
     <div
-      className="flex h-9 shrink-0 items-center justify-between border-b border-line/60 bg-surface/70 backdrop-blur-xl"
+      className="flex h-9 items-center justify-between border-b border-line/60 bg-surface/70 backdrop-blur-xl"
       style={{ WebkitAppRegion: 'drag' }}
     >
       <div className="flex items-center gap-2 pl-3">
@@ -49,5 +58,6 @@ export function TitleBar() {
         </button>
       </div>
     </div>
+    </motion.div>
   )
 }
