@@ -19,45 +19,57 @@ export function FirestoreSyncProvider({ children }) {
   const setActiveModeId = useStore((s) => s.setActiveModeId)
   const setUserDoc = useStore((s) => s.setUserDoc)
   const setVerifiedPatreons = useStore((s) => s.setVerifiedPatreons)
+  const setSyncError = useStore((s) => s.setSyncError)
 
   useEffect(() => {
     if (!user) return undefined
 
-    const unsubModes = subscribeToModes(user.uid, (modes) => {
-      setModes(modes)
-      const currentActive = useStore.getState().activeModeId
-      if (modes.length > 0) {
-        const exists = modes.some((m) => m.id === currentActive)
-        if (!currentActive || !exists) {
-          const fallbackId = modes[0].id
-          setActiveModeId(fallbackId)
-          updateActiveMode(user.uid, fallbackId).catch((err) =>
-            console.error('[sync] failed to set active mode fallback', err),
-          )
-        }
-      }
-    })
+    // Clear any previous sync error when starting new listeners
+    setSyncError(null)
 
-    const unsubUser = subscribeToUserDoc(user.uid, (data) => {
-      setUserDoc(data)
-      const saved = data?.settings?.activeModeId
-      if (saved) {
-        const currentModes = useStore.getState().modes
-        if (currentModes.length > 0) {
-          if (currentModes.some((m) => m.id === saved)) {
-            setActiveModeId(saved)
-          } else {
-            const fallbackId = currentModes[0].id
+    const unsubModes = subscribeToModes(
+      user.uid,
+      (modes) => {
+        setModes(modes)
+        const currentActive = useStore.getState().activeModeId
+        if (modes.length > 0) {
+          const exists = modes.some((m) => m.id === currentActive)
+          if (!currentActive || !exists) {
+            const fallbackId = modes[0].id
             setActiveModeId(fallbackId)
             updateActiveMode(user.uid, fallbackId).catch((err) =>
-              console.error('[sync] failed to fallback active mode', err),
+              console.error('[sync] failed to set active mode fallback', err),
             )
           }
-        } else {
-          setActiveModeId(saved)
         }
-      }
-    })
+      },
+      (err) => setSyncError(err.message)
+    )
+
+    const unsubUser = subscribeToUserDoc(
+      user.uid,
+      (data) => {
+        setUserDoc(data)
+        const saved = data?.settings?.activeModeId
+        if (saved) {
+          const currentModes = useStore.getState().modes
+          if (currentModes.length > 0) {
+            if (currentModes.some((m) => m.id === saved)) {
+              setActiveModeId(saved)
+            } else {
+              const fallbackId = currentModes[0].id
+              setActiveModeId(fallbackId)
+              updateActiveMode(user.uid, fallbackId).catch((err) =>
+                console.error('[sync] failed to fallback active mode', err),
+              )
+            }
+          } else {
+            setActiveModeId(saved)
+          }
+        }
+      },
+      (err) => setSyncError(err.message)
+    )
 
     // Single app-wide, cache-first listener for the public wall of honor.
     const unsubPatreons = subscribeVerifiedPatreons(setVerifiedPatreons)
@@ -67,7 +79,7 @@ export function FirestoreSyncProvider({ children }) {
       unsubUser()
       unsubPatreons()
     }
-  }, [user, setModes, setActiveModeId, setUserDoc, setVerifiedPatreons])
+  }, [user, setModes, setActiveModeId, setUserDoc, setVerifiedPatreons, setSyncError])
 
   return children
 }

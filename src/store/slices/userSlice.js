@@ -5,9 +5,11 @@
 export const createUserSlice = (set) => ({
   settings: null,
   stats: null,
+  syncError: null,
   setUserDoc: (data) =>
     set({
       settings: data?.settings || null,
       stats: data?.statsAggregate || null,
     }),
+  setSyncError: (error) => set({ syncError: error }),
 })

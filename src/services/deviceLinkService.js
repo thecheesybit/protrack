@@ -64,7 +64,7 @@ export async function createHandshake() {
  * Listen for the mobile to claim the handshake. When a custom token or Google ID token appears,
  * sign in as the real user and clean up the handshake doc.
  */
-export function listenForClaim(sessionId, onClaimed, onError) {
+export function listenForClaim(sessionId, onClaimed, onError, onClaimStart) {
   requireAuth()
   let active = true
   const unsub = onSnapshot(
@@ -75,6 +75,7 @@ export function listenForClaim(sessionId, onClaimed, onError) {
         if (!active) return
         active = false
         unsub()
+        onClaimStart?.()
         try {
           if (data.tokenType === 'google') {
             const credential = GoogleAuthProvider.credential(data.token)

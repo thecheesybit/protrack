@@ -70,10 +70,14 @@ export async function ensureUserDocument(firebaseUser) {
   })
 }
 
-/** Realtime subscription to the user root doc (settings, profile, stats). */
-export function subscribeToUserDoc(uid, callback) {
-  return onSnapshot(doc(db, 'users', uid), (snap) =>
-    callback(snap.exists() ? snap.data() : null),
+export function subscribeToUserDoc(uid, callback, onError) {
+  return onSnapshot(
+    doc(db, 'users', uid),
+    (snap) => callback(snap.exists() ? snap.data() : null),
+    (err) => {
+      console.error('[sync] user doc subscription failed', err)
+      onError?.(err)
+    }
   )
 }
 

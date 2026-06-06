@@ -40,6 +40,7 @@ export function QrLoginScreen() {
   const [error, setError] = useState(null)
   const [mode, setMode] = useState('qr') // 'qr' | 'code'
   const [copied, setCopied] = useState(false)
+  const [claiming, setClaiming] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -58,8 +59,19 @@ export function QrLoginScreen() {
         currentId = id
         setSessionId(id)
         setError(null)
+        setClaiming(false)
         backoffMs = 1500
-        unsub = listenForClaim(id, undefined, (e) => setError(e.message))
+        unsub = listenForClaim(
+          id,
+          undefined,
+          (e) => {
+            setError(e.message)
+            setClaiming(false)
+          },
+          () => {
+            setClaiming(true)
+          }
+        )
       } catch (e) {
         if (!active) return
         const offline = typeof navigator !== 'undefined' && !navigator.onLine
@@ -127,26 +139,36 @@ export function QrLoginScreen() {
         </div>
 
         {/* QR ↔ Code toggle */}
-        <div className="mb-5 flex gap-1 rounded-xl border border-line/60 bg-surface-2/40 p-1">
-          <button
-            onClick={() => setMode('qr')}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-colors ${
-              mode === 'qr' ? 'bg-accent text-white' : 'text-muted hover:text-ink'
-            }`}
-          >
-            <QrCode className="h-3.5 w-3.5" /> Scan QR
-          </button>
-          <button
-            onClick={() => setMode('code')}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-colors ${
-              mode === 'code' ? 'bg-accent text-white' : 'text-muted hover:text-ink'
-            }`}
-          >
-            <KeyRound className="h-3.5 w-3.5" /> Use code
-          </button>
-        </div>
+        {!claiming && (
+          <div className="mb-5 flex gap-1 rounded-xl border border-line/60 bg-surface-2/40 p-1">
+            <button
+              onClick={() => setMode('qr')}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-colors ${
+                mode === 'qr' ? 'bg-accent text-white' : 'text-muted hover:text-ink'
+              }`}
+            >
+              <QrCode className="h-3.5 w-3.5" /> Scan QR
+            </button>
+            <button
+              onClick={() => setMode('code')}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-colors ${
+                mode === 'code' ? 'bg-accent text-white' : 'text-muted hover:text-ink'
+              }`}
+            >
+              <KeyRound className="h-3.5 w-3.5" /> Use code
+            </button>
+          </div>
+        )}
 
-        {mode === 'qr' ? (
+        {claiming ? (
+          <div className="flex flex-col items-center justify-center py-10 gap-4 text-center">
+            <Spinner className="h-10 w-10 text-accent" />
+            <h2 className="text-lg font-bold">Connecting device…</h2>
+            <p className="text-xs text-muted max-w-xs">
+              Secure handshake received. Authenticating and loading your workspace, please wait.
+            </p>
+          </div>
+        ) : mode === 'qr' ? (
           /* ── QR MODE ───────────────────────────────────────── */
           <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-stretch">
             <div className="flex flex-col items-center">
@@ -225,33 +247,39 @@ export function QrLoginScreen() {
           </div>
         )}
 
-        <div className="mt-5 flex items-center gap-2 rounded-xl border border-line/60 bg-surface-2/40 px-3 py-2 text-xs text-muted">
-          <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-400" />
-          End-to-end handshake · single-use · expires in 2 minutes
-        </div>
+        {!claiming && (
+          <>
+            <div className="mt-5 flex items-center gap-2 rounded-xl border border-line/60 bg-surface-2/40 px-3 py-2 text-xs text-muted">
+              <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-400" />
+              End-to-end handshake · single-use · expires in 2 minutes
+            </div>
 
-        <div className="mt-5 flex items-center justify-center gap-2 text-sm text-muted">
-          <Spinner className="h-4 w-4" />
-          Waiting for your phone…
-        </div>
+            <div className="mt-5 flex items-center justify-center gap-2 text-sm text-muted">
+              <Spinner className="h-4 w-4" />
+              Waiting for your phone…
+            </div>
+          </>
+        )}
 
-        <div className="mt-6 flex flex-col gap-3">
-          <div className="relative flex items-center justify-center py-2">
-            <div className="flex-grow border-t border-line/60" />
-            <span className="mx-4 flex-shrink text-[10px] font-bold uppercase tracking-wider text-muted">
-              or
-            </span>
-            <div className="flex-grow border-t border-line/60" />
+        {!claiming && (
+          <div className="mt-6 flex flex-col gap-3">
+            <div className="relative flex items-center justify-center py-2">
+              <div className="flex-grow border-t border-line/60" />
+              <span className="mx-4 flex-shrink text-[10px] font-bold uppercase tracking-wider text-muted">
+                or
+              </span>
+              <div className="flex-grow border-t border-line/60" />
+            </div>
+
+            <button
+              onClick={signIn}
+              disabled={authLoading}
+              className="flex w-full items-center justify-center gap-2.5 rounded-2xl bg-white px-5 py-3 font-semibold text-gray-900 shadow transition-all hover:bg-gray-50 active:scale-[0.98] disabled:opacity-60"
+            >
+              {authLoading ? 'Signing in…' : 'Sign in with Google'}
+            </button>
           </div>
-
-          <button
-            onClick={signIn}
-            disabled={authLoading}
-            className="flex w-full items-center justify-center gap-2.5 rounded-2xl bg-white px-5 py-3 font-semibold text-gray-900 shadow transition-all hover:bg-gray-50 active:scale-[0.98] disabled:opacity-60"
-          >
-            {authLoading ? 'Signing in…' : 'Sign in with Google'}
-          </button>
-        </div>
+        )}
 
         {error && <p className="mt-3 text-center text-xs text-red-400">{error}</p>}
       </GlassCard>

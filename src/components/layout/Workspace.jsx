@@ -10,6 +10,11 @@ import { Dashboard } from '@/components/layout/Dashboard'
  */
 export function Workspace() {
   const settings = useStore((s) => s.settings)
+  const syncError = useStore((s) => s.syncError)
+
+  if (syncError) {
+    return <AppLoader error={syncError} />
+  }
 
   // null = user doc still loading; brief, then resolves.
   if (settings === null) return <AppLoader />

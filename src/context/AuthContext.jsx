@@ -7,6 +7,24 @@ import {
 import { auth, googleProvider, isFirebaseConfigured } from '@/lib/firebase'
 import { ensureUserDocument } from '@/services/userService'
 
+function withTimeout(promise, ms, errorMessage) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(errorMessage))
+    }, ms)
+
+    promise
+      .then((res) => {
+        clearTimeout(timer)
+        resolve(res)
+      })
+      .catch((err) => {
+        clearTimeout(timer)
+        reject(err)
+      })
+  })
+}
+
 export const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
@@ -40,19 +58,39 @@ export function AuthProvider({ children }) {
     }, 3000)
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      let profileSlowTimer = null
       try {
         // Anonymous users are only the desktop QR-handshake bootstrap — never
         // seed a profile/modes for them.
         if (firebaseUser && !firebaseUser.isAnonymous) {
+          setLoading(true)
           setLoadingStatus('Verifying user profile…')
-          await ensureUserDocument(firebaseUser)
+          setError(null)
+
+          profileSlowTimer = setTimeout(() => {
+            setLoadingStatus('Still verifying profile — Firestore is responding slowly…')
+          }, 3500)
+
+          await withTimeout(
+            ensureUserDocument(firebaseUser),
+            12000,
+            'Profile verification timed out. Please check your internet connection and reload.'
+          )
         }
         setUser(firebaseUser)
       } catch (err) {
         console.error('[auth] failed to initialise user document', err)
         setError(err.message)
-        setUser(firebaseUser)
+        if (firebaseUser && !firebaseUser.isAnonymous) {
+          try {
+            await firebaseSignOut(auth)
+          } catch (signoutErr) {
+            console.error('[auth] failed to sign out after init failure', signoutErr)
+          }
+        }
+        setUser(null)
       } finally {
+        if (profileSlowTimer) clearTimeout(profileSlowTimer)
         clearTimeout(fallbackTimer)
         clearTimeout(slowConnectionTimer)
         setLoading(false)
