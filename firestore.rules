@@ -4,8 +4,19 @@ rules_version = '2';
 // read or write their own subtree. Nothing is world-readable.
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
     function isOwner(userId) {
       return request.auth != null && request.auth.uid == userId;
+    }
+
+    // The single administrator — Google-verified email only.
+    function isAdmin() {
+      return isSignedIn()
+        && request.auth.token.email == 'ak818ace@gmail.com'
+        && request.auth.token.email_verified == true;
     }
 
     match /users/{userId} {
@@ -31,6 +42,26 @@ service cloud.firestore {
         && resource.data.desktopUid == request.auth.uid;
       allow delete: if request.auth != null
         && resource.data.desktopUid == request.auth.uid;
+    }
+
+    // Support Corner — contribution intake. A signed-in user may CREATE their
+    // own owner-stamped pending packet, but can never read/list/modify the
+    // queue. Only the admin reads, verifies, and clears it.
+    match /pending_contributions/{id} {
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0
+        && !('verifiedAt' in request.resource.data);
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Wall of Honor — world-readable (the public contributor wall); only the
+    // admin promotes records here. Display-safe fields only (no email/uid PII).
+    match /verified_patreons/{uid} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
     }
   }
 }

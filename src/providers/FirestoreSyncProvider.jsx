@@ -3,6 +3,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
 import { subscribeToModes } from '@/services/modeService'
 import { subscribeToUserDoc } from '@/services/userService'
+import { subscribeVerifiedPatreons } from '@/services/patreonService'
 
 /**
  * Wires realtime Firestore listeners for the signed-in user into the Zustand
@@ -17,6 +18,7 @@ export function FirestoreSyncProvider({ children }) {
   const setModes = useStore((s) => s.setModes)
   const setActiveModeId = useStore((s) => s.setActiveModeId)
   const setUserDoc = useStore((s) => s.setUserDoc)
+  const setVerifiedPatreons = useStore((s) => s.setVerifiedPatreons)
 
   useEffect(() => {
     if (!user) return undefined
@@ -34,11 +36,15 @@ export function FirestoreSyncProvider({ children }) {
       if (saved) setActiveModeId(saved)
     })
 
+    // Single app-wide, cache-first listener for the public wall of honor.
+    const unsubPatreons = subscribeVerifiedPatreons(setVerifiedPatreons)
+
     return () => {
       unsubModes()
       unsubUser()
+      unsubPatreons()
     }
-  }, [user, setModes, setActiveModeId, setUserDoc])
+  }, [user, setModes, setActiveModeId, setUserDoc, setVerifiedPatreons])
 
   return children
 }

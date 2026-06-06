@@ -5,6 +5,7 @@ import { AppLoader } from '@/components/common/AppLoader'
 import { LandingPage } from '@/components/marketing/LandingPage'
 import { QrLoginScreen } from '@/components/auth/QrLoginScreen'
 import { LinkDevicePage } from '@/components/auth/LinkDevicePage'
+import { PatreonApprovePage } from '@/components/patreon/PatreonApprovePage'
 import { Workspace } from '@/components/layout/Workspace'
 import { FirestoreSyncProvider } from '@/providers/FirestoreSyncProvider'
 import { UpdateGate } from '@/components/desktop/UpdateGate'
@@ -15,10 +16,17 @@ import { isDesktop, isWorkspaceHost } from '@/desktop/isDesktop'
 function Routes() {
   const { user, loading } = useAuth()
 
+  const pathname = typeof window !== 'undefined' ? window.location.pathname : '/'
+
   // Mobile auth gateway: /link?s=<sessionId> — the only authenticated surface
   // the web build exposes (used by the QR handshake).
-  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/link')) {
+  if (pathname.startsWith('/link')) {
     return <LinkDevicePage key="link" />
+  }
+
+  // Admin-only contribution approval dashboard (its own Google sign-in + lock).
+  if (pathname.startsWith('/patreon-approve')) {
+    return <PatreonApprovePage key="patreon-approve" />
   }
 
   // The Netlify web domain is a gateway only — never the functional workspace.

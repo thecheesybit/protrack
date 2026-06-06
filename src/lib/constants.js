@@ -54,3 +54,34 @@ export const APP_LINKS = {
   releasesLatest: 'https://github.com/thecheesybit/protrack/releases/latest',
   webGateway: 'https://pro-track-app.netlify.app',
 }
+
+/* ── Support Corner (crowd-funded sustainability) ───────── */
+
+// The single admin who can verify contributions. Checked against the
+// Google-verified token email in Firestore rules + the /patreon-approve gate.
+export const ADMIN_EMAIL = 'ak818ace@gmail.com'
+
+// Payee details for the dynamically-generated UPI intent QR.
+export const SUPPORT_UPI = {
+  vpa: 'ak818ace-2@oksbi',
+  payeeName: 'Ayush Kumar',
+  note: 'PRO TRACK support',
+}
+
+// Indicative USD→INR rate used only to render a UPI (INR) QR for USD intents.
+export const USD_TO_INR = 84
+
+// Pre-baked wall entries so the Wall of Honor feels alive from day one. Rendered
+// locally (zero Firestore reads) and merged with live verified patrons by id.
+export const SEED_PATREONS = [
+  { id: 'seed-aarav', name: 'Aarav Sharma', region: 'IN', amount: 500, currency: 'INR', testimony: 'Switching between my UPSC and optional-subject modes is instant — it is like having two clean desks.', featureRequest: 'Spaced-repetition revision queue', seed: true },
+  { id: 'seed-priya', name: 'Priya Nair', region: 'IN', amount: 250, currency: 'INR', testimony: "Typing 'revise polity tomorrow 5pm' straight onto the calendar still feels like magic.", featureRequest: 'Shared study-group calendars', seed: true },
+  { id: 'seed-rohan', name: 'Rohan Mehta', region: 'IN', amount: 1000, currency: 'INR', testimony: 'The desktop app is buttery — the mini-timer following me onto the Kanban board is perfect.', featureRequest: 'Linux AppImage auto-update', seed: true },
+  { id: 'seed-sneha', name: 'Sneha Iyer', region: 'IN', amount: 150, currency: 'INR', testimony: 'The activity rings finally made me consistent. Hydration habit on day one.', featureRequest: 'Weekly email digest', seed: true },
+  { id: 'seed-karthik', name: 'Karthik Reddy', region: 'IN', amount: 750, currency: 'INR', testimony: 'The obsidian night theme is the only app that does not burn my eyes at 2am.', featureRequest: 'Custom ambient sound upload', seed: true },
+  { id: 'seed-jordan', name: 'Jordan Miller', region: 'US', amount: 10, currency: 'USD', testimony: 'Electron build is shockingly snappy and the tray-on-close is exactly right.', featureRequest: 'Global hotkey rebinding', seed: true },
+  { id: 'seed-emily', name: 'Emily Carter', region: 'US', amount: 25, currency: 'USD', testimony: 'The live timeline flag across the day is the detail that made me stay.', featureRequest: 'Apple Calendar two-way sync', seed: true },
+  { id: 'seed-michael', name: 'Michael Thompson', region: 'US', amount: 5, currency: 'USD', testimony: 'Dragging a card to Done and watching the subject percentage tick up is so satisfying.', featureRequest: 'Sub-tasks inside Kanban cards', seed: true },
+  { id: 'seed-sarah', name: 'Sarah Johnson', region: 'US', amount: 15, currency: 'USD', testimony: 'The Dynamic Island for Pomodoro alerts feels straight out of a flagship phone.', featureRequest: 'Focus-stats Notion export', seed: true },
+  { id: 'seed-david', name: 'David Rodriguez', region: 'US', amount: 50, currency: 'USD', testimony: 'Mode-switching carried me through grad school — research mode vs coursework mode is everything.', featureRequest: 'Team / lab shared modes', seed: true },
+]

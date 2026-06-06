@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { AuroraBackground } from '@/components/common/AuroraBackground'
 import { Logo } from '@/components/common/Logo'
+import { WallOfHonor } from '@/components/support/WallOfHonor'
 import { APP_LINKS, CREATOR } from '@/lib/constants'
 
 const FEATURES = [
@@ -144,6 +145,14 @@ export function LandingPage() {
               </motion.div>
             ))}
           </div>
+        </section>
+
+        {/* Wall of Honor — community supporters keeping PRO TRACK free */}
+        <section className="py-10">
+          <p className="mb-5 text-center text-sm text-muted">
+            PRO TRACK is free and open-source. These supporters keep the servers running.
+          </p>
+          <WallOfHonor />
         </section>
 
         {/* Footer + creator credit */}

@@ -11,9 +11,9 @@ import { db } from '@/lib/firebase'
 
 const ledgerCol = (uid) => collection(db, 'users', uid, 'ledger')
 
-// Bounded read so the history pane never costs more than ~50 reads, even as the
-// log grows. Append-only; the UI is strictly read-only.
-const LEDGER_LIMIT = 50
+// Bounded read so the history pane stays predictable as the log grows.
+// Generous for a small (<50) user base; well within the raised free-tier caps.
+const LEDGER_LIMIT = 200
 
 /**
  * Append an achievement / milestone entry.

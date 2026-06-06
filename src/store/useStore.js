@@ -7,6 +7,7 @@ import { createChromeSlice } from './slices/chromeSlice'
 import { createIslandSlice } from './slices/islandSlice'
 import { createChronoSlice } from './slices/chronoSlice'
 import { createUpdateSlice } from './slices/updateSlice'
+import { createPatreonSlice } from './slices/patreonSlice'
 
 /**
  * Single Zustand store composed from feature slices. Realtime Firestore
@@ -22,4 +23,5 @@ export const useStore = create((...a) => ({
   ...createIslandSlice(...a),
   ...createChronoSlice(...a),
   ...createUpdateSlice(...a),
+  ...createPatreonSlice(...a),
 }))
