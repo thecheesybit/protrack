@@ -20,6 +20,11 @@ contextBridge.exposeInMainWorld('protrack', {
     maximize: () => ipcRenderer.invoke('window:maximize'),
     close: () => ipcRenderer.invoke('window:close'),
     isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
+    toggleFullScreen: () => ipcRenderer.invoke('window:toggleFullScreen'),
+    isFullScreen: () => ipcRenderer.invoke('window:isFullScreen'),
+    // Main forwards maximize/unmaximize/enter-full-screen/leave-full-screen
+    // events so the TitleBar icons always reflect the true window state.
+    onStateChange: (cb) => subscribe('window:state', cb),
   },
 
   // OS keychain / DPAPI-backed session storage.
@@ -34,6 +39,9 @@ contextBridge.exposeInMainWorld('protrack', {
 
   // Global-hotkey → focus pause/resume. Returns an unsubscribe fn.
   onFocusToggle: (cb) => subscribe('shortcut:focus-toggle', () => cb()),
+
+  // Global-hotkey → mute toggle. Returns an unsubscribe fn.
+  onMute: (cb) => subscribe('shortcut:mute', () => cb()),
 
   // Over-the-air auto-update lifecycle. Each subscriber returns an unsubscribe fn.
   update: {

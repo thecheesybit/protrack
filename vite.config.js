@@ -15,11 +15,28 @@ export default defineConfig({
       ? [
           electron({
             main: { entry: 'electron/main.js' },
-            preload: { input: path.join(process.cwd(), 'electron/preload.js') },
+            preload: {
+              input: path.join(process.cwd(), 'electron/preload.js'),
+              vite: {
+                build: {
+                  rollupOptions: {
+                    output: {
+                      entryFileNames: '[name].cjs',
+                    },
+                  },
+                },
+              },
+            },
           }),
         ]
       : []),
   ],
+  // Compile-time flag so the renderer knows this is an Electron build even
+  // before the preload bridge has injected window.protrack. Prevents the
+  // marketing LandingPage from ever flashing inside the desktop app.
+  define: {
+    __IS_ELECTRON__: JSON.stringify(withElectron),
+  },
   resolve: {
     alias: {
       '@': path.resolve(process.cwd(), './src'),
@@ -27,7 +44,8 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    open: true,
+    // Don't pop a browser tab during desktop dev — the Electron window is the app.
+    open: !withElectron,
   },
   build: {
     chunkSizeWarningLimit: 700,

@@ -25,15 +25,36 @@ const HABIT_ICONS = [
 export function HabitEditorModal({ open, onClose, habit, order }) {
   const { user } = useAuth()
   const isEdit = Boolean(habit?.id)
-  const [draft, setDraft] = useState({ name: '', icon: 'Heart', color: '#10b981' })
+  const [draft, setDraft] = useState({
+    name: '',
+    icon: 'Heart',
+    color: '#10b981',
+    timesPerWeek: 7,
+    timesPerDay: 1,
+    interval: 'none',
+  })
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (!open) return
     setDraft(
       habit
-        ? { name: habit.name, icon: habit.icon, color: habit.color }
-        : { name: '', icon: 'Heart', color: MODE_PALETTE[(order || 0) % MODE_PALETTE.length] },
+        ? {
+            name: habit.name,
+            icon: habit.icon,
+            color: habit.color,
+            timesPerWeek: habit.timesPerWeek ?? 7,
+            timesPerDay: habit.timesPerDay ?? 1,
+            interval: habit.interval ?? 'none',
+          }
+        : {
+            name: '',
+            icon: 'Heart',
+            color: MODE_PALETTE[(order || 0) % MODE_PALETTE.length],
+            timesPerWeek: 7,
+            timesPerDay: 1,
+            interval: 'none',
+          },
     )
   }, [open, habit, order])
 
@@ -42,8 +63,19 @@ export function HabitEditorModal({ open, onClose, habit, order }) {
     if (!name) return toast.error('Name your habit')
     setSaving(true)
     try {
-      if (isEdit) await updateHabit(user.uid, habit.id, { name, icon: draft.icon, color: draft.color })
-      else await addHabit(user.uid, { name, icon: draft.icon, color: draft.color, order: order || 0 })
+      const payload = {
+        name,
+        icon: draft.icon,
+        color: draft.color,
+        timesPerWeek: Number(draft.timesPerWeek),
+        timesPerDay: Number(draft.timesPerDay),
+        interval: draft.interval,
+      }
+      if (isEdit) {
+        await updateHabit(user.uid, habit.id, payload)
+      } else {
+        await addHabit(user.uid, { ...payload, order: order || 0 })
+      }
       onClose()
     } catch (err) {
       console.error('[habit] save failed', err)
@@ -95,6 +127,56 @@ export function HabitEditorModal({ open, onClose, habit, order }) {
         placeholder="e.g. Read 20 pages"
         className="w-full rounded-xl border border-line bg-surface-2/60 px-3.5 py-2.5 text-sm outline-none focus:border-accent"
       />
+
+      <div className="mt-4 grid grid-cols-3 gap-3">
+        <div>
+          <label className="mb-1.5 block text-[10px] font-semibold text-muted uppercase tracking-wider">Per Week</label>
+          <select
+            value={draft.timesPerWeek}
+            onChange={(e) => setDraft((d) => ({ ...d, timesPerWeek: Number(e.target.value) }))}
+            className="w-full rounded-xl border border-line bg-surface-2/60 px-3 py-2 text-xs outline-none focus:border-accent"
+          >
+            {[1, 2, 3, 4, 5, 6, 7].map((num) => (
+              <option key={num} value={num}>
+                {num} day{num > 1 ? 's' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-[10px] font-semibold text-muted uppercase tracking-wider">Per Day</label>
+          <select
+            value={draft.timesPerDay}
+            onChange={(e) => setDraft((d) => ({ ...d, timesPerDay: Number(e.target.value) }))}
+            className="w-full rounded-xl border border-line bg-surface-2/60 px-3 py-2 text-xs outline-none focus:border-accent"
+          >
+            {[1, 2, 3, 4, 5, 6, 8, 10, 12].map((num) => (
+              <option key={num} value={num}>
+                {num} time{num > 1 ? 's' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-[10px] font-semibold text-muted uppercase tracking-wider">Interval</label>
+          <select
+            value={draft.interval}
+            onChange={(e) => setDraft((d) => ({ ...d, interval: e.target.value }))}
+            className="w-full rounded-xl border border-line bg-surface-2/60 px-3 py-2 text-xs outline-none focus:border-accent"
+          >
+            <option value="none">No interval</option>
+            <option value="30m">30 minutes</option>
+            <option value="1h">1 hour</option>
+            <option value="2h">2 hours</option>
+            <option value="3h">3 hours</option>
+            <option value="4h">4 hours</option>
+            <option value="6h">6 hours</option>
+            <option value="12h">12 hours</option>
+          </select>
+        </div>
+      </div>
 
       <label className="mb-2 mt-4 block text-xs font-medium text-muted">Color</label>
       <div className="flex flex-wrap gap-2">

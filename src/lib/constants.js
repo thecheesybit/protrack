@@ -27,6 +27,8 @@ export const MODE_PRESETS = [
   { name: 'GATE Mode', icon: 'Cpu', accentColor: '#06b6d4', blurb: 'Engineering entrance' },
   { name: 'NEET Mode', icon: 'Stethoscope', accentColor: '#10b981', blurb: 'Medical entrance' },
   { name: 'CAT Mode', icon: 'Calculator', accentColor: '#f59e0b', blurb: 'Management aptitude' },
+  { name: 'UGC NET Mode', icon: 'Globe', accentColor: '#0ea5e9', blurb: 'Lectureship & JRF · social sciences' },
+  { name: 'UGC NET Sociology Mode', icon: 'Users', accentColor: '#3b82f6', blurb: 'Lectureship & JRF · sociology & social systems' },
   { name: 'Research Mode', icon: 'FlaskConical', accentColor: '#ec4899', blurb: 'Thesis & publications' },
 ]
 

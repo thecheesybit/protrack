@@ -1,6 +1,27 @@
-/** True when running inside the Electron shell (preload exposes window.protrack). */
-export const isDesktop =
+/* global __IS_ELECTRON__ */
+
+/**
+ * True when running inside the Electron shell.
+ *
+ * Two-layer detection:
+ *  1. Compile-time: Vite injects `__IS_ELECTRON__` when building with
+ *     ELECTRON=true. This is the primary signal — it is available instantly
+ *     at module-evaluation time, before any preload or DOM script runs.
+ *  2. Runtime: the preload bridge exposes `window.protrack.isDesktop`. Used
+ *     as a secondary check and to access IPC methods.
+ *
+ * The compile-time flag is critical because `window.protrack` may not yet
+ * be set when ES module-level code runs (Vite's ESM import chain can
+ * evaluate before contextBridge.exposeInMainWorld lands), which previously
+ * caused the marketing LandingPage to flash inside the desktop app.
+ */
+const compileTimeElectron =
+  typeof __IS_ELECTRON__ !== 'undefined' && __IS_ELECTRON__
+
+const runtimeElectron =
   typeof window !== 'undefined' && Boolean(window.protrack?.isDesktop)
+
+export const isDesktop = compileTimeElectron || runtimeElectron
 
 /** Safe accessor for the preload bridge. */
 export const desktopBridge = typeof window !== 'undefined' ? window.protrack : undefined

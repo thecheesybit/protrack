@@ -121,7 +121,16 @@ export function HabitsWidget({ widget, variant }) {
                   <span className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ backgroundColor: `${h.color}22`, color: h.color }}>
                     <Icon className="h-4 w-4" />
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium">{h.name}</span>
+                  <div className="min-w-0 flex-1 truncate">
+                    <div className="text-sm font-medium leading-none mb-1">{h.name}</div>
+                    {(h.timesPerWeek || h.timesPerDay || (h.interval && h.interval !== 'none')) && (
+                      <div className="text-[10px] text-muted truncate leading-none">
+                        {h.timesPerWeek && `${h.timesPerWeek}d/wk`}
+                        {h.timesPerDay && ` • ${h.timesPerDay}x/d`}
+                        {h.interval && h.interval !== 'none' && ` • every ${h.interval}`}
+                      </div>
+                    )}
+                  </div>
 
                   {isHero && (
                     <div className="hidden items-center gap-1 sm:flex">

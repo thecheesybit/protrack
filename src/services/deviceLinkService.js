@@ -1,14 +1,20 @@
-import { signInAnonymously, signInWithCustomToken } from 'firebase/auth'
+import {
+  signInAnonymously,
+  signInWithCustomToken,
+  signInWithPopup,
+  signInWithCredential,
+  GoogleAuthProvider,
+} from 'firebase/auth'
 import {
   doc,
   setDoc,
+  updateDoc,
   onSnapshot,
   deleteDoc,
   serverTimestamp,
   Timestamp,
 } from 'firebase/firestore'
-import { httpsCallable } from 'firebase/functions'
-import { auth, db, functions } from '@/lib/firebase'
+import { auth, db, googleProvider } from '@/lib/firebase'
 
 const HANDSHAKE_TTL_MS = 2 * 60 * 1000 // QR valid for 2 minutes
 
@@ -39,27 +45,42 @@ export async function createHandshake() {
 }
 
 /**
- * Listen for the mobile to claim the handshake. When a custom token appears,
+ * Listen for the mobile to claim the handshake. When a custom token or Google ID token appears,
  * sign in as the real user and clean up the handshake doc.
  */
 export function listenForClaim(sessionId, onClaimed, onError) {
-  return onSnapshot(
+  let active = true
+  const unsub = onSnapshot(
     doc(db, 'desktopHandshakes', sessionId),
     async (snap) => {
       const data = snap.data()
       if (data?.status === 'claimed' && data?.token) {
+        if (!active) return
+        active = false
+        unsub()
         try {
-          await signInWithCustomToken(auth, data.token)
+          if (data.tokenType === 'google') {
+            const credential = GoogleAuthProvider.credential(data.token)
+            await signInWithCredential(auth, credential)
+          } else {
+            await signInWithCustomToken(auth, data.token)
+          }
           await deleteDoc(doc(db, 'desktopHandshakes', sessionId)).catch(() => {})
           onClaimed?.()
         } catch (err) {
-          console.error('[link] custom-token sign-in failed', err)
+          console.error('[link] sign-in failed', err)
           onError?.(err)
         }
       }
     },
-    (err) => onError?.(err),
+    (err) => {
+      if (active) onError?.(err)
+    },
   )
+  return () => {
+    active = false
+    unsub()
+  }
 }
 
 export async function clearHandshake(sessionId) {
@@ -73,11 +94,22 @@ export async function clearHandshake(sessionId) {
 /* ── Mobile side ────────────────────────────────────────── */
 
 /**
- * Called from the authenticated web app (phone) to mint a single-use custom
- * token for THIS user and hand it to the waiting desktop via the Cloud Function.
+ * Called from the authenticated web app (phone) to obtain the user's Google ID token
+ * via a popup, and write it onto the pending handshake doc so the waiting desktop
+ * can sign in directly. Bypasses the need for Cloud Functions.
  */
 export async function claimDesktop(sessionId) {
-  const mint = httpsCallable(functions, 'mintDesktopToken')
-  const res = await mint({ sessionId })
-  return res.data
+  const res = await signInWithPopup(auth, googleProvider)
+  const credential = GoogleAuthProvider.credentialFromResult(res)
+  const idToken = credential?.idToken
+  if (!idToken) throw new Error('Could not retrieve Google ID token')
+
+  const ref = doc(db, 'desktopHandshakes', sessionId)
+  await updateDoc(ref, {
+    status: 'claimed',
+    token: idToken,
+    tokenType: 'google',
+    claimedBy: auth.currentUser.uid,
+    claimedAt: serverTimestamp(),
+  })
 }

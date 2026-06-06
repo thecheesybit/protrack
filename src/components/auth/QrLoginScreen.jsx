@@ -7,6 +7,7 @@ import { Logo } from '@/components/common/Logo'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { Spinner } from '@/components/ui/Spinner'
 import { createHandshake, listenForClaim, clearHandshake } from '@/services/deviceLinkService'
+import { useAuth } from '@/hooks/useAuth'
 
 const WEB_URL = import.meta.env.VITE_WEB_URL || 'https://pro-track-app.netlify.app'
 const REFRESH_MS = 110 * 1000 // rotate the QR just before the 2-min TTL
@@ -18,6 +19,7 @@ const STEPS = [
 ]
 
 export function QrLoginScreen() {
+  const { signIn, loading: authLoading } = useAuth()
   const [sessionId, setSessionId] = useState(null)
   const [error, setError] = useState(null)
 
@@ -65,13 +67,18 @@ export function QrLoginScreen() {
       <AuroraBackground />
 
       <GlassCard className="w-full max-w-lg p-8 sm:p-10">
-        <div className="mb-7 flex items-center gap-3">
+        <div className="mb-6 flex items-center gap-3">
           <Logo className="h-11 w-11 drop-shadow-lg" />
           <div>
-            <h1 className="text-xl font-bold tracking-tight">PRO TRACK</h1>
-            <p className="text-xs text-muted">Desktop · secure sign-in</p>
+            <h1 className="text-xl font-bold tracking-tight">Welcome to PRO TRACK</h1>
+            <p className="text-xs text-muted">Your workspace is ready — sign in to get started.</p>
           </div>
         </div>
+
+        <p className="mb-6 text-sm text-muted">
+          For your security, sign-in happens on your phone. Scan the code below with the PRO TRACK
+          mobile gateway and you will be in within seconds.
+        </p>
 
         <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-stretch">
           {/* QR */}
@@ -118,6 +125,22 @@ export function QrLoginScreen() {
         <div className="mt-7 flex items-center justify-center gap-2 text-sm text-muted">
           <Spinner className="h-4 w-4" />
           Waiting for your phone…
+        </div>
+
+        <div className="mt-6 flex flex-col gap-3">
+          <div className="relative flex py-2 items-center justify-center">
+            <div className="flex-grow border-t border-line/60"></div>
+            <span className="flex-shrink mx-4 text-[10px] text-muted font-bold uppercase tracking-wider">or</span>
+            <div className="flex-grow border-t border-line/60"></div>
+          </div>
+
+          <button
+            onClick={signIn}
+            disabled={authLoading}
+            className="flex w-full items-center justify-center gap-2.5 rounded-2xl bg-white px-5 py-3 font-semibold text-gray-900 shadow hover:bg-gray-50 active:scale-[0.98] transition-all disabled:opacity-60"
+          >
+            {authLoading ? 'Signing in…' : 'Sign in with Google'}
+          </button>
         </div>
 
         {error && <p className="mt-3 text-center text-xs text-red-400">{error}</p>}

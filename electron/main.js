@@ -22,9 +22,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isDev = !app.isPackaged
 const DEV_URL = process.env.VITE_DEV_SERVER_URL
 
-// Built layout: dist-electron/main.js + preload.mjs, dist/ (renderer), build/ (assets)
+// Built layout: dist-electron/main.js + preload.cjs, dist/ (renderer), build/ (assets)
 const RENDERER_DIST = path.join(__dirname, '../dist')
-const PRELOAD = path.join(__dirname, 'preload.mjs')
+const PRELOAD = path.join(__dirname, 'preload.cjs')
 const ICON = path.join(__dirname, '../build/icon.png')
 
 let win = null
@@ -35,7 +35,20 @@ let isQuitting = false
 const SHORTCUTS = {
   toggleWindow: 'CommandOrControl+Shift+P',
   toggleFocus: 'CommandOrControl+Shift+Space',
+  toggleFullScreen: 'CommandOrControl+Shift+F',
+  hideToTray: 'CommandOrControl+Shift+H',
+  toggleMute: 'CommandOrControl+Shift+M',
 }
+
+// Permissions auto-granted to the app (it is first-party, contextIsolated).
+// Lets the voice assistant capture the mic without a manual prompt.
+const GRANTED_PERMISSIONS = new Set([
+  'media',
+  'audioCapture',
+  'mediaKeySystem',
+  'notifications',
+  'clipboard-sanitized-write',
+])
 
 const sessionFile = () => path.join(app.getPath('userData'), 'session.enc')
 
@@ -104,10 +117,24 @@ function createWindow() {
     },
   })
 
+  // Auto-approve first-party permission requests (microphone for the voice
+  // assistant, notifications, etc.) so the user is never blocked by a prompt.
+  const ses = win.webContents.session
+  ses.setPermissionRequestHandler((_wc, permission, callback) =>
+    callback(GRANTED_PERMISSIONS.has(permission)),
+  )
+  ses.setPermissionCheckHandler((_wc, permission) => GRANTED_PERMISSIONS.has(permission))
+
   if (isDev && DEV_URL) win.loadURL(DEV_URL)
   else win.loadFile(path.join(RENDERER_DIST, 'index.html'))
 
   win.once('ready-to-show', () => win.show())
+
+  // Forward window-state events so the renderer TitleBar always reflects truth.
+  win.on('maximize', () => win.webContents.send('window:state', { maximized: true }))
+  win.on('unmaximize', () => win.webContents.send('window:state', { maximized: false }))
+  win.on('enter-full-screen', () => win.webContents.send('window:state', { fullscreen: true }))
+  win.on('leave-full-screen', () => win.webContents.send('window:state', { fullscreen: false }))
 
   // Minimize to tray instead of quitting.
   win.on('close', (e) => {
@@ -119,12 +146,25 @@ function createWindow() {
 
   // External links open in the system browser; block in-app navigation away.
   win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.includes('/__/auth/') || url.includes('firebaseapp.com/__/auth')) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          webPreferences: {
+            contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: true,
+          },
+        },
+      }
+    }
     shell.openExternal(url)
     return { action: 'deny' }
   })
   win.webContents.on('will-navigate', (e, url) => {
     const current = win.webContents.getURL()
-    if (url !== current && !url.startsWith('http://localhost')) {
+    const isLocal = url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')
+    if (url !== current && !isLocal) {
       e.preventDefault()
       shell.openExternal(url)
     }
@@ -134,7 +174,11 @@ function createWindow() {
 function createTray() {
   try {
     const image = nativeImage.createFromPath(ICON)
-    tray = new Tray(image.isEmpty() ? image : image.resize({ width: 18, height: 18 }))
+    if (image.isEmpty()) {
+      console.warn('[tray] icon not found at', ICON, '— skipping tray creation')
+      return
+    }
+    tray = new Tray(image.resize({ width: 18, height: 18 }))
     tray.setToolTip('PRO TRACK')
     tray.setContextMenu(
       Menu.buildFromTemplate([
@@ -169,9 +213,20 @@ if (!gotLock) {
 
     // System-wide hotkeys: toggle visibility, and pause/resume focus (the
     // latter is forwarded to the renderer focus engine).
-    globalShortcut.register(SHORTCUTS.toggleWindow, toggleWindow)
-    globalShortcut.register(SHORTCUTS.toggleFocus, () =>
+    const reg = (key, fn) => {
+      if (!globalShortcut.register(key, fn))
+        console.warn(`[shortcut] failed to register ${key} — may be claimed by another app`)
+    }
+    reg(SHORTCUTS.toggleWindow, toggleWindow)
+    reg(SHORTCUTS.toggleFocus, () =>
       win?.webContents.send('shortcut:focus-toggle'),
+    )
+    reg(SHORTCUTS.toggleFullScreen, () => {
+      if (win) win.setFullScreen(!win.isFullScreen())
+    })
+    reg(SHORTCUTS.hideToTray, () => win?.hide())
+    reg(SHORTCUTS.toggleMute, () =>
+      win?.webContents.send('shortcut:mute'),
     )
 
     initAutoUpdate()
@@ -202,6 +257,12 @@ ipcMain.handle('window:maximize', () => {
 })
 ipcMain.handle('window:close', () => win?.hide())
 ipcMain.handle('window:isMaximized', () => win?.isMaximized() ?? false)
+ipcMain.handle('window:toggleFullScreen', () => {
+  if (!win) return false
+  win.setFullScreen(!win.isFullScreen())
+  return win.isFullScreen()
+})
+ipcMain.handle('window:isFullScreen', () => win?.isFullScreen() ?? false)
 
 /* ── IPC: OS-encrypted session storage (safeStorage) ────── */
 ipcMain.handle('secure:set', (_e, value) => {

@@ -15,6 +15,7 @@ export function useFocusEngine() {
   const { user } = useAuth()
   const status = useStore((s) => s.status)
   const ambient = useStore((s) => s.ambient)
+  const muted = useStore((s) => s.muted)
   const intervalRef = useRef(null)
   const ambientRef = useRef(null)
   const completingRef = useRef(false)
@@ -32,7 +33,7 @@ export function useFocusEngine() {
     completingRef.current = true
     const st = useStore.getState()
     st.tick() // visually land on 0
-    playChime()
+    if (!st.muted) playChime()
 
     if (st.phase === 'focus') {
       const durationMin = st.focusMin
@@ -45,14 +46,16 @@ export function useFocusEngine() {
         duration: 5000,
       })
       try {
-        await logFocusSession(user.uid, {
+        const uid = user?.uid
+        if (!uid) throw new Error('not authenticated')
+        await logFocusSession(uid, {
           modeId: st.session?.modeId || useStore.getState().activeModeId,
           subjectId: st.session?.subjectId || null,
           durationMin,
           startedAt: st.startedAt ? new Date(st.startedAt) : new Date(),
           hourOfDay: (st.startedAt ? new Date(st.startedAt) : new Date()).getHours(),
         })
-        await addLedgerEntry(user.uid, {
+        await addLedgerEntry(uid, {
           kind: 'focus',
           title: `${durationMin}-minute focus block`,
           detail: st.session?.label || 'Deep focus',
@@ -89,10 +92,38 @@ export function useFocusEngine() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status])
 
-  // Ambient soundscape lifecycle.
+  // Ambient soundscape lifecycle (silenced while muted).
   useEffect(() => {
     const player = ambientRef.current
-    if (status === 'running' && ambient !== 'none') player.start(ambient)
+    if (status === 'running' && ambient !== 'none' && !muted) player.start(ambient)
     else player.stop()
-  }, [status, ambient])
+  }, [status, ambient, muted])
+
+  // Listen for Electron global hotkey Focus Toggle events.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.protrack?.onFocusToggle) {
+      const unsub = window.protrack.onFocusToggle(() => {
+        const st = useStore.getState()
+        if (st.status === 'running') {
+          st.pause()
+        } else if (st.status === 'paused') {
+          st.resume()
+        } else if (st.status === 'idle') {
+          st.startFocus()
+        }
+      })
+      return unsub
+    }
+  }, [])
+
+  // Listen for Electron global hotkey Mute events.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.protrack?.onMute) {
+      const unsub = window.protrack.onMute(() => {
+        const st = useStore.getState()
+        st.toggleMute()
+      })
+      return unsub
+    }
+  }, [])
 }

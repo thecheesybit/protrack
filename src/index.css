@@ -104,18 +104,14 @@
     letter-spacing: -0.02em;
   }
 
+  * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
   ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-  }
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  ::-webkit-scrollbar-thumb {
-    @apply rounded-full bg-line;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    @apply bg-muted/50;
+    display: none;
+    width: 0;
+    height: 0;
   }
 
   ::selection {

@@ -15,6 +15,7 @@ export const createFocusSlice = (set, get) => ({
   session: null, // { label, color, subjectId, modeId } | null
   startedAt: null,
   ambient: 'none', // 'none' | 'rain' | 'waves' | 'wind'
+  muted: false, // global mute for chime + ambient (toggled by hotkey)
   justCompleted: 0, // bumps to trigger the tree-grow animation
 
   setDurations: (focusMin, breakMin) =>
@@ -25,6 +26,9 @@ export const createFocusSlice = (set, get) => ({
     })),
 
   setAmbient: (ambient) => set({ ambient }),
+
+  setMuted: (muted) => set({ muted }),
+  toggleMute: () => set((s) => ({ muted: !s.muted })),
 
   startFocus: (session = null) =>
     set((s) => ({

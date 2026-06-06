@@ -23,13 +23,16 @@ export function subscribeToHabits(uid, callback) {
   })
 }
 
-export async function addHabit(uid, { name, icon, color, order }) {
+export async function addHabit(uid, { name, icon, color, order, timesPerWeek, timesPerDay, interval }) {
   return addDoc(habitsCol(uid), {
     name,
     icon: icon || 'Heart',
     color: color || '#10b981',
     doneDates: [],
     order: order ?? 0,
+    timesPerWeek: timesPerWeek ?? 7,
+    timesPerDay: timesPerDay ?? 1,
+    interval: interval || 'none',
     createdAt: serverTimestamp(),
   })
 }

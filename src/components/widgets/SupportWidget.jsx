@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Heart, Github, BadgeCheck } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { WidgetFrame } from './WidgetFrame'
@@ -15,6 +16,7 @@ export function SupportWidget({ widget, variant }) {
   const { user } = useAuth()
   const isPatreon = useIsPatreon(user?.uid)
   const isHero = variant === 'hero'
+  const [expanded, setExpanded] = useState(false)
 
   const Philosophy = (
     <div className="rounded-2xl border border-line/50 bg-gradient-to-br from-accent/10 to-accent-2/5 p-4">
@@ -68,10 +70,33 @@ export function SupportWidget({ widget, variant }) {
           </div>
         </div>
       ) : (
-        <div className="flex flex-1 flex-col gap-3 overflow-y-auto">
-          {Philosophy}
-          {!isPatreon && (
-            <p className="text-center text-xs text-muted">Open to contribute and view the Wall of Honor.</p>
+        <div className="flex flex-1 flex-col gap-2">
+          {expanded ? (
+            <>
+              {Philosophy}
+              {!isPatreon && (
+                <p className="text-center text-xs text-muted mt-1">Open to contribute and view the Wall of Honor.</p>
+              )}
+              <button
+                onClick={() => setExpanded(false)}
+                className="text-center text-xs text-accent font-semibold hover:underline mt-1"
+              >
+                Show less
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setExpanded(true)}
+              className="flex items-center justify-between rounded-xl border border-line bg-gradient-to-br from-accent/5 to-accent-2/5 p-3 text-left hover:border-accent/30 transition-all active:scale-[0.98] w-full"
+            >
+              <div className="flex items-center gap-2">
+                <Heart className="h-4 w-4 text-rose-400 animate-pulse animate-duration-1000" />
+                <span className="text-xs font-semibold text-ink">Support PRO TRACK</span>
+              </div>
+              <span className="text-[10px] text-muted font-medium bg-surface/80 px-2 py-0.5 rounded-full border border-line">
+                Expand
+              </span>
+            </button>
           )}
         </div>
       )}

@@ -50,6 +50,20 @@ export function Dashboard() {
         e.preventDefault()
         useStore.getState().setAiOpen(true)
       }
+      if (e.key.toLowerCase() === 'f') {
+        const st = useStore.getState()
+        if (st.status === 'idle') {
+          if (
+            e.target.tagName === 'INPUT' ||
+            e.target.tagName === 'TEXTAREA' ||
+            e.target.isContentEditable
+          ) {
+            return
+          }
+          e.preventDefault()
+          window.protrack?.window?.toggleFullScreen?.()
+        }
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

@@ -14,6 +14,8 @@ import {
   Stethoscope,
   Calculator,
   FlaskConical,
+  Globe,
+  Users,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
@@ -25,7 +27,7 @@ import { MODE_PRESETS } from '@/lib/constants'
 import { completeOnboarding } from '@/services/onboardingService'
 
 // Explicit map (not a namespace import) so Vite tree-shakes lucide-react.
-const PRESET_ICONS = { BookOpen, GraduationCap, Cpu, Stethoscope, Calculator, FlaskConical }
+const PRESET_ICONS = { BookOpen, GraduationCap, Cpu, Stethoscope, Calculator, FlaskConical, Globe, Users }
 
 function PolicyBlock({ icon: Icon, doc }) {
   return (

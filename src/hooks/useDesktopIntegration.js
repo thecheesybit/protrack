@@ -29,4 +29,18 @@ export function useDesktopIntegration() {
       else st.resume()
     })
   }, [])
+
+  // Global hotkey → mute / unmute chime + ambient sound.
+  useEffect(() => {
+    if (!isDesktop || !desktopBridge?.onMute) return undefined
+    return desktopBridge.onMute(() => {
+      const st = useStore.getState()
+      st.toggleMute()
+      st.pushIsland({
+        kind: 'info',
+        title: !st.muted ? 'Sound muted' : 'Sound on',
+        duration: 1800,
+      })
+    })
+  }, [])
 }
