@@ -22,5 +22,15 @@ contextBridge.exposeInMainWorld('protrack', {
     clear: () => ipcRenderer.invoke('secure:clear'),
   },
 
+  // Stable hardware fingerprint (computed in main; raw traits never exposed).
+  getDeviceFingerprint: () => ipcRenderer.invoke('device:fingerprint'),
+
+  // Global-hotkey → focus pause/resume. Returns an unsubscribe fn.
+  onFocusToggle: (cb) => {
+    const handler = () => cb()
+    ipcRenderer.on('shortcut:focus-toggle', handler)
+    return () => ipcRenderer.removeListener('shortcut:focus-toggle', handler)
+  },
+
   appInfo: () => ipcRenderer.invoke('app:info'),
 })

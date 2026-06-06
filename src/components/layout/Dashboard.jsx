@@ -6,6 +6,7 @@ import { useModeAccent } from '@/hooks/useModeAccent'
 import { useAutoHideChrome } from '@/hooks/useAutoHideChrome'
 import { useConnectivity } from '@/hooks/useConnectivity'
 import { useChronoTheme } from '@/hooks/useChronoTheme'
+import { useDesktopIntegration } from '@/hooks/useDesktopIntegration'
 import { AuroraBackground } from '@/components/common/AuroraBackground'
 import { DynamicIsland } from '@/components/island/DynamicIsland'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
@@ -33,6 +34,7 @@ export function Dashboard() {
   useAutoHideChrome() // top nav springs away when the cursor leaves the top edge
   useConnectivity() // sync status surfaced via the Dynamic Island; writes replay on reconnect
   useChronoTheme() // time-of-day palette/shadow modulation (data-chrono band)
+  useDesktopIntegration() // desktop-only: hardware-fingerprint binding + global hotkeys
 
   // Global shortcuts: Esc unwinds overlays/maximize; ⌘/Ctrl+K opens the AI.
   useEffect(() => {

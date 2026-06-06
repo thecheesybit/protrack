@@ -23,6 +23,12 @@ nsis:
   perMachine: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: PRO TRACK
+  uninstallDisplayName: PRO TRACK ${version}
+  artifactName: PRO-TRACK-Setup-${version}.${ext}
+  runAfterFinish: true
+  deleteAppDataOnUninstall: false
 
 mac:
   target:

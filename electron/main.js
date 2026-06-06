@@ -7,9 +7,12 @@ import {
   shell,
   safeStorage,
   nativeImage,
+  globalShortcut,
 } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
+import os from 'node:os'
+import crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -25,7 +28,39 @@ let win = null
 let tray = null
 let isQuitting = false
 
+// System-wide hotkeys (sensible defaults; surfaced read-only in Settings).
+const SHORTCUTS = {
+  toggleWindow: 'CommandOrControl+Shift+P',
+  toggleFocus: 'CommandOrControl+Shift+Space',
+}
+
 const sessionFile = () => path.join(app.getPath('userData'), 'session.enc')
+
+/**
+ * Stable, privacy-preserving hardware fingerprint. Hashes durable machine
+ * traits (hostname, platform, arch, CPU model, non-internal MACs) so the same
+ * device always yields the same id — bound to the account in Firestore — while
+ * the raw identifiers never leave the machine.
+ */
+function deviceFingerprint() {
+  const nets = os.networkInterfaces()
+  const macs = Object.values(nets)
+    .flat()
+    .filter((n) => n && !n.internal && n.mac && n.mac !== '00:00:00:00:00:00')
+    .map((n) => n.mac)
+  const cpu = os.cpus()?.[0]?.model || ''
+  const raw = [os.hostname(), os.platform(), os.arch(), cpu, [...new Set(macs)].sort().join(',')].join('|')
+  return crypto.createHash('sha256').update(raw).digest('hex').slice(0, 32)
+}
+
+function toggleWindow() {
+  if (!win) return createWindow()
+  if (win.isVisible() && win.isFocused()) win.hide()
+  else {
+    win.show()
+    win.focus()
+  }
+}
 
 function createWindow() {
   win = new BrowserWindow({
@@ -43,6 +78,8 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false, // ESM preload needs sandbox off; contextIsolation still isolates
+      // Keep the Pomodoro tick, alarms, and chimes alive when minimized/in tray.
+      backgroundThrottling: false,
     },
   })
 
@@ -108,6 +145,14 @@ if (!gotLock) {
   app.whenReady().then(() => {
     createWindow()
     createTray()
+
+    // System-wide hotkeys: toggle visibility, and pause/resume focus (the
+    // latter is forwarded to the renderer focus engine).
+    globalShortcut.register(SHORTCUTS.toggleWindow, toggleWindow)
+    globalShortcut.register(SHORTCUTS.toggleFocus, () =>
+      win?.webContents.send('shortcut:focus-toggle'),
+    )
+
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()
     })
@@ -115,6 +160,9 @@ if (!gotLock) {
 
   app.on('before-quit', () => {
     isQuitting = true
+  })
+  app.on('will-quit', () => {
+    globalShortcut.unregisterAll()
   })
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin' && isQuitting) app.quit()
@@ -162,5 +210,13 @@ ipcMain.handle('secure:clear', () => {
 })
 ipcMain.handle('app:info', () => ({
   version: app.getVersion(),
+  platform: process.platform,
+  shortcuts: SHORTCUTS,
+}))
+
+/* ── IPC: hardware fingerprint identity ─────────────────── */
+ipcMain.handle('device:fingerprint', () => ({
+  id: deviceFingerprint(),
+  hostname: os.hostname(),
   platform: process.platform,
 }))
