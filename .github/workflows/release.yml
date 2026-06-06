@@ -9,19 +9,23 @@ name: Release
 # Manual `workflow_dispatch` is also supported for ad-hoc releases (e.g. a
 # point fix that doesn't land on master through the normal commit flow).
 on:
-  push:
-    branches:
-      - master
-    paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
-      - '.github/**/*.md'
+  # NOTE: push-to-master auto-trigger is intentionally disabled for the first
+  # production release. Re-enable in a follow-up PR by uncommenting the block
+  # below after v1.1.0 has been shipped via `gh workflow run release.yml`.
+  #
+  # push:
+  #   branches:
+  #     - master
+  #   paths-ignore:
+  #     - 'docs/**'
+  #     - '**/*.md'
+  #     - '.github/**/*.md'
   workflow_dispatch:
     inputs:
       bump:
         description: 'Version bump'
         required: true
-        default: 'patch'
+        default: 'minor'
         type: choice
         options: [patch, minor, major]
 
