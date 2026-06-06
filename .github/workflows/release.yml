@@ -1,21 +1,51 @@
 name: Release
 
+# Production pipeline. A push to `master` is the single source of truth for
+# shipping: this workflow bumps the version, regenerates CHANGELOG.md from the
+# new commits, deploys the marketing/web shell to Netlify, builds Electron
+# installers for Windows / macOS / Linux, and publishes them as GitHub Release
+# assets so the in-app auto-updater picks them up.
+#
+# Manual `workflow_dispatch` is also supported for ad-hoc releases (e.g. a
+# point fix that doesn't land on master through the normal commit flow).
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - master
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - '.github/**/*.md'
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump'
+        required: true
+        default: 'patch'
+        type: choice
+        options: [patch, minor, major]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  release:
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      matrix:
-        os: [windows-latest] # Add macos-latest or ubuntu-latest here if desired in the future
+  prepare:
+    name: Bump version & changelog
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      new_version: ${{ steps.bump.outputs.version }}
+      tag: ${{ steps.bump.outputs.tag }}
 
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -23,10 +53,151 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install Dependencies
+      - name: Configure git user
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump package.json
+        id: bump
+        env:
+          BUMP_KIND: ${{ inputs.bump || 'patch' }}
+        run: |
+          NEW_VERSION=$(npm version "$BUMP_KIND" --no-git-tag-version | tr -d v)
+          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "PRO TRACK → v$NEW_VERSION"
+
+      - name: Regenerate CHANGELOG.md from conventional commits
+        env:
+          NEW_VERSION: ${{ steps.bump.outputs.version }}
+        run: |
+          DATE=$(date -u +"%Y-%m-%d")
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          RANGE=${PREV_TAG:+$PREV_TAG..HEAD}
+          {
+            echo "# Changelog"
+            echo
+            echo "## v$NEW_VERSION — $DATE"
+            echo
+            git log $RANGE --no-merges --pretty=format:"- %s (%h)" \
+              | grep -E '^- (feat|fix|perf|refactor|docs|chore|ci|test|build|style)(\(.+\))?:' \
+              || echo "- Maintenance release"
+            echo
+            if [ -f CHANGELOG.md ]; then
+              # Drop the previous "# Changelog" header so we don't duplicate it.
+              tail -n +2 CHANGELOG.md
+            fi
+          } > CHANGELOG.new.md
+          mv CHANGELOG.new.md CHANGELOG.md
+
+      - name: Commit version + changelog
+        env:
+          NEW_VERSION: ${{ steps.bump.outputs.version }}
+        run: |
+          git add package.json package-lock.json CHANGELOG.md
+          git commit -m "chore(release): v$NEW_VERSION [skip ci]"
+          git tag "v$NEW_VERSION"
+          git push origin HEAD --tags
+
+  deploy-web:
+    name: Deploy web → Netlify
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
         run: npm ci
 
-      - name: Build and Publish Electron App
-        run: npm run electron:build
+      - name: Build web bundle
+        run: npm run build
+
+      - name: Deploy to Netlify
+        # Only deploys when the secrets are present, so forks won't fail.
+        if: ${{ env.NETLIFY_AUTH_TOKEN != '' && env.NETLIFY_SITE_ID != '' }}
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        run: |
+          npx --yes netlify-cli@17 deploy \
+            --dir=dist \
+            --prod \
+            --message="Release v${{ needs.prepare.outputs.tag }}"
+
+  build-electron:
+    name: Build Electron · ${{ matrix.os }}
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build & publish installers (electron-builder)
+        # electron-builder reads GH_TOKEN to upload assets to the release tag
+        # created by the prepare job. `--publish always` is set in package.json.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false # skip code-sign when no cert is present
+        run: npm run electron:build -- --publish always
+
+  finalize:
+    name: Publish release notes
+    needs: [prepare, deploy-web, build-electron]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Extract release section from CHANGELOG
+        id: notes
+        env:
+          NEW_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          awk "/^## v$NEW_VERSION /{flag=1; next} /^## v/{flag=0} flag" CHANGELOG.md > release-notes.md
+          echo "path=release-notes.md" >> "$GITHUB_OUTPUT"
+
+      - name: Update GitHub Release notes
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: PRO TRACK ${{ needs.prepare.outputs.tag }}
+          body_path: ${{ steps.notes.outputs.path }}
+          fail_on_unmatched_files: false
+          generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,4 +1,4 @@
-import { Sun, Moon, Settings, Sparkles, LogOut } from 'lucide-react'
+import { Sun, Moon, Settings, Sparkles, LogOut, Heart, Minimize2 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useTheme } from '@/hooks/useTheme'
 import { useStore } from '@/store/useStore'
@@ -26,6 +26,8 @@ export function TopBar() {
   const { theme, toggleTheme } = useTheme()
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
   const setAiOpen = useStore((s) => s.setAiOpen)
+  const setSupportOpen = useStore((s) => s.setSupportOpen)
+  const fullscreen = useStore((s) => s.fullscreen)
 
   const firstName = (user?.displayName || 'Explorer').split(' ')[0]
 
@@ -42,6 +44,24 @@ export function TopBar() {
       </div>
 
       <div className="flex items-center gap-2">
+        {fullscreen && (
+          <IconButton
+            label="Exit Full Screen"
+            onClick={() => window.protrack?.window?.toggleFullScreen?.()}
+            className="text-amber-400 hover:text-amber-500 border-amber-500/10 bg-amber-500/5 hover:bg-amber-500/10"
+          >
+            <Minimize2 className="h-5 w-5" />
+          </IconButton>
+        )}
+
+        <IconButton
+          label="Support Corner"
+          onClick={() => setSupportOpen(true)}
+          className="text-rose-400 hover:text-rose-500 border-rose-500/10 bg-rose-500/5 hover:bg-rose-500/10"
+        >
+          <Heart className="h-5 w-5 fill-rose-400/20" />
+        </IconButton>
+
         <IconButton
           label="AI Companion"
           onClick={() => setAiOpen(true)}

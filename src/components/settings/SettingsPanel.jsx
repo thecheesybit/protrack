@@ -11,6 +11,7 @@ import {
   Keyboard,
   History,
   Github,
+  Type,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
@@ -53,6 +54,8 @@ export function SettingsPanel() {
   const open = useStore((s) => s.settingsOpen)
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
   const settings = useStore((s) => s.settings)
+  const fontScale = useStore((s) => s.fontScale)
+  const setFontScale = useStore((s) => s.setFontScale)
 
   const [keyInput, setKeyInput] = useState('')
   const [hydration, setHydration] = useState(60)
@@ -111,6 +114,36 @@ export function SettingsPanel() {
             <span>Theme</span>
             <span className="font-medium capitalize text-accent">{theme}</span>
           </button>
+        </Section>
+
+        {/* Display — global typography scale (Compact / Standard / Large).
+            Drives --root-font-size, so every rem in the app rescales. */}
+        <Section title="Display" icon={<Type className="h-4 w-4" />}>
+          <p className="mb-2 text-xs text-muted">
+            Font size — applies to the whole workspace instantly.
+          </p>
+          <div className="flex gap-1.5" role="radiogroup" aria-label="Font size">
+            {[
+              { key: 'compact', label: 'Compact' },
+              { key: 'standard', label: 'Standard' },
+              { key: 'large', label: 'Large' },
+            ].map((opt) => (
+              <button
+                key={opt.key}
+                role="radio"
+                aria-checked={fontScale === opt.key}
+                onClick={() => setFontScale(opt.key)}
+                className={cn(
+                  'flex-1 rounded-lg border py-2 text-sm transition-colors',
+                  fontScale === opt.key
+                    ? 'border-accent/50 bg-accent/15 text-accent'
+                    : 'border-line text-muted hover:text-ink',
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </Section>
 
         {/* Gemini */}

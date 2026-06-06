@@ -5,7 +5,6 @@ import { AnalyticsWidget } from './AnalyticsWidget'
 import { HabitsWidget } from './HabitsWidget'
 import { TodosWidget } from './TodosWidget'
 import { LedgerWidget } from './LedgerWidget'
-import { SupportWidget } from './SupportWidget'
 
 // Every board widget maps to a real, mode-aware component — no placeholders.
 const COMPONENTS = {
@@ -16,7 +15,6 @@ const COMPONENTS = {
   habits: HabitsWidget,
   todos: TodosWidget,
   ledger: LedgerWidget,
-  support: SupportWidget,
 }
 
 export function getWidgetComponent(id) {

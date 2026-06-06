@@ -51,6 +51,46 @@ const GRANTED_PERMISSIONS = new Set([
 ])
 
 const sessionFile = () => path.join(app.getPath('userData'), 'session.enc')
+const windowStateFile = () => path.join(app.getPath('userData'), 'window-state.json')
+
+/**
+ * Persisted window bounds. We roll our own (rather than depend on
+ * electron-store) to keep the Electron main bundle lean and dependency-free,
+ * and because the schema is tiny.
+ */
+const DEFAULT_WINDOW_STATE = {
+  width: 1280,
+  height: 820,
+  x: undefined,
+  y: undefined,
+  isMaximized: false,
+  isFullScreen: false,
+}
+
+function readWindowState() {
+  try {
+    if (!fs.existsSync(windowStateFile())) return { ...DEFAULT_WINDOW_STATE }
+    const raw = JSON.parse(fs.readFileSync(windowStateFile(), 'utf8'))
+    return {
+      ...DEFAULT_WINDOW_STATE,
+      ...raw,
+      // Defensive: numeric, sane minimums in case the file was tampered with.
+      width: Math.max(940, Number(raw.width) || DEFAULT_WINDOW_STATE.width),
+      height: Math.max(600, Number(raw.height) || DEFAULT_WINDOW_STATE.height),
+    }
+  } catch (err) {
+    console.warn('[window-state] read failed; using defaults', err)
+    return { ...DEFAULT_WINDOW_STATE }
+  }
+}
+
+function persistWindowState(state) {
+  try {
+    fs.writeFileSync(windowStateFile(), JSON.stringify(state, null, 2))
+  } catch (err) {
+    console.warn('[window-state] write failed', err)
+  }
+}
 
 /**
  * Stable, privacy-preserving hardware fingerprint. Hashes durable machine
@@ -97,11 +137,18 @@ function initAutoUpdate() {
 }
 
 function createWindow() {
+  const state = readWindowState()
   win = new BrowserWindow({
-    width: 1280,
-    height: 820,
+    width: state.width,
+    height: state.height,
+    x: state.x,
+    y: state.y,
     minWidth: 940,
     minHeight: 600,
+    // useContentSize: width/height refer to the renderer viewport, not the
+    // outer frame — guarantees the React layout gets pixel-exact dimensions
+    // on every HiDPI display regardless of OS chrome thickness.
+    useContentSize: true,
     show: false,
     frame: false,
     titleBarStyle: 'hidden',
@@ -114,7 +161,21 @@ function createWindow() {
       sandbox: false, // ESM preload needs sandbox off; contextIsolation still isolates
       // Keep the Pomodoro tick, alarms, and chimes alive when minimized/in tray.
       backgroundThrottling: false,
+      // Lock zoom at 1.0 so the renderer renders at native device pixels.
+      // Any cached zoomLevel from a prior session is ignored.
+      zoomFactor: 1.0,
+      // Pin the default font sizes so DPI changes never reflow typography.
+      defaultFontSize: 16,
+      defaultMonospaceFontSize: 13,
     },
+  })
+
+  // Belt-and-braces: clear any persisted zoom and disable user zoom shortcuts
+  // (Ctrl+/-, pinch). Keeps the UI sharp on every monitor.
+  win.webContents.setZoomFactor(1.0)
+  win.webContents.setVisualZoomLevelLimits(1, 1).catch(() => {})
+  win.webContents.on('did-finish-load', () => {
+    win.webContents.setZoomFactor(1.0)
   })
 
   // Auto-approve first-party permission requests (microphone for the voice
@@ -128,13 +189,50 @@ function createWindow() {
   if (isDev && DEV_URL) win.loadURL(DEV_URL)
   else win.loadFile(path.join(RENDERER_DIST, 'index.html'))
 
-  win.once('ready-to-show', () => win.show())
+  win.once('ready-to-show', () => {
+    win.show()
+    if (state.isMaximized) win.maximize()
+    if (state.isFullScreen) win.setFullScreen(true)
+  })
+
+  // Persist bounds on resize/move. Debounced via simple timer to avoid disk
+  // churn during a drag; flush on close for the final position.
+  let saveTimer = null
+  const queueSave = () => {
+    if (!win || win.isDestroyed()) return
+    if (saveTimer) clearTimeout(saveTimer)
+    saveTimer = setTimeout(() => {
+      const isMaximized = win.isMaximized()
+      const isFullScreen = win.isFullScreen()
+      // Don't capture the inflated bounds while maximized/fullscreen — keep
+      // the prior "normal" bounds so the next unmaximize restores them.
+      const bounds = !isMaximized && !isFullScreen ? win.getBounds() : null
+      const next = bounds
+        ? { ...bounds, isMaximized, isFullScreen }
+        : { ...readWindowState(), isMaximized, isFullScreen }
+      persistWindowState(next)
+    }, 300)
+  }
+  win.on('resize', queueSave)
+  win.on('move', queueSave)
 
   // Forward window-state events so the renderer TitleBar always reflects truth.
-  win.on('maximize', () => win.webContents.send('window:state', { maximized: true }))
-  win.on('unmaximize', () => win.webContents.send('window:state', { maximized: false }))
-  win.on('enter-full-screen', () => win.webContents.send('window:state', { fullscreen: true }))
-  win.on('leave-full-screen', () => win.webContents.send('window:state', { fullscreen: false }))
+  win.on('maximize', () => {
+    queueSave()
+    win.webContents.send('window:state', { maximized: true })
+  })
+  win.on('unmaximize', () => {
+    queueSave()
+    win.webContents.send('window:state', { maximized: false })
+  })
+  win.on('enter-full-screen', () => {
+    queueSave()
+    win.webContents.send('window:state', { fullscreen: true })
+  })
+  win.on('leave-full-screen', () => {
+    queueSave()
+    win.webContents.send('window:state', { fullscreen: false })
+  })
 
   // Minimize to tray instead of quitting.
   win.on('close', (e) => {

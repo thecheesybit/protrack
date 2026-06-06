@@ -1,23 +1,28 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Sparkles, AlertTriangle } from 'lucide-react'
+import { Send, Sparkles, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react'
 import { useStore } from '@/store/useStore'
+import { useAuth } from '@/hooks/useAuth'
 import { useSubjects } from '@/hooks/useSubjects'
 import { useTimetable } from '@/hooks/useTimetable'
+import { useHabits, useTodos } from '@/hooks/useWellness'
 import { chatWithGemini, hasGeminiKey } from '@/services/geminiService'
 import { todayDow } from '@/lib/time'
 
 const SUGGESTIONS = [
   'Analyze my progress',
-  'Plan my next study session',
-  'Quiz me on a weak subject',
+  'I finished my Calculus study session',
+  'Remind me to drink water',
 ]
 
 export function ChatTab({ onOpenSettings }) {
+  const { user } = useAuth()
   const modes = useStore((s) => s.modes)
   const activeModeId = useStore((s) => s.activeModeId)
   const stats = useStore((s) => s.stats)
   const { subjects } = useSubjects(activeModeId)
   const { slots } = useTimetable(activeModeId)
+  const habits = useHabits()
+  const todos = useTodos()
 
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
@@ -36,9 +41,17 @@ export function ChatTab({ onOpenSettings }) {
       .map((s) => `- ${s.name}: ${s.progressPct || 0}% (${(s.flags || []).length} pending notes)`)
       .join('\n')
     const todaySlots = slots.filter((s) => s.dayOfWeek === today).map((s) => s.label).join(', ')
+    const habitLines = habits.map((h) => `- ${h.name}`).join('\n')
+    const todoLines = todos
+      .filter((t) => !t.done)
+      .slice(0, 10)
+      .map((t) => `- ${t.text}`)
+      .join('\n')
     return [
-      `Active mode: ${activeMode?.name || '—'}`,
+      `Active mode: ${activeMode?.name || '—'} (id: ${activeModeId || 'none'})`,
       `Subjects:\n${subjLines || '  (none yet)'}`,
+      `Habits:\n${habitLines || '  (none yet)'}`,
+      `Open to-dos:\n${todoLines || '  (none)'}`,
       `Today's sessions: ${todaySlots || 'none planned'}`,
       `Focus stats: ${stats?.currentStreak || 0}-day streak, ${Math.round((stats?.totalFocusMin || 0) / 60)}h total, ${stats?.treesGrown || 0} sessions completed.`,
     ].join('\n')
@@ -53,8 +66,14 @@ export function ChatTab({ onOpenSettings }) {
     setInput('')
     setLoading(true)
     try {
-      const reply = await chatWithGemini(next, buildContext())
-      setMessages((m) => [...m, { role: 'assistant', text: reply }])
+      const { text: reply, toolEvents } = await chatWithGemini(next, buildContext(), {
+        uid: user?.uid,
+        modeId: activeModeId,
+        subjects,
+        habits,
+        todos,
+      })
+      setMessages((m) => [...m, { role: 'assistant', text: reply, toolEvents }])
     } catch (err) {
       setMessages((m) => [...m, { role: 'assistant', text: `Error: ${err.message}` }])
     } finally {
@@ -106,7 +125,7 @@ export function ChatTab({ onOpenSettings }) {
         )}
 
         {messages.map((m, i) => (
-          <div key={i} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
+          <div key={i} className={m.role === 'user' ? 'flex justify-end' : 'flex flex-col items-start gap-1.5'}>
             <div
               className={
                 m.role === 'user'
@@ -116,6 +135,23 @@ export function ChatTab({ onOpenSettings }) {
             >
               {m.text}
             </div>
+            {m.role === 'assistant' && m.toolEvents?.length > 0 && (
+              <div className="ml-1 flex flex-wrap gap-1.5">
+                {m.toolEvents.map((ev, j) => (
+                  <span
+                    key={j}
+                    className={
+                      ev.ok
+                        ? 'inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-400'
+                        : 'inline-flex items-center gap-1 rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[11px] text-rose-400'
+                    }
+                  >
+                    {ev.ok ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                    {ev.summary || ev.error || ev.name}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         ))}
 

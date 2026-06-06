@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Plus, Check, Flame, Pencil, ListChecks, Sparkles } from 'lucide-react'
+import { Plus, Check, Flame, Pencil, ListChecks, Sparkles, BellRing } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useHabits } from '@/hooks/useWellness'
+import { missedToday } from '@/hooks/useHabitReminders'
 import { WidgetFrame } from './WidgetFrame'
 import { HabitEditorModal } from '@/components/wellness/HabitEditorModal'
 import { getIcon } from '@/lib/icons'
@@ -115,6 +116,7 @@ export function HabitsWidget({ widget, variant }) {
             {habits.map((h) => {
               const Icon = getIcon(h.icon)
               const streak = computeStreak(h.doneDates || [])
+              const missed = missedToday(h)
               return (
                 <div key={h.id} className="group flex items-center gap-2.5 rounded-xl border border-line/50 bg-surface-2/30 px-3 py-2">
                   <Toggle habit={h} />
@@ -131,6 +133,15 @@ export function HabitsWidget({ widget, variant }) {
                       </div>
                     )}
                   </div>
+
+                  {missed > 0 && (
+                    <span
+                      title={`${missed} reminder${missed > 1 ? 's' : ''} missed today`}
+                      className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-400"
+                    >
+                      <BellRing className="h-3 w-3" /> {missed}
+                    </span>
+                  )}
 
                   {isHero && (
                     <div className="hidden items-center gap-1 sm:flex">

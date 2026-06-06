@@ -3,6 +3,30 @@
 @tailwind utilities;
 
 /* ─────────────────────────────────────────────────────────────
+   Root font-size: every `rem` in the app resolves against this.
+   `useFontScale` toggles data-font-scale on <html> to give users a
+   Compact / Standard / Large preference without touching layout code.
+   ───────────────────────────────────────────────────────────── */
+html {
+  font-size: var(--root-font-size, 16px);
+  /* Stop iOS / WebView from auto-bumping text when the window narrows. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+:root {
+  --root-font-size: 16px;
+}
+:root[data-font-scale='compact'] {
+  --root-font-size: 14px;
+}
+:root[data-font-scale='standard'] {
+  --root-font-size: 16px;
+}
+:root[data-font-scale='large'] {
+  --root-font-size: 18px;
+}
+
+/* ─────────────────────────────────────────────────────────────
    Theme tokens — RGB channel triplets so Tailwind's `<alpha-value>`
    works (e.g. bg-surface/60). `--accent` is overridden at runtime by
    useModeAccent so the whole UI glows in the active mode's color.
@@ -91,10 +115,22 @@
     @apply bg-bg text-ink font-sans antialiased;
     color-scheme: light dark;
     font-feature-settings: 'cv11', 'ss01', 'cv02', 'cv03';
-    text-rendering: optimizeLegibility;
+    /* `geometricPrecision` keeps glyph metrics consistent across DPI tiers —
+       `optimizeLegibility` can soften horizontal hinting on Windows HiDPI. */
+    text-rendering: geometricPrecision;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Avoid the half-pixel composite blur on translated/animated layers. */
+    transform: translateZ(0);
+    backface-visibility: hidden;
     transition: background-color 0.45s ease, color 0.45s ease;
+  }
+
+  /* Crisp 1px borders on hairline DPI — without this Tailwind's `border`
+     can render as a soft 1.33px line on 1.25x / 1.5x Windows scaling. */
+  img,
+  svg {
+    image-rendering: -webkit-optimize-contrast;
   }
 
   /* Tighter, more confident headings (Linear/Apple cadence). */

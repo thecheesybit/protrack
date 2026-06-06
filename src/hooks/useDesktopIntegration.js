@@ -43,4 +43,20 @@ export function useDesktopIntegration() {
       })
     })
   }, [])
+
+  // Listen to window state changes (like fullscreen)
+  useEffect(() => {
+    if (!isDesktop || !desktopBridge?.window) return undefined
+
+    // Sync initial state
+    desktopBridge.window.isFullScreen?.().then((v) => {
+      useStore.getState().setFullscreen(Boolean(v))
+    })
+
+    return desktopBridge.window.onStateChange?.((state) => {
+      if (state.fullscreen !== undefined) {
+        useStore.getState().setFullscreen(state.fullscreen)
+      }
+    })
+  }, [])
 }

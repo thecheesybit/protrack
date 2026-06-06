@@ -1,0 +1,69 @@
+name: CI
+
+# Lightweight build-and-verify gate. Runs on every push (except master, which
+# is owned by the release pipeline) and every PR. Keeps `development` honest
+# and prevents broken commits from reaching `master`.
+on:
+  push:
+    branches-ignore:
+      - master
+  pull_request:
+    branches:
+      - master
+      - development
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint & build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (skip silently if no lint script)
+        run: |
+          if npm run --silent | grep -q '^  lint'; then
+            npm run lint
+          else
+            echo "No 'lint' script defined — skipping."
+          fi
+
+      - name: Brand guard — fail on any emoji in source
+        # The project's design rule is "Lucide icons only — zero emojis in UI
+        # strings". Cheap grep gate so regressions surface in CI, not review.
+        run: |
+          if grep -RInP '[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}]' src/ 2>/dev/null; then
+            echo "::error::Emoji found in src/ — use Lucide icons instead."
+            exit 1
+          fi
+
+      - name: Build web bundle
+        run: npm run build
+
+      - name: Build Electron main + preload
+        run: npx cross-env ELECTRON=true vite build
+
+      - name: Upload web bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist-${{ github.sha }}
+          path: dist
+          retention-days: 7
+          if-no-files-found: error

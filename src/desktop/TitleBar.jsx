@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Minus, Square, Copy, Maximize2, Minimize2, X } from 'lucide-react'
 import { desktopBridge } from './isDesktop'
 import { Logo } from '@/components/common/Logo'
+import { useStore } from '@/store/useStore'
 
 /**
  * Custom frameless title bar. The native window controls (minimize, maximize,
@@ -11,27 +12,27 @@ import { Logo } from '@/components/common/Logo'
  */
 export function TitleBar() {
   const [maximized, setMaximized] = useState(false)
-  const [fullscreen, setFullscreen] = useState(false)
+  const fullscreen = useStore((s) => s.fullscreen)
 
   const ctrl = desktopBridge?.window
 
   useEffect(() => {
     ctrl?.isMaximized?.().then((v) => setMaximized(Boolean(v)))
-    ctrl?.isFullScreen?.().then((v) => setFullscreen(Boolean(v)))
 
     // Subscribe to live state events from main so buttons stay in sync when
     // the window state changes externally (global hotkey, OS double-click, etc.)
     const unsub = ctrl?.onStateChange?.((state) => {
       if (state.maximized !== undefined) setMaximized(state.maximized)
-      if (state.fullscreen !== undefined) setFullscreen(state.fullscreen)
     })
     return () => unsub?.()
   }, [ctrl])
 
   const onMinimize = () => ctrl?.minimize()
   const onMaximize = async () => setMaximized(Boolean(await ctrl?.maximize()))
-  const onFullscreen = async () => setFullscreen(Boolean(await ctrl?.toggleFullScreen()))
+  const onFullscreen = async () => ctrl?.toggleFullScreen()
   const onClose = () => ctrl?.close()
+
+  if (fullscreen) return null
 
   return (
     <div className="shrink-0">

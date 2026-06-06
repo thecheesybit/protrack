@@ -27,7 +27,12 @@ export function QrLoginScreen() {
     let active = true
     let unsub = null
     let currentId = null
-    let timer = null
+    let cycleTimer = null
+    let retryTimer = null
+    // Exponential backoff for transient network failures, capped at 15s.
+    // The previous version would leave an empty QR for the full 110s cycle
+    // when createHandshake() hit a flaky network on first attempt.
+    let backoffMs = 1500
 
     const spin = async () => {
       try {
@@ -38,17 +43,27 @@ export function QrLoginScreen() {
         currentId = id
         setSessionId(id)
         setError(null)
+        backoffMs = 1500
         unsub = listenForClaim(id, undefined, (e) => setError(e.message))
       } catch (e) {
-        setError(e.message)
+        if (!active) return
+        const offline = typeof navigator !== 'undefined' && !navigator.onLine
+        setError(offline ? 'Offline — waiting for connection…' : e.message)
+        retryTimer = setTimeout(() => active && spin(), backoffMs)
+        backoffMs = Math.min(15_000, backoffMs * 2)
       }
     }
 
     spin()
-    timer = setInterval(spin, REFRESH_MS)
+    cycleTimer = setInterval(spin, REFRESH_MS)
+    const onOnline = () => active && spin()
+    window.addEventListener('online', onOnline)
+
     return () => {
       active = false
-      clearInterval(timer)
+      clearInterval(cycleTimer)
+      if (retryTimer) clearTimeout(retryTimer)
+      window.removeEventListener('online', onOnline)
       if (unsub) unsub()
       if (currentId) clearHandshake(currentId)
     }
