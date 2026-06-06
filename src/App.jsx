@@ -9,13 +9,18 @@ import { PatreonApprovePage } from '@/components/patreon/PatreonApprovePage'
 import { Workspace } from '@/components/layout/Workspace'
 import { FirestoreSyncProvider } from '@/providers/FirestoreSyncProvider'
 import { UpdateGate } from '@/components/desktop/UpdateGate'
+import { SetupRequired } from '@/components/common/SetupRequired'
 import { useAutoUpdate } from '@/hooks/useAutoUpdate'
 import { useFontScale } from '@/hooks/useFontScale'
 import { TitleBar } from '@/desktop/TitleBar'
 import { isDesktop, isWorkspaceHost } from '@/desktop/isDesktop'
 
 function Routes() {
-  const { user, loading } = useAuth()
+  const { user, loading, configured } = useAuth()
+
+  // Hard short-circuit: if Firebase config wasn't baked in at build time,
+  // never reach any code that touches `auth.X` (which would null-deref).
+  if (!configured) return <SetupRequired key="setup" />
 
   const pathname = typeof window !== 'undefined' ? window.location.pathname : '/'
 

@@ -18,6 +18,14 @@ import { auth, db, googleProvider } from '@/lib/firebase'
 
 const HANDSHAKE_TTL_MS = 2 * 60 * 1000 // QR valid for 2 minutes
 
+function requireAuth() {
+  if (!auth || !db) {
+    throw new Error(
+      'Firebase is not configured for this build. Add VITE_FIREBASE_* env vars and rebuild.',
+    )
+  }
+}
+
 /** Cryptographically-random, unguessable session id (acts as a bearer secret). */
 function randomSessionId() {
   const bytes = new Uint8Array(32)
@@ -32,6 +40,7 @@ function randomSessionId() {
  * access is authenticated), create a pending handshake doc, return its id.
  */
 export async function createHandshake() {
+  requireAuth()
   if (!auth.currentUser) await signInAnonymously(auth)
   const desktopUid = auth.currentUser.uid
   const sessionId = randomSessionId()
@@ -49,6 +58,7 @@ export async function createHandshake() {
  * sign in as the real user and clean up the handshake doc.
  */
 export function listenForClaim(sessionId, onClaimed, onError) {
+  requireAuth()
   let active = true
   const unsub = onSnapshot(
     doc(db, 'desktopHandshakes', sessionId),
@@ -84,6 +94,7 @@ export function listenForClaim(sessionId, onClaimed, onError) {
 }
 
 export async function clearHandshake(sessionId) {
+  if (!db) return
   try {
     await deleteDoc(doc(db, 'desktopHandshakes', sessionId))
   } catch {
@@ -99,6 +110,7 @@ export async function clearHandshake(sessionId) {
  * can sign in directly. Bypasses the need for Cloud Functions.
  */
 export async function claimDesktop(sessionId) {
+  requireAuth()
   const res = await signInWithPopup(auth, googleProvider)
   const credential = GoogleAuthProvider.credentialFromResult(res)
   const idToken = credential?.idToken

@@ -39,6 +39,10 @@ export function AuthProvider({ children }) {
   }, [])
 
   const signIn = useCallback(async () => {
+    if (!isFirebaseConfigured) {
+      setError('Firebase is not configured for this build.')
+      return
+    }
     setError(null)
     try {
       await signInWithPopup(auth, googleProvider)
@@ -52,6 +56,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   const signOut = useCallback(async () => {
+    if (!isFirebaseConfigured) return
     await firebaseSignOut(auth)
   }, [])
 

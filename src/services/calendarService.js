@@ -25,6 +25,7 @@ export function clearCalToken() {
 }
 
 export async function connectCalendar() {
+  if (!auth) throw new Error('Firebase is not configured for this build.')
   const provider = new GoogleAuthProvider()
   provider.addScope(CAL_SCOPE)
   provider.setCustomParameters({ prompt: 'consent' })
