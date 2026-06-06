@@ -37,7 +37,8 @@ export function WidgetFrame({
       layoutId={`widget-${widget.id}`}
       transition={{ type: 'spring', stiffness: 380, damping: 34 }}
       className={cn(
-        'group relative flex flex-col overflow-hidden rounded-3xl border border-line/70 bg-surface/60 shadow-glass backdrop-blur-xl transition-colors hover:border-accent/30',
+        'edge-light group relative flex flex-col overflow-hidden rounded-3xl border border-line/70 bg-surface/60 backdrop-blur-2xl transition-colors hover:border-accent/40',
+        isHero ? 'shadow-glass-lg' : 'shadow-glass',
         widget.span,
         isHero && 'h-full min-h-[62vh]',
         !isHero && !isRail && 'min-h-[210px]',

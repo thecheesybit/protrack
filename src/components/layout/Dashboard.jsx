@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useStore } from '@/store/useStore'
 import { useFocusEngine } from '@/hooks/useFocusEngine'
+import { useModeAccent } from '@/hooks/useModeAccent'
 import { AuroraBackground } from '@/components/common/AuroraBackground'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { Spinner } from '@/components/ui/Spinner'
@@ -21,6 +22,7 @@ export function Dashboard() {
   const modesLoading = useStore((s) => s.modesLoading)
   const setAiOpen = useStore((s) => s.setAiOpen)
   useFocusEngine() // drives the Pomodoro tick, sound, notifications, and stats
+  useModeAccent() // re-tints the whole UI to the active mode's accent color
 
   // Global shortcuts: Esc unwinds overlays/maximize; ⌘/Ctrl+K opens the AI.
   useEffect(() => {

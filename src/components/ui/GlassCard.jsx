@@ -10,7 +10,7 @@ export const GlassCard = forwardRef(function GlassCard(
     <div
       ref={ref}
       className={cn(
-        'rounded-3xl border border-line/70 bg-surface/60 shadow-glass backdrop-blur-xl',
+        'edge-light rounded-3xl border border-line/70 bg-surface/60 shadow-glass-lg backdrop-blur-2xl',
         className,
       )}
       {...props}

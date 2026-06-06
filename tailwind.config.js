@@ -22,8 +22,13 @@ export default {
         },
       },
       boxShadow: {
-        glass: '0 8px 32px -8px rgba(0, 0, 0, 0.35), inset 0 1px 0 0 rgba(255, 255, 255, 0.04)',
-        glow: '0 0 0 1px rgb(var(--accent) / 0.35), 0 8px 40px -8px rgb(var(--accent) / 0.45)',
+        // Elevation scale — obsidian-friendly, soft, with an inner top highlight.
+        glass:
+          'inset 0 1px 0 0 rgba(255, 255, 255, 0.05), 0 8px 30px -12px rgba(0, 0, 0, 0.5)',
+        'glass-lg':
+          'inset 0 1px 0 0 rgba(255, 255, 255, 0.06), 0 28px 70px -24px rgba(0, 0, 0, 0.7)',
+        glow: '0 0 0 1px rgb(var(--accent) / 0.35), 0 12px 44px -12px rgb(var(--accent) / 0.5)',
+        'glow-sm': '0 0 22px -6px rgb(var(--accent) / 0.55)',
       },
       borderRadius: {
         '2xl': '1.125rem',

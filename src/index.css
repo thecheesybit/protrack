@@ -4,28 +4,32 @@
 
 /* ─────────────────────────────────────────────────────────────
    Theme tokens — RGB channel triplets so Tailwind's `<alpha-value>`
-   works (e.g. bg-surface/60). Swapping `.dark` morphs the whole UI.
+   works (e.g. bg-surface/60). `--accent` is overridden at runtime by
+   useModeAccent so the whole UI glows in the active mode's color.
    ───────────────────────────────────────────────────────────── */
 :root {
-  --bg: 248 249 252;
+  --bg: 249 250 252;
   --surface: 255 255 255;
-  --surface-2: 244 245 249;
-  --text: 17 17 23;
-  --muted: 102 102 117;
-  --border: 226 227 234;
+  --surface-2: 243 244 248;
+  --text: 16 17 23;
+  --muted: 99 102 116;
+  --border: 224 226 233;
   --accent: 99 102 241;
   --accent-2: 139 92 246;
+  --accent-hex: #6366f1;
 }
 
 .dark {
-  --bg: 9 9 14;
-  --surface: 21 21 30;
-  --surface-2: 28 28 40;
-  --text: 237 237 244;
-  --muted: 148 148 165;
-  --border: 39 39 53;
+  /* Obsidian — near-black with a faint blue-violet undertone */
+  --bg: 7 8 12;
+  --surface: 16 17 23;
+  --surface-2: 23 25 33;
+  --text: 240 241 247;
+  --muted: 148 151 167;
+  --border: 32 34 44;
   --accent: 129 140 248;
   --accent-2: 167 139 250;
+  --accent-hex: #818cf8;
 }
 
 @layer base {
@@ -42,10 +46,20 @@
   body {
     @apply bg-bg text-ink font-sans antialiased;
     color-scheme: light dark;
-    transition: background-color 0.4s ease, color 0.4s ease;
+    font-feature-settings: 'cv11', 'ss01', 'cv02', 'cv03';
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.45s ease, color 0.45s ease;
   }
 
-  /* Custom scrollbar — subtle, premium. */
+  /* Tighter, more confident headings (Linear/Apple cadence). */
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.02em;
+  }
+
   ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
@@ -61,7 +75,13 @@
   }
 
   ::selection {
-    background: rgb(var(--accent) / 0.3);
+    background: rgb(var(--accent) / 0.32);
+  }
+
+  /* Accent-tinted focus ring across all interactive elements. */
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgb(var(--bg)), 0 0 0 4px rgb(var(--accent) / 0.55);
   }
 }
 
@@ -70,9 +90,43 @@
     @apply bg-gradient-to-br from-accent to-accent-2 bg-clip-text text-transparent;
   }
 
+  /* The signature surface: frosted glass with an inner top highlight. */
+  .glass {
+    background: rgb(var(--surface) / 0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgb(var(--border) / 0.7);
+  }
+
+  /* Hairline gradient border highlight (premium edge lighting). */
+  .edge-light {
+    position: relative;
+  }
+  .edge-light::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 0.08),
+      rgb(255 255 255 / 0)
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
   /* Faint dotted grid backdrop for the board canvas. */
   .bg-grid {
-    background-image: radial-gradient(rgb(var(--border) / 0.6) 1px, transparent 1px);
+    background-image: radial-gradient(rgb(var(--border) / 0.55) 1px, transparent 1px);
     background-size: 22px 22px;
+  }
+
+  .accent-glow {
+    box-shadow: 0 0 0 1px rgb(var(--accent) / 0.35),
+      0 12px 40px -12px rgb(var(--accent) / 0.5);
   }
 }
