@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.11 — 2026-06-06
+
+- ci: auto-merge self-heals from release/dev race — rebases development on master before ff (4a838e1)
+
+
 ## v1.1.10 — 2026-06-06
 
 - feat(settings): show only what's new in the current version, link to full GitHub history (88815c2)
