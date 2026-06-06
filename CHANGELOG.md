@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.9 — 2026-06-06
+
+- feat: changelog auto-syncs to shipped releases (2bb635d)
+
+
 ## v1.1.8 — 2026-06-06
 
 - feat: priority dot at end of task/todo row + visible legend strip (cdcd031)
