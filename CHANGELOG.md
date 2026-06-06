@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.3 — 2026-06-06
+
+- fix: explicit auth persistence for Electron file:// protocol (ed7ce2b)
+
+
 ## v1.1.2 — 2026-06-06
 
 - fix: auth-loader timeout + 8-char code login fallback (8d46866)
