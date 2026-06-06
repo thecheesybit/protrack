@@ -42,13 +42,14 @@ setup notice instead of crashing.
 
 - [x] **Sprint 0** — Scaffolding (Vite, Tailwind, Firebase, Netlify)
 - [x] **Sprint 1** — Auth & Layout Shell (Google OAuth, dashboard, mode switcher, focused-zoom)
-- [ ] **Sprint 2** — Modes & Workspace Context
-- [ ] **Sprint 3** — Smart Timetable + Google Calendar
-- [ ] **Sprint 4** — Subject Tracker + Kanban
-- [ ] **Sprint 5** — Deep Focus + Gamification + Analytics
-- [ ] **Sprint 6** — AI Companion + Audio Notes (Gemini)
-- [ ] **Sprint 7** — Wellness & Habits
-- [ ] **Sprint 8** — Polish & Ship
+- [x] **Sprint 2** — Modes & Workspace Context (CRUD, drag-reorder)
+- [x] **Sprint 3** — Smart Timetable + Google Calendar
+- [x] **Sprint 4** — Subject Tracker + micro-Kanban
+- [x] **Sprint 5** — Deep Focus + Gamification + Analytics
+- [x] **Sprint 6** — AI Companion + Voice Notes (Gemini)
+- [x] **Sprint 7** — Wellness & Habits
+- [x] **Sprint 8** — Polish & Ship
+- [ ] **Desktop** — Electron wrapper + QR mobile→desktop auth sync
 
 ## Project Structure
 
