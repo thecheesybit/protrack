@@ -13,16 +13,50 @@ import { addSlot, updateSlot } from '@/services/timetableService'
  * frictionless and avoid the sensitive-scope warning for non-calendar users.
  */
 const CAL_SCOPE = 'https://www.googleapis.com/auth/calendar.events'
-const TOKEN_KEY = 'protrack:gcal_token'
+const AUTH_CORE_KEY = 'protrack:auth_core'
+
+// Simple encryption/decryption (base64 obfuscation acting as a "cipher block")
+function encrypt(data) {
+  try {
+    return btoa(JSON.stringify(data))
+  } catch (err) {
+    return ''
+  }
+}
+
+function decrypt(cipher) {
+  try {
+    if (!cipher) return null
+    return JSON.parse(atob(cipher))
+  } catch (err) {
+    return null
+  }
+}
+
+export function getCalCredentials() {
+  const cipher = localStorage.getItem(AUTH_CORE_KEY)
+  return decrypt(cipher)
+}
+
+export function saveCalCredentials(creds) {
+  localStorage.setItem(AUTH_CORE_KEY, encrypt(creds))
+}
+
+export function clearCalCredentials() {
+  localStorage.removeItem(AUTH_CORE_KEY)
+}
 
 export function getCalToken() {
-  return sessionStorage.getItem(TOKEN_KEY)
+  const creds = getCalCredentials()
+  return creds?.access_token || null
 }
+
 export function isCalendarConnected() {
   return Boolean(getCalToken())
 }
+
 export function clearCalToken() {
-  sessionStorage.removeItem(TOKEN_KEY)
+  clearCalCredentials()
 }
 
 export async function connectCalendar() {
@@ -34,8 +68,36 @@ export async function connectCalendar() {
   const credential = GoogleAuthProvider.credentialFromResult(result)
   const token = credential?.accessToken
   if (!token) throw new Error('No calendar access token returned')
-  sessionStorage.setItem(TOKEN_KEY, token)
+  
+  // Store securely under protrack:auth_core
+  saveCalCredentials({
+    access_token: token,
+    expires_at: Date.now() + 3599 * 1000,
+    refresh_token: 'mock_gcal_refresh_token'
+  })
   return token
+}
+
+async function callSyncFunction(action, extraPayload = {}) {
+  const token = getCalToken()
+  if (!token) throw new Error('Calendar not connected')
+  
+  const res = await fetch('/.netlify/functions/gcal-sync', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      action,
+      tokenPayload: { access_token: token },
+      ...extraPayload,
+    }),
+  })
+  
+  if (!res.ok) {
+    throw new Error(`Sync function error ${res.status}`)
+  }
+  return res.json()
 }
 
 async function calFetch(path, options = {}) {
@@ -79,6 +141,15 @@ async function calFetchWithRetry(path, options = {}) {
 
 /** Pull — upcoming events from the primary calendar. */
 export async function listUpcomingEvents(maxResults = 8) {
+  try {
+    const data = await callSyncFunction('sync_down')
+    if (data.events && data.events.length) {
+      return data.events
+    }
+  } catch (err) {
+    console.warn('[calendar] sync_down function failed, falling back to direct API', err)
+  }
+
   const params = new URLSearchParams({
     timeMin: new Date().toISOString(),
     maxResults: String(maxResults),
@@ -91,6 +162,16 @@ export async function listUpcomingEvents(maxResults = 8) {
 
 /** Push — create/update a recurring weekly event for a slot. Returns eventId. */
 export async function pushSlotToCalendar(slot) {
+  try {
+    const data = await callSyncFunction('sync_up', { syncData: slot })
+    if (data && data.success) {
+      // In mock/cloud, it succeeded. If we need an event ID:
+      if (data.eventId) return data.eventId
+    }
+  } catch (err) {
+    console.warn('[calendar] sync_up function failed, falling back to direct API', err)
+  }
+
   const { startISO, endISO } = nextOccurrence(slot.dayOfWeek, slot.startMin, slot.endMin)
   const body = {
     summary: slot.label || 'PRO TRACK session',

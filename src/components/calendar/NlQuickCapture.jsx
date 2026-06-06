@@ -7,7 +7,7 @@ import { parseCapture, dateToDow, dateToMinutes } from '@/lib/nlParse'
 import { DAYS, DAY_START_MIN, DAY_END_MIN, minutesToLabel, clampMin } from '@/lib/time'
 import { addSlot } from '@/services/timetableService'
 import { addTodo } from '@/services/todoService'
-import { getSubjectsOnce } from '@/services/subjectService'
+import { getSubjectsOnce, addTask } from '@/services/subjectService'
 
 /**
  * Natural-language quick capture. Opens when the calendar grid is clicked; the
@@ -21,6 +21,7 @@ export function NlQuickCapture({ open, onClose, seed, modeId, defaultColor }) {
   const [subjects, setSubjects] = useState([])
   const [picking, setPicking] = useState(false)
   const [busy, setBusy] = useState('')
+  const modes = useStore((s) => s.modes)
 
   useEffect(() => {
     if (!open) {
@@ -33,9 +34,29 @@ export function NlQuickCapture({ open, onClose, seed, modeId, defaultColor }) {
   // Lazily load subjects (cache-first) the first time the picker is needed.
   useEffect(() => {
     if (open && picking && user && modeId && subjects.length === 0) {
-      getSubjectsOnce(user.uid, modeId).then(setSubjects).catch(() => setSubjects([]))
+      if (modeId === 'all') {
+        const activeModes = modes || []
+        Promise.all(
+          activeModes.map((m) =>
+            getSubjectsOnce(user.uid, m.id).then((subjs) =>
+              subjs.map((s) => ({
+                ...s,
+                _modeName: m.name,
+                _modeColor: m.accentColor,
+                _modeId: m.id,
+              }))
+            )
+          )
+        )
+          .then((results) => {
+            setSubjects(results.flat())
+          })
+          .catch(() => setSubjects([]))
+      } else {
+        getSubjectsOnce(user.uid, modeId).then(setSubjects).catch(() => setSubjects([]))
+      }
     }
-  }, [open, picking, user, modeId, subjects.length])
+  }, [open, picking, user, modeId, subjects.length, modes])
 
   const parsed = useMemo(() => parseCapture(text), [text])
 
@@ -64,7 +85,8 @@ export function NlQuickCapture({ open, onClose, seed, modeId, defaultColor }) {
     if (!canSubmit || busy) return
     setBusy('session')
     try {
-      await addSlot(user.uid, modeId, {
+      const targetModeId = modeId === 'all' ? (modes[0]?.id || '') : modeId
+      await addSlot(user.uid, targetModeId, {
         dayOfWeek: placement.dayOfWeek,
         startMin: placement.startMin,
         endMin: placement.endMin,
@@ -78,27 +100,44 @@ export function NlQuickCapture({ open, onClose, seed, modeId, defaultColor }) {
     }
   }
 
-  const addAsTodo = async (subjectId = null) => {
+  const addAsTodo = async () => {
     if (!canSubmit || busy) return
-    setBusy(subjectId ? 'subject' : 'todo')
+    setBusy('todo')
     try {
+      const targetModeId = modeId === 'all' ? (modes[0]?.id || '') : modeId
       await addTodo(user.uid, {
         text: title,
-        modeId,
+        modeId: targetModeId,
         dueAt: parsed.date || null,
-        subjectId,
+        subjectId: null,
       })
-      const subjName = subjectId ? subjects.find((s) => s.id === subjectId)?.name : null
       done(
         'success',
-        subjName
-          ? `To-do linked to ${subjName}`
-          : parsed.date
-            ? `To-do due ${parsed.date.toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`
-            : 'To-do added',
+        parsed.date
+          ? `To-do due ${parsed.date.toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`
+          : 'To-do added',
       )
     } catch (err) {
       console.error('[capture] todo failed', err)
+      setBusy('')
+    }
+  }
+
+  const addAsKanbanTask = async (subjectId) => {
+    if (!canSubmit || busy) return
+    setBusy('subject')
+    try {
+      const subject = subjects.find((s) => s.id === subjectId)
+      const targetModeId = modeId === 'all' ? (subject?._modeId || modeId) : modeId
+      await addTask(user.uid, targetModeId, subjectId, {
+        title,
+        column: 'todo',
+        priority: 'medium',
+        notes: parsed.date ? `Due: ${parsed.date.toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}` : '',
+      })
+      done('success', `Kanban card added to ${subject?.name || 'subject'}`)
+    } catch (err) {
+      console.error('[capture] kanban task failed', err)
       setBusy('')
     }
   }
@@ -220,7 +259,7 @@ export function NlQuickCapture({ open, onClose, seed, modeId, defaultColor }) {
                           key={s.id}
                           type="button"
                           disabled={Boolean(busy)}
-                          onClick={() => addAsTodo(s.id)}
+                          onClick={() => addAsKanbanTask(s.id)}
                           className="flex items-center gap-1.5 rounded-full border border-line/70 px-3 py-1.5 text-xs font-medium transition-colors hover:border-accent/50 disabled:opacity-50"
                         >
                           <span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} />

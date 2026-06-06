@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import toast from 'react-hot-toast'
+import { Plus, Minus } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 
 /**
@@ -111,7 +112,7 @@ export function FlipClock() {
 
   // Drag state refs (not in state to avoid re-renders during drag)
   const dragging = useRef(false)
-  const dragStart = useRef({ px: 0, py: 0, ox: 0, oy: 0 })
+  const dragStart = useRef({ px: 0, py: 0, ox: 0, oy: 0, pressed: false })
   const clockRef = useRef(null)
 
   useEffect(() => {
@@ -132,13 +133,14 @@ export function FlipClock() {
     // Only primary button
     if (e.button !== 0) return
     dragging.current = false
-    dragStart.current = { px: e.clientX, py: e.clientY, ox: pos.x, oy: pos.y }
+    dragStart.current = { px: e.clientX, py: e.clientY, ox: pos.x, oy: pos.y, pressed: true }
     const el = clockRef.current
     if (el) el.setPointerCapture(e.pointerId)
   }, [pos])
 
   const handlePointerMove = useCallback((e) => {
     const ds = dragStart.current
+    if (!ds.pressed) return
     const dx = e.clientX - ds.px
     const dy = e.clientY - ds.py
     // Only start dragging after 4px movement (prevents conflict with double-click)
@@ -152,6 +154,7 @@ export function FlipClock() {
   }, [scale])
 
   const handlePointerUp = useCallback(() => {
+    dragStart.current.pressed = false
     if (dragging.current) {
       // Persist position
       try {
@@ -188,6 +191,15 @@ export function FlipClock() {
     })
   }, [])
 
+  const handleZoom = (e, ds) => {
+    e.stopPropagation()
+    setScale((prev) => {
+      const next = Math.max(0.5, Math.min(3.0, prev + ds))
+      try { localStorage.setItem(SCALE_KEY, next.toString()) } catch {}
+      return Number(next.toFixed(1))
+    })
+  }
+
   // During focus lock, always show if pinned
   const hiddenByAuto = mode === 'auto' && !focusLocked && (chromeHidden || fullscreen || focusRunning)
 
@@ -211,7 +223,7 @@ export function FlipClock() {
               ? 'Double-click to enable auto-hide · Drag to move · Scroll to resize'
               : 'Double-click to pin clock · Drag to move · Scroll to resize'
           }
-          className="fixed z-[55] flex cursor-grab select-none flex-col items-center gap-2 rounded-2xl border border-line/50 bg-surface/40 px-3 py-3 shadow-glass backdrop-blur-xl transition-colors hover:border-accent/40 active:cursor-grabbing touch-none"
+          className="fixed z-[55] flex cursor-grab select-none flex-col items-center gap-2 rounded-2xl border border-line/50 bg-surface/40 px-3 py-3 shadow-glass backdrop-blur-xl transition-colors hover:border-accent/40 active:cursor-grabbing touch-none group"
           style={{
             left: pos.x,
             top: pos.y,
@@ -219,6 +231,26 @@ export function FlipClock() {
           }}
           aria-label={`Flip clock — ${mode} mode (double-click to toggle, drag to move, scroll to scale)`}
         >
+          {/* Resize controls (visible on group hover) */}
+          <div className="absolute -right-3 -top-3 flex flex-col gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+            <button
+              onClick={(e) => handleZoom(e, 0.1)}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-2 border border-line text-muted hover:text-ink hover:border-accent"
+              title="Increase scale"
+            >
+              <Plus className="h-3 w-3" />
+            </button>
+            <button
+              onClick={(e) => handleZoom(e, -0.1)}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-2 border border-line text-muted hover:text-ink hover:border-accent"
+              title="Decrease scale"
+            >
+              <Minus className="h-3 w-3" />
+            </button>
+          </div>
+
           <div className="flex items-end gap-1">
             <Digit value={t.h1} />
             <Digit value={t.h2} />

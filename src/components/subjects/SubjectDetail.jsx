@@ -24,25 +24,26 @@ export function SubjectDetail({ modeId, subject, onEdit }) {
   const progress = subject.progressPct || 0
 
   // Atomic increment so concurrent +/- from two devices merge correctly.
-  const bumpProgress = (delta) => adjustProgress(user.uid, modeId, subject.id, delta)
+  const targetModeId = modeId === 'all' ? subject._modeId : modeId
+  const bumpProgress = (delta) => adjustProgress(user.uid, targetModeId, subject.id, delta)
 
   const addLink = () => {
     if (!linkForm?.url?.trim()) return setLinkForm(null)
     const url = linkForm.url.trim()
-    addSubjectLink(user.uid, modeId, subject.id, {
+    addSubjectLink(user.uid, targetModeId, subject.id, {
       label: linkForm.label?.trim() || url,
       url: url.startsWith('http') ? url : `https://${url}`,
     })
     setLinkForm(null)
   }
-  const removeLink = (link) => removeSubjectLink(user.uid, modeId, subject.id, link)
+  const removeLink = (link) => removeSubjectLink(user.uid, targetModeId, subject.id, link)
 
   const addFlag = () => {
     if (!flagText?.trim()) return setFlagText(null)
-    addSubjectFlag(user.uid, modeId, subject.id, { type: 'pending_note', note: flagText.trim() })
+    addSubjectFlag(user.uid, targetModeId, subject.id, { type: 'pending_note', note: flagText.trim() })
     setFlagText(null)
   }
-  const removeFlag = (flag) => removeSubjectFlag(user.uid, modeId, subject.id, flag)
+  const removeFlag = (flag) => removeSubjectFlag(user.uid, targetModeId, subject.id, flag)
 
   return (
     <div className="flex h-full flex-col">
@@ -189,7 +190,7 @@ export function SubjectDetail({ modeId, subject, onEdit }) {
       <div className={cn('mt-4 flex min-h-0 flex-1 flex-col')}>
         <span className="mb-2 text-xs font-medium text-muted">Tasks</span>
         <div className="min-h-0 flex-1">
-          <MicroKanban modeId={modeId} subjectId={subject.id} subjectName={subject.name} />
+          <MicroKanban modeId={targetModeId} subjectId={subject.id} subjectName={subject.name} />
         </div>
       </div>
     </div>

@@ -154,7 +154,7 @@ export function TodosWidget({ widget, variant }) {
 
   const active = useMemo(() => {
     return todos
-      .filter((t) => !t.done)
+      .filter((t) => !t.done && (activeModeId === 'all' || t.modeId === activeModeId))
       .sort((a, b) => {
         // Order field takes precedence; otherwise priority bumps urgent → low.
         if (a.order != null && b.order != null) return a.order - b.order
@@ -162,9 +162,11 @@ export function TodosWidget({ widget, variant }) {
         const bp = PRIORITY_ORDER[b.priority || 'medium']
         return ap - bp
       })
-  }, [todos])
+  }, [todos, activeModeId])
 
-  const done = todos.filter((t) => t.done)
+  const done = useMemo(() => {
+    return todos.filter((t) => t.done && (activeModeId === 'all' || t.modeId === activeModeId))
+  }, [todos, activeModeId])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),

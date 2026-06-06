@@ -262,7 +262,7 @@ export function MicroKanban({ modeId, subjectId, subjectName }) {
   const [activeId, setActiveId] = useState(null)
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 2 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 120, tolerance: 6 } }),
   )
 
