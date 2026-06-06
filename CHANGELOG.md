@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1.4 — 2026-06-06
+
+- ci: split build & publish — synchronous installer upload (c1c7b52)
+- ci: harden auto-merge PR fallback (soft-fail) [skip ci] (e233b89)
+- ci: enable full automation — push to master auto-releases [skip ci] (7fa9bef)
+- ci: auto-merge development → master when verified (facb0cb)
+
+
 ## v1.1.3 — 2026-06-06
 
 - fix: explicit auth persistence for Electron file:// protocol (ed7ce2b)
