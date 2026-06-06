@@ -99,6 +99,10 @@ jobs:
 
       - name: Open PR when ff is not possible
         if: steps.merge.outputs.promoted != 'true'
+        # Soft-fail: if the repo hasn't enabled "Allow GitHub Actions to create
+        # PRs", the workflow still surfaces the divergence as a warning instead
+        # of marking the run red.
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
