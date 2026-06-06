@@ -82,3 +82,8 @@ export async function updateActiveMode(uid, modeId) {
     { merge: true },
   )
 }
+
+/** Merge a partial settings patch onto the user doc. */
+export async function updateSettings(uid, patch) {
+  await setDoc(doc(db, 'users', uid), { settings: patch }, { merge: true })
+}

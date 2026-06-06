@@ -3,16 +3,20 @@ import { useStore } from '@/store/useStore'
 import { useFocusEngine } from '@/hooks/useFocusEngine'
 import { AuroraBackground } from '@/components/common/AuroraBackground'
 import { Spinner } from '@/components/ui/Spinner'
+import { Sparkles } from 'lucide-react'
 import { TopBar } from './TopBar'
 import { ModeSwitcher } from './ModeSwitcher'
 import { BoardCanvas } from './BoardCanvas'
 import { FocusPanel } from '@/components/focus/FocusPanel'
+import { AIAssistant } from '@/components/ai/AIAssistant'
+import { SettingsPanel } from '@/components/settings/SettingsPanel'
 
 /**
  * The single unified dashboard — everything lives here. No nested routing.
  */
 export function Dashboard() {
   const modesLoading = useStore((s) => s.modesLoading)
+  const setAiOpen = useStore((s) => s.setAiOpen)
   useFocusEngine() // drives the Pomodoro tick, sound, notifications, and stats
 
   return (
@@ -41,7 +45,18 @@ export function Dashboard() {
         </main>
       </div>
 
+      {/* Floating AI companion */}
+      <button
+        onClick={() => setAiOpen(true)}
+        className="fixed bottom-6 right-6 z-30 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-accent-2 text-white shadow-glow transition-transform hover:scale-105 active:scale-95"
+        aria-label="Open AI companion"
+      >
+        <Sparkles className="h-6 w-6" />
+      </button>
+
       <FocusPanel />
+      <AIAssistant />
+      <SettingsPanel />
     </div>
   )
 }
