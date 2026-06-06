@@ -30,6 +30,7 @@ export default defineConfig({
     open: true,
   },
   build: {
+    chunkSizeWarningLimit: 700,
     rollupOptions: {
       output: {
         // Split heavy vendors so the app shell loads fast and caches well.

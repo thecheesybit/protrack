@@ -1,6 +1,11 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth, GoogleAuthProvider } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore'
+import {
+  initializeFirestore,
+  getFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 import { getFunctions } from 'firebase/functions'
 
@@ -28,7 +33,17 @@ let functions = null
 if (isFirebaseConfigured) {
   app = initializeApp(firebaseConfig)
   auth = getAuth(app)
-  db = getFirestore(app)
+  // Offline-first: a persistent IndexedDB cache serves reads locally (≈0 server
+  // reads on reload), queues writes offline, and survives across tabs. This is
+  // the backbone of both free-tier compliance and offline resiliency.
+  try {
+    db = initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    })
+  } catch (err) {
+    console.warn('[firebase] persistent cache unavailable, using default', err)
+    db = getFirestore(app)
+  }
   storage = getStorage(app)
   functions = getFunctions(app)
 }

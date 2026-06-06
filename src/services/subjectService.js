@@ -7,6 +7,9 @@ import {
   getDocs,
   doc,
   writeBatch,
+  arrayUnion,
+  arrayRemove,
+  increment,
   serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
@@ -43,6 +46,23 @@ export async function addSubject(uid, modeId, subject) {
 
 export async function updateSubject(uid, modeId, subjectId, patch) {
   return updateDoc(doc(subjectsCol(uid, modeId), subjectId), patch)
+}
+
+/* Atomic field-level merges — safe under concurrent edits across devices. */
+export async function addSubjectLink(uid, modeId, subjectId, link) {
+  return updateSubject(uid, modeId, subjectId, { links: arrayUnion(link) })
+}
+export async function removeSubjectLink(uid, modeId, subjectId, link) {
+  return updateSubject(uid, modeId, subjectId, { links: arrayRemove(link) })
+}
+export async function addSubjectFlag(uid, modeId, subjectId, flag) {
+  return updateSubject(uid, modeId, subjectId, { flags: arrayUnion(flag) })
+}
+export async function removeSubjectFlag(uid, modeId, subjectId, flag) {
+  return updateSubject(uid, modeId, subjectId, { flags: arrayRemove(flag) })
+}
+export async function adjustProgress(uid, modeId, subjectId, delta) {
+  return updateSubject(uid, modeId, subjectId, { progressPct: increment(delta) })
 }
 
 export async function deleteSubject(uid, modeId, subjectId) {

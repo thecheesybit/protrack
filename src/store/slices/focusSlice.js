@@ -63,5 +63,3 @@ export const createFocusSlice = (set, get) => ({
   endToIdle: () =>
     set((s) => ({ status: 'idle', phase: 'focus', secondsLeft: s.focusMin * 60, startedAt: null })),
 })
-
-export const focusInitial = { DEFAULT_FOCUS, DEFAULT_BREAK }

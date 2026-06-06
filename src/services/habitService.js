@@ -5,6 +5,8 @@ import {
   updateDoc,
   deleteDoc,
   doc,
+  arrayUnion,
+  arrayRemove,
   serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
@@ -40,12 +42,11 @@ export async function deleteHabit(uid, habitId) {
   return deleteDoc(doc(habitsCol(uid), habitId))
 }
 
-/** Toggle today's completion (doneDates stored on the habit doc). */
+/** Toggle today's completion atomically (merge-safe across devices). */
 export async function toggleHabitToday(uid, habit) {
   const today = ymd()
-  const dates = habit.doneDates || []
-  const next = dates.includes(today)
-    ? dates.filter((d) => d !== today)
-    : [...dates, today]
-  return updateHabit(uid, habit.id, { doneDates: next })
+  const done = (habit.doneDates || []).includes(today)
+  return updateHabit(uid, habit.id, {
+    doneDates: done ? arrayRemove(today) : arrayUnion(today),
+  })
 }

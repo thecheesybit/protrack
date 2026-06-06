@@ -4,6 +4,7 @@ import { useStore } from '@/store/useStore'
 import { useFocusEngine } from '@/hooks/useFocusEngine'
 import { useModeAccent } from '@/hooks/useModeAccent'
 import { useAutoHideChrome } from '@/hooks/useAutoHideChrome'
+import { useConnectivity } from '@/hooks/useConnectivity'
 import { AuroraBackground } from '@/components/common/AuroraBackground'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { Spinner } from '@/components/ui/Spinner'
@@ -27,6 +28,7 @@ export function Dashboard() {
   useFocusEngine() // drives the Pomodoro tick, sound, notifications, and stats
   useModeAccent() // re-tints the whole UI to the active mode's accent color
   useAutoHideChrome() // top nav springs away when the cursor leaves the top edge
+  useConnectivity() // elegant offline toast; writes queue + replay via persistence
 
   // Global shortcuts: Esc unwinds overlays/maximize; ⌘/Ctrl+K opens the AI.
   useEffect(() => {

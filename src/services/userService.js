@@ -4,7 +4,7 @@ import {
   setDoc,
   onSnapshot,
   collection,
-  writeBatch,
+  runTransaction,
   serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
@@ -12,17 +12,14 @@ import { DEFAULT_MODES } from '@/lib/constants'
 
 /**
  * Create the user's root document + settings + seeded default modes on first
- * login. Idempotent: returns the existing data if the document already exists.
+ * login, inside a transaction so two devices logging in simultaneously can't
+ * double-seed. Idempotent — a no-op if the document already exists.
  */
 export async function ensureUserDocument(firebaseUser) {
   const userRef = doc(db, 'users', firebaseUser.uid)
-  const snapshot = await getDoc(userRef)
-  if (snapshot.exists()) return snapshot.data()
-
-  const batch = writeBatch(db)
-
-  // Pre-allocate mode doc refs so we can point activeModeId at the first one.
   const modesCol = collection(db, 'users', firebaseUser.uid, 'modes')
+
+  // Pre-allocate mode refs so we can point activeModeId at the first one.
   const modeDocs = DEFAULT_MODES.map((mode, order) => ({
     ref: doc(modesCol),
     mode,
@@ -30,41 +27,42 @@ export async function ensureUserDocument(firebaseUser) {
   }))
   const firstModeId = modeDocs[0]?.ref.id ?? null
 
-  batch.set(userRef, {
-    profile: {
-      displayName: firebaseUser.displayName || 'Explorer',
-      email: firebaseUser.email || '',
-      photoURL: firebaseUser.photoURL || '',
-      createdAt: serverTimestamp(),
-    },
-    settings: {
-      theme: 'dark',
-      activeModeId: firstModeId,
-      hydrationIntervalMin: 60,
-      notificationsEnabled: false,
-      geminiConfigured: false,
-    },
-    statsAggregate: {
-      currentStreak: 0,
-      longestStreakMin: 0,
-      totalFocusMin: 0,
-      activeDays: [],
-      treesGrown: 0,
-    },
-  })
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(userRef)
+    if (snap.exists()) return
 
-  modeDocs.forEach(({ ref, mode, order }) => {
-    batch.set(ref, {
-      ...mode,
-      order,
-      createdAt: serverTimestamp(),
-      lastActiveAt: serverTimestamp(),
+    tx.set(userRef, {
+      profile: {
+        displayName: firebaseUser.displayName || 'Explorer',
+        email: firebaseUser.email || '',
+        photoURL: firebaseUser.photoURL || '',
+        createdAt: serverTimestamp(),
+      },
+      settings: {
+        theme: 'dark',
+        activeModeId: firstModeId,
+        hydrationIntervalMin: 60,
+        notificationsEnabled: false,
+        geminiConfigured: false,
+      },
+      statsAggregate: {
+        currentStreak: 0,
+        longestSessionMin: 0,
+        totalFocusMin: 0,
+        activeDays: [],
+        treesGrown: 0,
+      },
+    })
+
+    modeDocs.forEach(({ ref, mode, order }) => {
+      tx.set(ref, {
+        ...mode,
+        order,
+        createdAt: serverTimestamp(),
+        lastActiveAt: serverTimestamp(),
+      })
     })
   })
-
-  await batch.commit()
-  const fresh = await getDoc(userRef)
-  return fresh.data()
 }
 
 /** Realtime subscription to the user root doc (settings, profile, stats). */

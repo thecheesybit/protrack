@@ -4,7 +4,13 @@ import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { MicroKanban } from './MicroKanban'
-import { updateSubject } from '@/services/subjectService'
+import {
+  adjustProgress,
+  addSubjectLink,
+  removeSubjectLink,
+  addSubjectFlag,
+  removeSubjectFlag,
+} from '@/services/subjectService'
 import { cn } from '@/utils/cn'
 
 export function SubjectDetail({ modeId, subject, onEdit }) {
@@ -15,34 +21,28 @@ export function SubjectDetail({ modeId, subject, onEdit }) {
 
   const links = subject.links || []
   const flags = subject.flags || []
+  const progress = subject.progressPct || 0
 
-  const setProgress = (next) =>
-    updateSubject(user.uid, modeId, subject.id, {
-      progressPct: Math.max(0, Math.min(100, next)),
-    })
+  // Atomic increment so concurrent +/- from two devices merge correctly.
+  const bumpProgress = (delta) => adjustProgress(user.uid, modeId, subject.id, delta)
 
   const addLink = () => {
     if (!linkForm?.url?.trim()) return setLinkForm(null)
     const url = linkForm.url.trim()
-    const next = [
-      ...links,
-      { label: linkForm.label?.trim() || url, url: url.startsWith('http') ? url : `https://${url}` },
-    ]
-    updateSubject(user.uid, modeId, subject.id, { links: next })
+    addSubjectLink(user.uid, modeId, subject.id, {
+      label: linkForm.label?.trim() || url,
+      url: url.startsWith('http') ? url : `https://${url}`,
+    })
     setLinkForm(null)
   }
-  const removeLink = (i) =>
-    updateSubject(user.uid, modeId, subject.id, { links: links.filter((_, idx) => idx !== i) })
+  const removeLink = (link) => removeSubjectLink(user.uid, modeId, subject.id, link)
 
   const addFlag = () => {
     if (!flagText?.trim()) return setFlagText(null)
-    updateSubject(user.uid, modeId, subject.id, {
-      flags: [...flags, { type: 'pending_note', note: flagText.trim() }],
-    })
+    addSubjectFlag(user.uid, modeId, subject.id, { type: 'pending_note', note: flagText.trim() })
     setFlagText(null)
   }
-  const removeFlag = (i) =>
-    updateSubject(user.uid, modeId, subject.id, { flags: flags.filter((_, idx) => idx !== i) })
+  const removeFlag = (flag) => removeSubjectFlag(user.uid, modeId, subject.id, flag)
 
   return (
     <div className="flex h-full flex-col">
@@ -76,19 +76,21 @@ export function SubjectDetail({ modeId, subject, onEdit }) {
       <div className="mt-4">
         <div className="mb-1.5 flex items-center justify-between text-xs">
           <span className="text-muted">Progress</span>
-          <span className="font-semibold">{subject.progressPct || 0}%</span>
+          <span className="font-semibold">{progress}%</span>
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setProgress((subject.progressPct || 0) - 5)}
-            className="flex h-6 w-6 items-center justify-center rounded-md border border-line text-muted hover:text-ink"
+            onClick={() => bumpProgress(-5)}
+            disabled={progress <= 0}
+            className="flex h-6 w-6 items-center justify-center rounded-md border border-line text-muted hover:text-ink disabled:opacity-40"
           >
             <Minus className="h-3 w-3" />
           </button>
-          <ProgressBar value={subject.progressPct || 0} color={subject.color} />
+          <ProgressBar value={progress} color={subject.color} />
           <button
-            onClick={() => setProgress((subject.progressPct || 0) + 5)}
-            className="flex h-6 w-6 items-center justify-center rounded-md border border-line text-muted hover:text-ink"
+            onClick={() => bumpProgress(5)}
+            disabled={progress >= 100}
+            className="flex h-6 w-6 items-center justify-center rounded-md border border-line text-muted hover:text-ink disabled:opacity-40"
           >
             <Plus className="h-3 w-3" />
           </button>
@@ -117,7 +119,7 @@ export function SubjectDetail({ modeId, subject, onEdit }) {
                   <ExternalLink className="h-3 w-3 shrink-0" />
                   <span className="truncate">{l.label}</span>
                 </a>
-                <button onClick={() => removeLink(i)} className="opacity-0 group-hover/link:opacity-100">
+                <button onClick={() => removeLink(l)} className="opacity-0 group-hover/link:opacity-100">
                   <X className="h-3 w-3 text-muted" />
                 </button>
               </div>
@@ -160,7 +162,7 @@ export function SubjectDetail({ modeId, subject, onEdit }) {
               <div key={i} className="group/flag flex items-center gap-1.5 text-xs">
                 <Flag className="h-3 w-3 shrink-0 text-amber-400" />
                 <span className="min-w-0 flex-1 truncate">{f.note}</span>
-                <button onClick={() => removeFlag(i)} className="opacity-0 group-hover/flag:opacity-100">
+                <button onClick={() => removeFlag(f)} className="opacity-0 group-hover/flag:opacity-100">
                   <X className="h-3 w-3 text-muted" />
                 </button>
               </div>
