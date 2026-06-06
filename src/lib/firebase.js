@@ -6,6 +6,7 @@ import {
   browserLocalPersistence,
   inMemoryPersistence,
   indexedDBLocalPersistence,
+  browserPopupRedirectResolver,
 } from 'firebase/auth'
 import {
   initializeFirestore,
@@ -67,6 +68,10 @@ if (isFirebaseConfigured) {
         indexedDBLocalPersistence,
         inMemoryPersistence,
       ],
+      // CRITICAL: without an explicit popupRedirectResolver, signInWithPopup
+      // throws `auth/argument-error` because the popup machinery isn't wired
+      // up. getAuth() includes this by default; initializeAuth() does not.
+      popupRedirectResolver: browserPopupRedirectResolver,
     })
   } catch (err) {
     // initializeAuth throws if called twice — fall back to getAuth.
