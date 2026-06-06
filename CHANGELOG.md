@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.1.5 — 2026-06-06
+
+- feat: lock down DevTools in packaged production builds (a8b3b69)
+- fix: trim Firebase env values — CI secrets pasted with trailing newlines silently broke auth (projectId became 'my-id\n' → invalid auth domain) (71d872c)
+
+
 ## v1.1.4 — 2026-06-06
 
 - ci: split build & publish — synchronous installer upload (c1c7b52)
