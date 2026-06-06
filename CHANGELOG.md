@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.13 — 2026-06-06
+
+- feat: implement 'All Scopes' Mode, resizable clock, Zen overlay, AudioFX sounds, and warning-restricted Deep Focus exits (3acc29b)
+
+
 ## v1.2.0 — 2026-06-07
 
 ### Added
