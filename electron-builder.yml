@@ -1,6 +1,14 @@
 appId: com.protrack.app
 productName: PRO TRACK
-copyright: Copyright © 2026 PRO TRACK
+copyright: Copyright © 2026 AYUSH KUMAR
+
+# Auto-update feed — electron-updater reads releases from this GitHub repo and
+# emits latest.yml alongside the installer. Repo must be public (or use a token)
+# for clients to fetch updates.
+publish:
+  provider: github
+  owner: thecheesybit
+  repo: protrack
 
 directories:
   output: release

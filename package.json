@@ -1,7 +1,7 @@
 {
   "name": "pro-track",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "description": "PRO TRACK — a radically simplified, auto-adapting all-in-one productivity workspace.",
   "main": "dist-electron/main.js",
@@ -22,6 +22,7 @@
     "chrono-node": "^2.9.1",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
+    "electron-updater": "^6.8.9",
     "firebase": "^10.13.2",
     "framer-motion": "^11.5.4",
     "lucide-react": "^0.445.0",

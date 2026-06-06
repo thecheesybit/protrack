@@ -14,6 +14,9 @@ import fs from 'node:fs'
 import os from 'node:os'
 import crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
+import electronUpdater from 'electron-updater'
+
+const { autoUpdater } = electronUpdater
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isDev = !app.isPackaged
@@ -60,6 +63,24 @@ function toggleWindow() {
     win.show()
     win.focus()
   }
+}
+
+/**
+ * Over-the-air updates from the GitHub release feed. Older clients download the
+ * new build automatically; the renderer's UpdateGate obscures the dashboard and
+ * offers a one-click restart. Only runs in packaged builds.
+ */
+function initAutoUpdate() {
+  if (!app.isPackaged) return
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+  const send = (channel, payload) => win?.webContents.send(channel, payload)
+  autoUpdater.on('update-available', (info) => send('update:available', { version: info?.version }))
+  autoUpdater.on('download-progress', (p) => send('update:progress', { percent: Math.round(p?.percent || 0) }))
+  autoUpdater.on('update-downloaded', (info) => send('update:downloaded', { version: info?.version }))
+  autoUpdater.on('error', (err) => send('update:error', { message: String(err?.message || err) }))
+  autoUpdater.checkForUpdates().catch(() => {})
+  setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 60 * 60 * 1000)
 }
 
 function createWindow() {
@@ -153,6 +174,8 @@ if (!gotLock) {
       win?.webContents.send('shortcut:focus-toggle'),
     )
 
+    initAutoUpdate()
+
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()
     })
@@ -220,3 +243,12 @@ ipcMain.handle('device:fingerprint', () => ({
   hostname: os.hostname(),
   platform: process.platform,
 }))
+
+/* ── IPC: apply downloaded update ───────────────────────── */
+ipcMain.handle('update:install', () => {
+  try {
+    autoUpdater.quitAndInstall()
+  } catch (err) {
+    console.error('[update:install]', err)
+  }
+})

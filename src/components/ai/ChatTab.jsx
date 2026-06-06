@@ -56,7 +56,7 @@ export function ChatTab({ onOpenSettings }) {
       const reply = await chatWithGemini(next, buildContext())
       setMessages((m) => [...m, { role: 'assistant', text: reply }])
     } catch (err) {
-      setMessages((m) => [...m, { role: 'assistant', text: `⚠️ ${err.message}` }])
+      setMessages((m) => [...m, { role: 'assistant', text: `Error: ${err.message}` }])
     } finally {
       setLoading(false)
     }

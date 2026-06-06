@@ -36,7 +36,7 @@ export function TopBar() {
         <div>
           <p className="text-sm text-muted">Welcome back,</p>
           <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
-            {firstName} 👋
+            {firstName}
           </h1>
         </div>
       </div>

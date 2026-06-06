@@ -7,6 +7,8 @@ import { QrLoginScreen } from '@/components/auth/QrLoginScreen'
 import { LinkDevicePage } from '@/components/auth/LinkDevicePage'
 import { Workspace } from '@/components/layout/Workspace'
 import { FirestoreSyncProvider } from '@/providers/FirestoreSyncProvider'
+import { UpdateGate } from '@/components/desktop/UpdateGate'
+import { useAutoUpdate } from '@/hooks/useAutoUpdate'
 import { TitleBar } from '@/desktop/TitleBar'
 import { isDesktop, isWorkspaceHost } from '@/desktop/isDesktop'
 
@@ -53,8 +55,11 @@ function Routes() {
 }
 
 export default function App() {
+  useAutoUpdate() // desktop-only: bridges Electron autoUpdater → UpdateGate
+
   return (
     <div className="flex h-full flex-col">
+      {isDesktop && <UpdateGate />}
       <Toaster
         position="top-center"
         toastOptions={{

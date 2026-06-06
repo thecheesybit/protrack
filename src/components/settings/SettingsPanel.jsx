@@ -1,5 +1,17 @@
 import { useEffect, useState } from 'react'
-import { Settings, Sun, Moon, Bell, KeyRound, Check, ExternalLink } from 'lucide-react'
+import {
+  Settings,
+  Sun,
+  Moon,
+  Bell,
+  KeyRound,
+  Check,
+  ExternalLink,
+  Droplets,
+  Keyboard,
+  History,
+  Github,
+} from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
 import { useTheme } from '@/hooks/useTheme'
@@ -9,7 +21,19 @@ import { Button } from '@/components/ui/Button'
 import { getGeminiKey, setGeminiKey, hasGeminiKey } from '@/services/geminiService'
 import { updateSettings } from '@/services/userService'
 import { ensureNotificationPermission } from '@/lib/notify'
+import { isDesktop, desktopBridge } from '@/desktop/isDesktop'
+import { CHANGELOG } from '@/content/changelog'
+import { CREATOR } from '@/lib/constants'
 import { cn } from '@/utils/cn'
+
+function prettyAccelerator(acc) {
+  if (!acc) return ''
+  return acc
+    .replace('CommandOrControl', 'Ctrl')
+    .replace('Space', 'Space')
+    .split('+')
+    .join(' + ')
+}
 
 function Section({ title, icon, children }) {
   return (
@@ -33,6 +57,7 @@ export function SettingsPanel() {
   const [keyInput, setKeyInput] = useState('')
   const [hydration, setHydration] = useState(60)
   const [notifOn, setNotifOn] = useState(false)
+  const [appInfo, setAppInfo] = useState(null)
 
   useEffect(() => {
     if (open) {
@@ -41,6 +66,9 @@ export function SettingsPanel() {
       setNotifOn(
         typeof Notification !== 'undefined' && Notification.permission === 'granted',
       )
+      if (isDesktop && desktopBridge?.appInfo) {
+        desktopBridge.appInfo().then(setAppInfo).catch(() => setAppInfo(null))
+      }
     }
   }, [open, settings])
 
@@ -114,7 +142,7 @@ export function SettingsPanel() {
         </Section>
 
         {/* Wellness */}
-        <Section title="Stay hydrated" icon={<span className="text-base">💧</span>}>
+        <Section title="Stay hydrated" icon={<Droplets className="h-4 w-4" />}>
           <p className="mb-2 text-xs text-muted">Remind me to drink water every…</p>
           <div className="flex gap-1.5">
             {[30, 45, 60, 90].map((m) => (
@@ -148,10 +176,73 @@ export function SettingsPanel() {
           </button>
         </Section>
 
+        {/* Global shortcuts (desktop) */}
+        {isDesktop && appInfo?.shortcuts && (
+          <Section title="Keyboard shortcuts" icon={<Keyboard className="h-4 w-4" />}>
+            <div className="space-y-2">
+              <ShortcutRow label="Show / hide window" acc={appInfo.shortcuts.toggleWindow} />
+              <ShortcutRow label="Pause / resume focus" acc={appInfo.shortcuts.toggleFocus} />
+            </div>
+          </Section>
+        )}
+
+        {/* Changelog */}
+        <Section title="Changelog" icon={<History className="h-4 w-4" />}>
+          <div className="space-y-4">
+            {CHANGELOG.map((release) => (
+              <div key={release.version}>
+                <div className="mb-1.5 flex items-center gap-2">
+                  <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">
+                    v{release.version}
+                  </span>
+                  <span className="text-xs text-muted">{release.date}</span>
+                </div>
+                <ul className="space-y-1">
+                  {release.highlights.map((h) => (
+                    <li key={h} className="flex items-start gap-2 text-xs text-muted">
+                      <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-accent" />
+                      {h}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        {/* About + creator credit */}
+        <Section title="About" icon={<Github className="h-4 w-4" />}>
+          <p className="text-xs text-muted">
+            PRO TRACK {appInfo?.version ? `v${appInfo.version}` : ''} — a calm, all-in-one productivity
+            workspace.
+          </p>
+          <a
+            href={CREATOR.githubUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-accent hover:underline"
+          >
+            <Github className="h-3.5 w-3.5" />
+            Crafted by {CREATOR.name}
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        </Section>
+
         <div className="px-5 py-4 text-center text-xs text-muted">
           PRO TRACK · signed in as {user?.email}
         </div>
       </div>
     </Sheet>
+  )
+}
+
+function ShortcutRow({ label, acc }) {
+  return (
+    <div className="flex items-center justify-between rounded-xl border border-line/60 bg-surface-2/30 px-3 py-2">
+      <span className="text-sm text-muted">{label}</span>
+      <kbd className="rounded-md border border-line bg-surface px-2 py-0.5 text-[11px] font-medium text-ink">
+        {prettyAccelerator(acc)}
+      </kbd>
+    </div>
   )
 }

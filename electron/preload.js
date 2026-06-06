@@ -1,5 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
+// Subscribe to a main→renderer channel; returns an unsubscribe function.
+const subscribe = (channel, cb) => {
+  const handler = (_e, payload) => cb(payload)
+  ipcRenderer.on(channel, handler)
+  return () => ipcRenderer.removeListener(channel, handler)
+}
+
 /**
  * The ONLY bridge between renderer and main. Everything is an explicit,
  * promise-based, whitelisted call — no raw ipcRenderer is ever exposed.
@@ -26,10 +33,15 @@ contextBridge.exposeInMainWorld('protrack', {
   getDeviceFingerprint: () => ipcRenderer.invoke('device:fingerprint'),
 
   // Global-hotkey → focus pause/resume. Returns an unsubscribe fn.
-  onFocusToggle: (cb) => {
-    const handler = () => cb()
-    ipcRenderer.on('shortcut:focus-toggle', handler)
-    return () => ipcRenderer.removeListener('shortcut:focus-toggle', handler)
+  onFocusToggle: (cb) => subscribe('shortcut:focus-toggle', () => cb()),
+
+  // Over-the-air auto-update lifecycle. Each subscriber returns an unsubscribe fn.
+  update: {
+    onAvailable: (cb) => subscribe('update:available', cb),
+    onProgress: (cb) => subscribe('update:progress', cb),
+    onDownloaded: (cb) => subscribe('update:downloaded', cb),
+    onError: (cb) => subscribe('update:error', cb),
+    install: () => ipcRenderer.invoke('update:install'),
   },
 
   appInfo: () => ipcRenderer.invoke('app:info'),
