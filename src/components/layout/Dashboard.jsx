@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { useStore } from '@/store/useStore'
+import { useFocusEngine } from '@/hooks/useFocusEngine'
 import { AuroraBackground } from '@/components/common/AuroraBackground'
 import { Spinner } from '@/components/ui/Spinner'
 import { TopBar } from './TopBar'
@@ -12,6 +13,7 @@ import { FocusPanel } from '@/components/focus/FocusPanel'
  */
 export function Dashboard() {
   const modesLoading = useStore((s) => s.modesLoading)
+  useFocusEngine() // drives the Pomodoro tick, sound, notifications, and stats
 
   return (
     <div className="relative flex h-full flex-col">

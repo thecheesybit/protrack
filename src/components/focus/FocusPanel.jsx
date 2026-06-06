@@ -11,8 +11,16 @@ export function FocusPanel() {
   const ctx = useStore((s) => s.focusContext)
   const closeFocus = useStore((s) => s.closeFocus)
   const maximizeWidget = useStore((s) => s.maximizeWidget)
+  const startFocus = useStore((s) => s.startFocus)
+  const activeModeId = useStore((s) => s.activeModeId)
 
   const start = () => {
+    startFocus({
+      label: ctx.title,
+      color: ctx.color,
+      subjectId: ctx.subjectId || null,
+      modeId: activeModeId,
+    })
     maximizeWidget('focus')
     closeFocus()
   }

@@ -27,6 +27,12 @@ export default defineConfig({
             'firebase/storage',
           ],
           'vendor-motion': ['framer-motion'],
+          'vendor-charts': ['recharts'],
+          'vendor-dnd': [
+            '@dnd-kit/core',
+            '@dnd-kit/sortable',
+            '@dnd-kit/utilities',
+          ],
         },
       },
     },
