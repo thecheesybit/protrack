@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.1.0 — 2026-06-06
+
+- ci: dispatch-only trigger for the first v1.1.0 release (8b3d01f)
+- feat: production hardening — v1.1.0 ready for release (8fea705)
+
+
 ## v1.1.0 — Production Hardening
 
 ### Added
