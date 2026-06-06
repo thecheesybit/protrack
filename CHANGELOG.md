@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.1.8 — 2026-06-06
+
+- feat: priority dot at end of task/todo row + visible legend strip (cdcd031)
+- feat: flip clock pinned to top-left by default, double-click toggles auto-hide (b0030fc)
+
+
 ## v1.1.7 — 2026-06-06
 
 - feat: aggressive auto-update with full event surfacing (0d588c0)
