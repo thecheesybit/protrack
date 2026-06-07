@@ -253,6 +253,31 @@ function createWindow() {
   )
   ses.setPermissionCheckHandler((_wc, permission) => GRANTED_PERMISSIONS.has(permission))
 
+  if (!isDev) {
+    const CSP = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: https: blob:",
+      "font-src 'self' data:",
+      "connect-src 'self' https://*.googleapis.com https://*.google.com" +
+        " wss://*.firebaseio.com https://*.firebaseio.com" +
+        " https://generativelanguage.googleapis.com" +
+        " https://securetoken.googleapis.com https://identitytoolkit.googleapis.com",
+      "frame-src https://www.youtube.com https://*.firebaseapp.com https://accounts.google.com",
+      "media-src 'self' blob: mediastream:",
+      "worker-src blob: 'self'",
+    ].join('; ')
+    ses.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [CSP],
+        },
+      })
+    })
+  }
+
   if (isDev && DEV_URL) win.loadURL(DEV_URL)
   else win.loadFile(path.join(RENDERER_DIST, 'index.html'))
 

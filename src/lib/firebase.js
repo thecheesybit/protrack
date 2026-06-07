@@ -14,8 +14,6 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
 } from 'firebase/firestore'
-import { getStorage } from 'firebase/storage'
-import { getFunctions } from 'firebase/functions'
 
 // Trim every env value — CI secrets pasted via the GitHub UI commonly carry a
 // trailing newline that turns "my-project" into "my-project\n", which makes
@@ -38,20 +36,18 @@ export const isFirebaseConfigured = Boolean(
   firebaseConfig.apiKey && firebaseConfig.projectId,
 )
 
-// Bundle-time diagnostic: surfaces which env vars made it into the build.
-// Values are NEVER logged — only presence flags — so this is safe in prod.
-console.info('[firebase] config presence', {
-  apiKey: Boolean(firebaseConfig.apiKey),
-  authDomain: Boolean(firebaseConfig.authDomain),
-  projectId: firebaseConfig.projectId || '(missing)',
-  appId: Boolean(firebaseConfig.appId),
-})
+if (import.meta.env.DEV) {
+  console.info('[firebase] config presence', {
+    apiKey: Boolean(firebaseConfig.apiKey),
+    authDomain: Boolean(firebaseConfig.authDomain),
+    projectId: firebaseConfig.projectId || '(missing)',
+    appId: Boolean(firebaseConfig.appId),
+  })
+}
 
 let app = null
 let auth = null
 let db = null
-let storage = null
-let functions = null
 
 if (isFirebaseConfigured) {
   app = initializeApp(firebaseConfig)
@@ -89,12 +85,10 @@ if (isFirebaseConfigured) {
     console.warn('[firebase] persistent cache unavailable, using default', err)
     db = getFirestore(app)
   }
-  storage = getStorage(app)
-  functions = getFunctions(app)
 }
 
 // GoogleAuthProvider is a plain config object — safe to build unconditionally.
 export const googleProvider = new GoogleAuthProvider()
 googleProvider.setCustomParameters({ prompt: 'select_account' })
 
-export { app, auth, db, storage, functions }
+export { app, auth, db }

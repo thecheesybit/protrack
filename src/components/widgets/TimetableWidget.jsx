@@ -3,6 +3,7 @@ import { CalendarCheck, CalendarPlus, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useStore } from '@/store/useStore'
 import { useTimetable } from '@/hooks/useTimetable'
+import { useTodos } from '@/hooks/useWellness'
 import { WidgetFrame } from './WidgetFrame'
 import { TimetableGrid } from '@/components/timetable/TimetableGrid'
 import { TodayAgenda } from '@/components/timetable/TodayAgenda'
@@ -22,6 +23,7 @@ export function TimetableWidget({ widget, variant }) {
   const openFocus = useStore((s) => s.openFocus)
   const { slots } = useTimetable(activeModeId)
 
+  const todos = useTodos()
   const activeMode = modes.find((m) => m.id === activeModeId)
   const defaultColor = activeMode?.accentColor || MODE_PALETTE[0]
 
@@ -119,6 +121,7 @@ export function TimetableWidget({ widget, variant }) {
                 onOpenSlot={openSlotFocus}
                 onEditSlot={openEditor}
                 onQuickCapture={setCaptureSeed}
+                dateTasks={todos.filter((t) => !t.done && t.dueAt)}
               />
             </div>
 
@@ -169,7 +172,7 @@ export function TimetableWidget({ widget, variant }) {
       <SlotEditorModal
         open={editorOpen}
         onClose={() => setEditorOpen(false)}
-        modeId={activeModeId}
+        modeId={editingSlot?._modeId || (activeModeId === 'all' ? modes[0]?.id : activeModeId)}
         slot={editingSlot}
       />
 

@@ -34,12 +34,15 @@ src/
 │  ├─ widgets/            registry + per-widget components (incl. LedgerWidget)
 │  └─ settings/           SettingsPanel (shortcuts, changelog, credits)
 ├─ hooks/                 useChronoTheme, useIslandCycle, useNowMinutes,
-│                         useDesktopIntegration, useAutoUpdate, useFocusEngine, …
+│                         useDesktopIntegration, useAutoUpdate, useFocusEngine,
+│                         useDeadlines (Island deadline notifications), …
 ├─ store/slices/          Zustand feature slices (below)
 ├─ services/              Firestore/IPC data access (one module per domain)
 ├─ content/              legal.js, changelog.js
 ├─ desktop/               isDesktop, TitleBar
-└─ lib/                   firebase, color, nlParse, time, icons, constants
+└─ lib/                   firebase, color, nlParse, time, icons, constants,
+                          deadlines (pure helpers), priority (taxonomy),
+                          dates (ymd/streak/lastNDays)
 electron/                 main.js, preload.js, (auto-update inline in main)
 functions/                mintDesktopToken
 ```
@@ -75,6 +78,12 @@ users/{uid}
   todos/{todoId}                      { text, done, modeId, dueAt, subjectId }
   focusSessions/{id}                  { modeId, subjectId, durationMin, startedAt, hourOfDay }
   ledger/{id}                         { kind, title, detail, modeId, at }   ← bounded read (50)
+```
+
+**Updated field shapes (v1.2):**
+```
+tasks/{taskId}   { title, column, order, priority, notes, dueAt, createdAt }
+todos/{todoId}   { text, done, modeId, dueAt, subjectId }   ← dueAt already existed; UI now exposes it
   devices/{fingerprint}               { label, platform, boundAt, lastSeen }
 desktopHandshakes/{sessionId}         { desktopUid, status, token?, expiresAt }  ← ephemeral
 ```
@@ -97,9 +106,14 @@ Rules (`firestore.rules`): everything under `users/{uid}/**` is owner-only. Hand
   - The main container wrapper dynamically applies `max-w-7xl px-6 py-6` to expand the viewport and fill the height while retaining clean, balanced margins.
   - Main section bottom padding is reduced from `pb-20` to `pb-6` to avoid empty screen space.
   - A yellow "Exit Full Screen" button (with the `Minimize2` icon) is added to `TopBar`. Users can exit fullscreen by hovering near the top edge to slide down the TopBar and clicking the button, or by pressing `Escape` when no other modals/panels are open, or pressing `F` anytime.
-- **NL calendar capture** — `lib/nlParse.parseCapture` (chrono-node) parses locally; one write creates a slot / to-do / subject-linked task. Zero reads.
+- **NL calendar capture** — `lib/nlParse.parseCapture` (chrono-node) parses locally; one write creates a slot / to-do / subject-linked task. `dueAt` is now stored on tasks too, enabling calendar rendering and the deadline engine.
 - **Kanban → subject sync** — on drop to *Done*, `MicroKanban` recomputes `progressPct = done/total` from in-memory tasks, writes it once, announces via the Island, appends a ledger entry.
 - **Auto-update** — `electron-updater` (GitHub feed) → IPC → `updateSlice` → `UpdateGate` obscures the dashboard and pauses focus until the user restarts to install.
+- **Deadline engine** (`src/hooks/useDeadlines.js`) — mounted in `Dashboard`; uses `getUpcomingItems` from `lib/deadlines.js` (pure, no reads) to check overdue/due-today items from Zustand-cached todos and fires Island notifications with a 60-second debounce. No new Firestore reads.
+- **Deep Focus video background** — `FocusLockScreen` reads `settings.focusAudioUrl` and `settings.focusVideoEnabled`. When a YouTube URL is stored and video is enabled, it renders a cover-fill iframe (177.78 vh × 56.25 vw, centered) behind a `bg-black/55` overlay with the timer panel on top. `BackgroundAudioPlayer` in `Dashboard` early-returns null when the lock screen is already playing the iframe to prevent duplicate audio. Five curated presets plus a custom URL field live in **Settings → Deep Focus Scene**.
+- **Slash commands** in `ChatTab` — `SLASH_PATTERNS` + `parseSlashCommand()` intercept `/done`, `/todo`, `/progress`, `/habit`, `/task` before the Gemini key gate; they call `executeTool` directly, making the AI useful offline and without an API key for common mutations.
+- **Lazy analytics** — `AnalyticsCharts.jsx` (all Recharts imports) is a separate file loaded via `React.lazy`. Non-hero mode shows stat cards with zero chart bundle; `vendor-charts` (364 KB) is only fetched when the widget is maximized.
+- **Zen overlay settings** — `settings.zenEnabled` (bool, default true) and `settings.zenDuration` (ms) control the idle quote overlay. Both are configurable in **Settings → Zen & Motivation**.
 
 ## 5. Free-tier discipline (hard rules for new features)
 
@@ -118,8 +132,9 @@ Rules (`firestore.rules`): everything under `users/{uid}/**` is owner-only. Hand
 
 ### Gemini function-calling (write access)
 - `src/services/geminiTools.js` exports `TOOL_DECLARATIONS` (Gemini schema) and an `executeTool(name, args, ctx)` dispatcher. Tools call the per-domain services — they never write Firestore directly.
-- Tools: `complete_task`, `set_subject_progress`, `add_subject`, `add_task`, `add_todo`, `mark_todo_done`, `add_timetable_slot`, `toggle_habit_today`, `add_habit`.
+- Tools: `complete_task`, `set_subject_progress`, `add_subject`, `add_task`, `add_todo`, `mark_todo_done`, `add_timetable_slot`, `toggle_habit_today`, `add_habit`, `set_todo_due`.
 - `chatWithGemini(history, contextText, ctx)` loops up to 4 hops, executing tool calls and feeding `functionResponse` back to the model. Returns `{ text, toolEvents }`; `ChatTab` renders the tool events as inline chips below the assistant bubble.
+- **Slash commands** bypass the model entirely: `/done <title> [@subject]`, `/todo <text>`, `/progress <subject> <pct>`, `/habit <name>`, `/task <title> @<subject>`. See `ChatTab.jsx → SLASH_PATTERNS`.
 - Adding a tool: declare it in `TOOL_DECLARATIONS`, add a case to `executeTool`, no other changes needed.
 
 ### Intelligent Habit Engine
@@ -147,7 +162,8 @@ Rules (`firestore.rules`): everything under `users/{uid}/**` is owner-only. Hand
 - **Immutability:** slices return new objects; never mutate state in place.
 - **Files:** small and feature-scoped (~200–400 lines). One service module per domain.
 - **Bundle:** import Lucide icons by name (never `import * as`), or tree-shaking breaks and the bundle balloons. Heavy deps get a `manualChunks` vendor split in `vite.config.js`.
-- **Build gates:** `npm run build` (web) and `ELECTRON=true vite build` (main + preload) must both stay green.
+- **Build gates:** `npm run build` (web) and `ELECTRON=true vite build` (main + preload) must both stay green. `npm test` (Vitest, 95 unit tests) and `npm run lint` (ESLint 10) must also pass.
+- **Tests:** pure logic lives in `src/lib/__tests__/` and `src/hooks/__tests__/`. Use `vi.useFakeTimers()` for any test that depends on `new Date()`. Mock React/Firebase imports via `vi.mock` when testing hooks that pull them in at the top level.
 - **Releasing desktop:** bump `package.json` version, add a `content/changelog.js` entry, publish a GitHub release with the installer + `latest.yml`.
 - **GitHub Release Automation:** configured `.github/workflows/release.yml` with `permissions: contents: write` and `--publish always` options.
 

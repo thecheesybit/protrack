@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Pencil } from 'lucide-react'
+import { Pencil, Flag } from 'lucide-react'
+import { isDueToday, dueAtToMinutes, classifyDeadline } from '@/lib/deadlines'
 import {
   DAYS,
   DAY_START_MIN,
@@ -88,6 +89,25 @@ function SlotBlock({ slot, onOpen, onEdit }) {
   )
 }
 
+/** Chip showing a dated todo or task on the today column. */
+function TodoChip({ item, topPx }) {
+  const urgency = classifyDeadline(item.dueAt)
+  const isOverdue = urgency === 'overdue'
+  return (
+    <div
+      title={item.text || item.title}
+      className={cn(
+        'absolute right-0.5 z-10 flex max-w-[90%] cursor-default items-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] font-semibold shadow-sm',
+        isOverdue ? 'bg-rose-500/90 text-white' : 'bg-amber-400/90 text-black',
+      )}
+      style={{ top: topPx - 8 }}
+    >
+      <Flag className="h-2.5 w-2.5 shrink-0" />
+      <span className="truncate">{item.text || item.title}</span>
+    </div>
+  )
+}
+
 /** Full weekly grid with pointer drag-to-create + click-to-capture. */
 export function TimetableGrid({
   slots,
@@ -96,6 +116,7 @@ export function TimetableGrid({
   onOpenSlot,
   onEditSlot,
   onQuickCapture,
+  dateTasks = [],
 }) {
   const [drag, setDrag] = useState(null)
   const today = todayDow()
@@ -190,6 +211,21 @@ export function TimetableGrid({
                       onEdit={() => onEditSlot(s)}
                     />
                   ))}
+
+                {day === today &&
+                  dateTasks
+                    .filter((t) => isDueToday(t.dueAt))
+                    .map((t) => {
+                      const mins = dueAtToMinutes(t.dueAt)
+                      if (mins === null || mins < DAY_START_MIN || mins > DAY_END_MIN) return null
+                      return (
+                        <TodoChip
+                          key={t.id}
+                          item={t}
+                          topPx={(mins - DAY_START_MIN) * PX_PER_MIN}
+                        />
+                      )
+                    })}
 
                 {drag && drag.day === day && (
                   <div

@@ -134,8 +134,8 @@ jobs:
           # paths-ignore in release.yml so behaviour stays consistent).
           CHANGED=$(git diff-tree --no-commit-id --name-only -r HEAD)
           if echo "$CHANGED" | grep -qvE '^(docs/|.*\.md$|\.github/.*\.md$)'; then
-            gh workflow run release.yml -f bump=patch --ref master
-            echo "::notice::Release pipeline dispatched (bump=patch)."
+            gh workflow run release.yml --ref master
+            echo "::notice::Release pipeline dispatched (conventional-commit auto-detection)."
           else
             echo "::notice::Docs-only change — release not dispatched."
           fi

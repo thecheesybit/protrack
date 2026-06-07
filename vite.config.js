@@ -58,7 +58,6 @@ export default defineConfig({
             'firebase/app',
             'firebase/auth',
             'firebase/firestore',
-            'firebase/storage',
           ],
           'vendor-motion': ['framer-motion'],
           'vendor-charts': ['recharts'],

@@ -75,8 +75,12 @@ export function useFocusEngine() {
       try {
         const uid = user?.uid
         if (!uid) throw new Error('not authenticated')
+        const rawModeId = st.session?.modeId || useStore.getState().activeModeId
+        const resolvedModeId = rawModeId === 'all'
+          ? (useStore.getState().modes[0]?.id || null)
+          : rawModeId
         await logFocusSession(uid, {
-          modeId: st.session?.modeId || useStore.getState().activeModeId,
+          modeId: resolvedModeId,
           subjectId: st.session?.subjectId || null,
           durationMin,
           startedAt: st.startedAt ? new Date(st.startedAt) : new Date(),
@@ -86,7 +90,7 @@ export function useFocusEngine() {
           kind: 'focus',
           title: `${durationMin}-minute focus block`,
           detail: st.session?.label || 'Deep focus',
-          modeId: st.session?.modeId || useStore.getState().activeModeId,
+          modeId: resolvedModeId,
         })
       } catch (err) {
         console.error('[focus] failed to log session', err)

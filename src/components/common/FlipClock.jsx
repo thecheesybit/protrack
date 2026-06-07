@@ -234,7 +234,10 @@ export function FlipClock() {
           initial={{ opacity: 0, scale: 0.9 * scale }}
           animate={{ opacity: 1, scale }}
           exit={{ opacity: 0, scale: 0.9 * scale }}
-          transition={{ duration: 0.4, ease: [0.2, 0, 0, 1] }}
+          transition={{
+            opacity: { duration: 0.35, ease: [0.2, 0, 0, 1] },
+            scale: { type: 'spring', stiffness: 480, damping: 38 },
+          }}
           onDoubleClick={toggleMode}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}

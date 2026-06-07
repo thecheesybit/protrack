@@ -8,6 +8,7 @@ import { useConnectivity } from '@/hooks/useConnectivity'
 import { useChronoTheme } from '@/hooks/useChronoTheme'
 import { useDesktopIntegration } from '@/hooks/useDesktopIntegration'
 import { useHabitReminders } from '@/hooks/useHabitReminders'
+import { useDeadlines } from '@/hooks/useDeadlines'
 import { AuroraBackground } from '@/components/common/AuroraBackground'
 import { FlipClock } from '@/components/common/FlipClock'
 import { ZenOverlay } from '@/components/common/ZenOverlay'
@@ -46,6 +47,7 @@ export function Dashboard() {
   useChronoTheme() // time-of-day palette/shadow modulation (data-chrono band)
   useDesktopIntegration() // desktop-only: hardware-fingerprint binding + global hotkeys
   useHabitReminders() // schedules per-interval reminder notifications for habits
+  useDeadlines()     // fires island notifications for overdue/due-today todos
 
   // Global shortcuts: Esc unwinds overlays/maximize; ⌘/Ctrl+K opens the AI.
   // When focus is locked, suppress all shortcuts except focus-related ones.
@@ -188,12 +190,18 @@ function BackgroundAudioPlayer() {
   const focusAudioUrl = useStore((s) => s.settings?.focusAudioUrl || '')
   const muted = useStore((s) => s.muted)
   const volume = useStore((s) => s.volume)
+  const focusLocked = useStore((s) => s.focusLocked)
+  const focusVideoEnabled = useStore((s) => s.settings?.focusVideoEnabled !== false)
   const iframeRef = useRef(null)
   const audioRef = useRef(null)
 
   if (status !== 'running' || !focusAudioUrl || muted) return null
 
   const youtubeMatch = focusAudioUrl.match(YT_PATTERN)
+
+  // When FocusLockScreen is showing the video iframe (which also carries audio),
+  // this hidden player would duplicate playback — skip it.
+  if (focusLocked && focusVideoEnabled && youtubeMatch) return null
 
   if (youtubeMatch) {
     const videoId = youtubeMatch[1]

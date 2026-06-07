@@ -1,29 +1,12 @@
-import { useMemo } from 'react'
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from 'recharts'
+import { lazy, Suspense, useMemo } from 'react'
 import { Flame, Clock, CalendarCheck, Trophy } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { useFocusSessions } from '@/hooks/useFocusSessions'
 import { WidgetFrame } from './WidgetFrame'
-import { HealthRings } from '@/components/analytics/HealthRings'
+import { Spinner } from '@/components/ui/Spinner'
 import { ymd, lastNDays } from '@/lib/dates'
 
-const ACCENT = '#818cf8'
-
-const tooltipStyle = {
-  background: 'rgb(var(--surface))',
-  border: '1px solid rgb(var(--border))',
-  borderRadius: 10,
-  fontSize: 12,
-  color: 'rgb(var(--text))',
-}
+const AnalyticsCharts = lazy(() => import('./AnalyticsCharts'))
 
 function toDate(ts) {
   if (!ts) return null
@@ -94,54 +77,23 @@ export function AnalyticsWidget({ widget, variant }) {
       {isHero ? (
         <div className="flex h-full flex-col gap-4">
           {cards}
-          <div className="flex min-h-0 flex-1 flex-col gap-4 xl:flex-row">
-            <div className="flex shrink-0 items-center justify-center rounded-2xl border border-line/50 bg-surface-2/30 p-4 xl:w-64">
-              <HealthRings todayMins={today.mins} streak={stats?.currentStreak || 0} sessionsToday={today.count} />
-            </div>
-            <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-2">
-              <Chart title="Focus minutes · last 14 days" data={perDay} />
-              <Chart title="Peak focus hours" data={perHour} />
-            </div>
-          </div>
+          <Suspense
+            fallback={
+              <div className="flex flex-1 items-center justify-center">
+                <Spinner className="h-6 w-6" />
+              </div>
+            }
+          >
+            <AnalyticsCharts perDay={perDay} perHour={perHour} today={today} stats={stats} />
+          </Suspense>
         </div>
       ) : (
-        <div className="flex flex-1 flex-col gap-3">
+        <div className="flex flex-1 flex-col gap-2">
           {cards}
-          <div className="min-h-0 flex-1">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={perDay} margin={{ top: 8, right: 4, left: -24, bottom: 0 }}>
-                <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'rgb(var(--muted))' }} axisLine={false} tickLine={false} interval={1} />
-                <YAxis tick={{ fontSize: 10, fill: 'rgb(var(--muted))' }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'rgb(var(--surface-2))' }} />
-                <Bar dataKey="mins" radius={[4, 4, 0, 0]} fill={ACCENT} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <p className="mt-auto text-center text-[10px] text-muted/70">Maximize for charts</p>
         </div>
       )}
     </WidgetFrame>
-  )
-}
-
-function Chart({ title, data }) {
-  return (
-    <div className="flex min-h-0 flex-col rounded-2xl border border-line/50 bg-surface-2/30 p-3">
-      <span className="mb-2 text-xs font-medium text-muted">{title}</span>
-      <div className="min-h-0 flex-1">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 8, right: 4, left: -24, bottom: 0 }}>
-            <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'rgb(var(--muted))' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 10, fill: 'rgb(var(--muted))' }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'rgb(var(--surface-2))' }} />
-            <Bar dataKey="mins" radius={[4, 4, 0, 0]}>
-              {data.map((_, i) => (
-                <Cell key={i} fill={ACCENT} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
   )
 }
 

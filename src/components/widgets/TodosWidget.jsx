@@ -14,16 +14,32 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Plus, Check, X, Flag, GripVertical, StickyNote } from 'lucide-react'
+import { Plus, Check, X, Flag, GripVertical, StickyNote, Calendar } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
 import { useTodos } from '@/hooks/useWellness'
 import { WidgetFrame } from './WidgetFrame'
 import { addTodo, updateTodo, deleteTodo, reorderTodos } from '@/services/todoService'
 import { getPriority, nextPriority, PRIORITIES, PRIORITY_ORDER } from '@/lib/priority'
+import { classifyDeadline } from '@/lib/deadlines'
 import { PriorityLegend } from '@/components/common/PriorityLegend'
 import { playPop, playSuccess } from '@/lib/audioFX'
 import { cn } from '@/utils/cn'
+
+function toDTLocal(dueAt) {
+  if (!dueAt) return ''
+  const d = dueAt?.toDate ? dueAt.toDate() : new Date(dueAt)
+  if (isNaN(d.getTime())) return ''
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function formatDueShort(dueAt) {
+  if (!dueAt) return ''
+  const d = dueAt?.toDate ? dueAt.toDate() : new Date(dueAt)
+  if (isNaN(d.getTime())) return ''
+  return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
 
 function PriorityDot({ priority, onCycle }) {
   const p = getPriority(priority)
@@ -104,6 +120,15 @@ function Row({ t, index, onToggle, onDelete, onUpdate }) {
         {t.notes && !expanded && (
           <StickyNote className="h-3 w-3 shrink-0 text-amber-400/80" />
         )}
+        {t.dueAt && !expanded && (
+          <Calendar
+            title={formatDueShort(t.dueAt)}
+            className={cn(
+              'h-3 w-3 shrink-0',
+              classifyDeadline(t.dueAt) === 'overdue' ? 'text-rose-400' : 'text-amber-400/80',
+            )}
+          />
+        )}
         <PriorityDot priority={t.priority} onCycle={cycleP} />
         <button
           onClick={() => onDelete(t.id)}
@@ -124,6 +149,26 @@ function Row({ t, index, onToggle, onDelete, onUpdate }) {
             rows={2}
             className="w-full resize-none rounded-md border border-line/50 bg-surface-2/40 px-2 py-1.5 text-xs outline-none focus:border-accent"
           />
+          <div className="mt-2 flex items-center gap-1.5">
+            <Calendar className="h-3.5 w-3.5 shrink-0 text-muted" />
+            <input
+              type="datetime-local"
+              value={toDTLocal(t.dueAt)}
+              onChange={(e) => onUpdate({ dueAt: e.target.value ? new Date(e.target.value) : null })}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="flex-1 rounded-md border border-line/50 bg-surface-2/40 px-2 py-1 text-xs outline-none focus:border-accent"
+            />
+            {t.dueAt && (
+              <button
+                onClick={() => onUpdate({ dueAt: null })}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="text-muted hover:text-ink"
+                aria-label="Clear due date"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
           <div className="mt-2 flex flex-wrap gap-1">
             {PRIORITIES.map((p) => (
               <button

@@ -18,6 +18,8 @@ import {
   AlertTriangle,
   Volume2,
   Calendar,
+  Film,
+  Quote,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
@@ -33,6 +35,14 @@ import { CHANGELOG } from '@/content/changelog'
 import { CREATOR } from '@/lib/constants'
 import { cn } from '@/utils/cn'
 import { isCalendarConnected, connectCalendar, clearCalToken } from '@/services/calendarService'
+
+const VIDEO_PRESETS = [
+  { label: 'Forest River', url: 'https://youtu.be/1GzKYoyrlkA' },
+  { label: 'Varanasi Temple', url: 'https://youtu.be/tAk4G8Rs1RQ' },
+  { label: 'Lo-fi Jazz', url: 'https://youtu.be/BYTxPFj44uo' },
+  { label: 'Hari Mantra', url: 'https://youtu.be/6x5xtNhOts0' },
+  { label: 'Shiv Stuti', url: 'https://youtu.be/AQFI1PJfV_I' },
+]
 
 function prettyAccelerator(acc) {
   if (!acc) return ''
@@ -105,10 +115,18 @@ export function SettingsPanel() {
   const [notifOn, setNotifOn] = useState(false)
   const [soundsOn, setSoundsOn] = useState(() => localStorage.getItem('protrack:sounds') !== 'false')
   const [appInfo, setAppInfo] = useState(null)
-  
+
+  // Deep Focus video
+  const [focusUrlInput, setFocusUrlInput] = useState('')
+  const [focusVideoEnabled, setFocusVideoEnabled] = useState(true)
+
+  // Zen & Motivation
+  const [zenEnabled, setZenEnabled] = useState(true)
+  const [zenDurationSec, setZenDurationSec] = useState(30)
+
   // Google Calendar Connection state
   const [calConnected, setCalConnected] = useState(isCalendarConnected())
-  
+
   // Double confirmation deletion state
   const [deleteStage, setDeleteStage] = useState(0)
   const [deleteInput, setDeleteInput] = useState('')
@@ -121,6 +139,10 @@ export function SettingsPanel() {
         typeof Notification !== 'undefined' && Notification.permission === 'granted',
       )
       setCalConnected(isCalendarConnected())
+      setFocusUrlInput(settings?.focusAudioUrl || '')
+      setFocusVideoEnabled(settings?.focusVideoEnabled !== false)
+      setZenEnabled(settings?.zenEnabled !== false)
+      setZenDurationSec(Math.round((settings?.zenDuration || 30000) / 1000))
       if (isDesktop && desktopBridge?.appInfo) {
         desktopBridge.appInfo().then(setAppInfo).catch(() => setAppInfo(null))
       }
@@ -174,6 +196,44 @@ export function SettingsPanel() {
     clearCalToken()
     setCalConnected(false)
     toast.success('Google Calendar disconnected')
+  }
+
+  const saveFocusAudio = async (url) => {
+    setFocusUrlInput(url)
+    try {
+      await updateSettings(user.uid, { focusAudioUrl: url })
+    } catch (err) {
+      console.error('[settings] focusAudio save failed', err)
+    }
+  }
+
+  const toggleFocusVideo = async () => {
+    const next = !focusVideoEnabled
+    setFocusVideoEnabled(next)
+    try {
+      await updateSettings(user.uid, { focusVideoEnabled: next })
+    } catch (err) {
+      console.error('[settings] focusVideo save failed', err)
+    }
+  }
+
+  const toggleZen = async () => {
+    const next = !zenEnabled
+    setZenEnabled(next)
+    try {
+      await updateSettings(user.uid, { zenEnabled: next })
+    } catch (err) {
+      console.error('[settings] zen save failed', err)
+    }
+  }
+
+  const saveZenDuration = async (sec) => {
+    setZenDurationSec(sec)
+    try {
+      await updateSettings(user.uid, { zenDuration: sec * 1000 })
+    } catch (err) {
+      console.error('[settings] zenDuration save failed', err)
+    }
   }
 
   const handleDeleteWipe = async () => {
@@ -364,7 +424,106 @@ export function SettingsPanel() {
           </div>
         </Section>
 
-        {/* SECTION 4: Synchronization Keys */}
+        {/* SECTION 4: Deep Focus Video */}
+        <Section title="Deep Focus Scene" icon={<Film className="h-4 w-4 text-accent" />}>
+          <div className="space-y-3">
+            <p className="text-[11px] text-muted">
+              Plays a YouTube video as a fullscreen background behind the focus timer.
+              Select a preset or paste any YouTube URL.
+            </p>
+
+            {/* Preset grid */}
+            <div className="grid grid-cols-2 gap-1.5">
+              {VIDEO_PRESETS.map((p) => (
+                <button
+                  key={p.url}
+                  onClick={() => saveFocusAudio(p.url)}
+                  className={cn(
+                    'rounded-xl border px-3 py-2 text-left text-xs transition-colors',
+                    focusUrlInput === p.url
+                      ? 'border-accent/50 bg-accent/15 text-accent'
+                      : 'border-line bg-surface-2/40 text-muted hover:border-accent/40 hover:text-ink',
+                  )}
+                >
+                  {p.label}
+                </button>
+              ))}
+              <button
+                onClick={() => saveFocusAudio('')}
+                className={cn(
+                  'rounded-xl border px-3 py-2 text-left text-xs transition-colors',
+                  !focusUrlInput
+                    ? 'border-accent/50 bg-accent/15 text-accent'
+                    : 'border-line bg-surface-2/40 text-muted hover:border-accent/40 hover:text-ink',
+                )}
+              >
+                Off / None
+              </button>
+            </div>
+
+            {/* Custom URL */}
+            <input
+              type="url"
+              value={focusUrlInput}
+              onChange={(e) => setFocusUrlInput(e.target.value)}
+              onBlur={() => saveFocusAudio(focusUrlInput.trim())}
+              placeholder="Or paste a custom YouTube URL…"
+              className="w-full rounded-xl border border-line bg-surface-2/60 px-3.5 py-2.5 text-sm outline-none focus:border-accent"
+            />
+
+            {/* Video visibility toggle */}
+            <button
+              onClick={toggleFocusVideo}
+              className="flex w-full items-center justify-between rounded-xl border border-line bg-surface-2/40 px-3.5 py-2.5 text-sm"
+            >
+              <span>Show as fullscreen background</span>
+              <span className={cn('font-medium', focusVideoEnabled ? 'text-emerald-400' : 'text-muted')}>
+                {focusVideoEnabled ? 'Enabled' : 'Disabled'}
+              </span>
+            </button>
+          </div>
+        </Section>
+
+        {/* SECTION 4b: Zen & Motivation */}
+        <Section title="Zen & Motivation" icon={<Quote className="h-4 w-4 text-accent" />}>
+          <div className="space-y-3">
+            {/* Toggle zen overlay on/off */}
+            <button
+              onClick={toggleZen}
+              className="flex w-full items-center justify-between rounded-xl border border-line bg-surface-2/40 px-3.5 py-2.5 text-sm"
+            >
+              <span>Motivational quotes when idle</span>
+              <span className={cn('font-medium', zenEnabled ? 'text-emerald-400' : 'text-muted')}>
+                {zenEnabled ? 'Enabled' : 'Disabled'}
+              </span>
+            </button>
+
+            {/* Quote display duration */}
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-muted">
+                Quote display time
+              </label>
+              <div className="flex gap-1.5">
+                {[15, 30, 60, 120].map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => saveZenDuration(s)}
+                    className={cn(
+                      'flex-1 rounded-lg border py-2 text-sm transition-colors',
+                      zenDurationSec === s
+                        ? 'border-accent/50 bg-accent/15 text-accent'
+                        : 'border-line text-muted hover:text-ink',
+                    )}
+                  >
+                    {s < 60 ? `${s}s` : `${s / 60}m`}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Section>
+
+        {/* SECTION 5: Synchronization Keys */}
         <Section title="Synchronization Keys" icon={<KeyRound className="h-4 w-4 text-accent" />}>
           <div className="space-y-4">
             <div>
@@ -428,7 +587,7 @@ export function SettingsPanel() {
           </div>
         </Section>
 
-        {/* SECTION 5: Danger Zone (Data Erasure) */}
+        {/* SECTION 6: Danger Zone (Data Erasure) */}
         <Section title="Danger Zone (Data Erasure)" icon={<AlertTriangle className="h-4 w-4 text-rose-500" />}>
           <div className="space-y-3">
             <p className="text-xs text-muted">

@@ -90,7 +90,13 @@ export async function chatWithGemini(history, contextText, ctx = {}) {
 export async function transcribeAudio(blob) {
   const model = client().getGenerativeModel({ model: MODEL })
   const arrayBuffer = await blob.arrayBuffer()
-  const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
+  const bytes = new Uint8Array(arrayBuffer)
+  let binary = ''
+  const CHUNK = 32768
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK))
+  }
+  const base64 = btoa(binary)
   const mimeType = blob.type || 'audio/webm'
   const result = await model.generateContent([
     { text: 'Transcribe this audio recording verbatim. Return only the transcript text, no other commentary.' },
@@ -121,17 +127,39 @@ Transcript:
   }
 }
 
-/** Fetch a unique motivational quote using Gemini. */
-export async function fetchZenQuote(recentQuotes = []) {
+/**
+ * Fetch a motivational quote using Gemini.
+ * When `context` is provided (subjects + todos), the quote is personalized.
+ *
+ * @param {Array} recentQuotes - recent quotes to avoid repeating
+ * @param {{ subjects?: Array, todos?: Array }} context - optional workspace context
+ */
+export async function fetchZenQuote(recentQuotes = [], context = {}) {
   if (!hasGeminiKey()) return null
-  
+
   const model = client().getGenerativeModel({
     model: MODEL,
     generationConfig: { responseMimeType: 'application/json' },
   })
-  
+
   const avoid = recentQuotes.map(q => `"${q.text}"`).join(', ')
-  const prompt = `Generate a highly profound, calming, and motivational quote for deep focus and productivity.
+
+  let contextBlock = ''
+  if (context.subjects?.length || context.todos?.length) {
+    const lagging = (context.subjects || [])
+      .filter(s => (s.progressPct || 0) < 60)
+      .slice(0, 3)
+      .map(s => `${s.name} (${s.progressPct || 0}%)`)
+    const pending = (context.todos || [])
+      .filter(t => !t.done)
+      .slice(0, 3)
+      .map(t => t.text)
+    if (lagging.length || pending.length) {
+      contextBlock = `\nContext about the student's current work:${lagging.length ? `\nSubjects needing focus: ${lagging.join(', ')}` : ''}${pending.length ? `\nPending tasks: ${pending.join(', ')}` : ''}\nPersonalize the quote to resonate with this student's specific challenges.`
+    }
+  }
+
+  const prompt = `Generate a highly profound, calming, and motivational quote for deep focus and productivity.${contextBlock}
 It must NOT be any of these recent quotes: [${avoid}].
 Return a JSON object with strictly two keys: "text" (the quote text) and "author" (the person who said it, or "Unknown").
 Do not include any other text.`

@@ -101,12 +101,13 @@ export function subscribeToTasks(uid, modeId, subjectId, callback) {
   })
 }
 
-export async function addTask(uid, modeId, subjectId, { title, column, priority, notes }) {
+export async function addTask(uid, modeId, subjectId, { title, column, priority, notes, dueAt }) {
   return addDoc(tasksCol(uid, modeId, subjectId), {
     title,
     column: column || 'todo',
     priority: priority || 'medium', // 'low' | 'medium' | 'high' | 'urgent'
     notes: notes || '',
+    dueAt: dueAt || null,
     order: Date.now(),
     createdAt: serverTimestamp(),
   })

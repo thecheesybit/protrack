@@ -133,7 +133,8 @@ export function NlQuickCapture({ open, onClose, seed, modeId, defaultColor }) {
         title,
         column: 'todo',
         priority: 'medium',
-        notes: parsed.date ? `Due: ${parsed.date.toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}` : '',
+        notes: '',
+        dueAt: parsed.date || null,
       })
       done('success', `Kanban card added to ${subject?.name || 'subject'}`)
     } catch (err) {

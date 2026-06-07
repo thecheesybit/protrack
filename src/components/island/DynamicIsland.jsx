@@ -8,6 +8,7 @@ import {
   TrendingUp,
   CheckCircle2,
   Info,
+  Clock,
 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { useIslandCycle } from '@/hooks/useIslandCycle'
@@ -23,6 +24,7 @@ const KIND = {
   progress: { Icon: TrendingUp, tone: 'text-accent' },
   success: { Icon: CheckCircle2, tone: 'text-emerald-400' },
   info: { Icon: Info, tone: 'text-accent' },
+  deadline: { Icon: Clock, tone: 'text-amber-400' },
 }
 
 const spring = { type: 'spring', stiffness: 420, damping: 34, mass: 0.7 }

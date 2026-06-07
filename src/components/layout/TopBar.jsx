@@ -1,4 +1,4 @@
-import { Sun, Moon, Settings, Sparkles, LogOut, Heart, Minimize2 } from 'lucide-react'
+import { Sun, Moon, Settings, LogOut, Heart, Minimize2 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useTheme } from '@/hooks/useTheme'
 import { useStore } from '@/store/useStore'
@@ -25,7 +25,6 @@ export function TopBar() {
   const { user, signOut } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
-  const setAiOpen = useStore((s) => s.setAiOpen)
   const setSupportOpen = useStore((s) => s.setSupportOpen)
   const fullscreen = useStore((s) => s.fullscreen)
 
@@ -60,14 +59,6 @@ export function TopBar() {
           className="text-rose-400 hover:text-rose-500 border-rose-500/10 bg-rose-500/5 hover:bg-rose-500/10"
         >
           <Heart className="h-5 w-5 fill-rose-400/20" />
-        </IconButton>
-
-        <IconButton
-          label="AI Companion"
-          onClick={() => setAiOpen(true)}
-          className="text-accent hover:text-accent"
-        >
-          <Sparkles className="h-5 w-5" />
         </IconButton>
 
         <IconButton

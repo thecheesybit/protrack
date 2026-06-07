@@ -6,9 +6,49 @@ import { useSubjects } from '@/hooks/useSubjects'
 import { useTimetable } from '@/hooks/useTimetable'
 import { useHabits, useTodos } from '@/hooks/useWellness'
 import { chatWithGemini, hasGeminiKey } from '@/services/geminiService'
+import { executeTool } from '@/services/geminiTools'
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition'
 import { todayDow } from '@/lib/time'
 import { CommandMatrix } from './CommandMatrix'
+
+const SLASH_PATTERNS = [
+  {
+    re: /^\/done\s+(.+?)(?:\s+@(.+))?$/i,
+    toTool: ([, a, b]) => b
+      ? { name: 'complete_task', args: { taskTitle: a.trim(), subjectName: b.trim() } }
+      : { name: 'complete_task', args: { subjectName: a.trim() } },
+  },
+  {
+    re: /^\/todo\s+(.+)$/i,
+    toTool: ([, text]) => ({ name: 'add_todo', args: { text: text.trim() } }),
+  },
+  {
+    re: /^\/progress\s+(.+?)\s+(\d+)%?$/i,
+    toTool: ([, subjectName, pct]) => ({
+      name: 'set_subject_progress',
+      args: { subjectName: subjectName.trim(), percent: Number(pct) },
+    }),
+  },
+  {
+    re: /^\/habit\s+(.+)$/i,
+    toTool: ([, habitName]) => ({ name: 'toggle_habit_today', args: { habitName: habitName.trim() } }),
+  },
+  {
+    re: /^\/task\s+(.+?)\s+@(.+)$/i,
+    toTool: ([, title, subjectName]) => ({
+      name: 'add_task',
+      args: { subjectName: subjectName.trim(), title: title.trim() },
+    }),
+  },
+]
+
+function parseSlashCommand(text) {
+  for (const { re, toTool } of SLASH_PATTERNS) {
+    const m = text.match(re)
+    if (m) return toTool(m)
+  }
+  return null
+}
 
 const SUGGESTIONS = [
   'Analyze my progress',
@@ -72,24 +112,42 @@ export function ChatTab({ onOpenSettings }) {
     ].join('\n')
   }
 
+  const ctx = { uid: user?.uid, modeId: activeModeId, subjects, habits, todos }
+
   const send = async (text) => {
     const content = (text ?? input).trim()
     if (!content || loading) return
-    if (!hasGeminiKey()) return
-    // Stop listening if voice was active
     if (listening) stop()
+
+    // Slash commands execute directly without a Gemini round-trip
+    const slashCmd = parseSlashCommand(content)
+    if (slashCmd) {
+      const next = [...messages, { role: 'user', text: content }]
+      setMessages(next)
+      setInput('')
+      setLoading(true)
+      try {
+        const outcome = await executeTool(slashCmd.name, slashCmd.args, ctx)
+        const reply = outcome.ok ? (outcome.summary || 'Done.') : `Error: ${outcome.error}`
+        setMessages((m) => [
+          ...m,
+          { role: 'assistant', text: reply, toolEvents: [{ ...outcome, name: slashCmd.name }] },
+        ])
+      } catch (err) {
+        setMessages((m) => [...m, { role: 'assistant', text: `Error: ${err.message}` }])
+      } finally {
+        setLoading(false)
+      }
+      return
+    }
+
+    if (!hasGeminiKey()) return
     const next = [...messages, { role: 'user', text: content }]
     setMessages(next)
     setInput('')
     setLoading(true)
     try {
-      const { text: reply, toolEvents } = await chatWithGemini(next, buildContext(), {
-        uid: user?.uid,
-        modeId: activeModeId,
-        subjects,
-        habits,
-        todos,
-      })
+      const { text: reply, toolEvents } = await chatWithGemini(next, buildContext(), ctx)
       setMessages((m) => [...m, { role: 'assistant', text: reply, toolEvents }])
     } catch (err) {
       setMessages((m) => [...m, { role: 'assistant', text: `Error: ${err.message}` }])

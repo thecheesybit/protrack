@@ -269,6 +269,24 @@ export const TOOL_DECLARATIONS = [
           required: ['name'],
         },
       },
+      {
+        name: 'set_todo_due',
+        description: 'Set or clear the due date on an existing to-do item by matching its text.',
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            text: {
+              type: SchemaType.STRING,
+              description: 'Title (or substring) of the to-do',
+            },
+            dueAt: {
+              type: SchemaType.STRING,
+              description: 'ISO 8601 datetime to set, or omit/null to clear the due date',
+            },
+          },
+          required: ['text'],
+        },
+      },
     ],
   },
 ]
@@ -453,6 +471,21 @@ export async function executeTool(name, args, ctx) {
           order: (habits?.length || 0) + 1,
         })
         return { ok: true, summary: `Created habit "${args.name}".` }
+      }
+
+      case 'set_todo_due': {
+        const needle = String(args.text || '').toLowerCase()
+        const t = todos?.find((x) => !x.done && x.text?.toLowerCase().includes(needle))
+        if (!t) return { ok: false, error: `No open to-do matching "${args.text}".` }
+        const dueAt = args.dueAt ? new Date(args.dueAt) : null
+        const dueValid = dueAt && !Number.isNaN(dueAt.getTime()) ? dueAt : null
+        await updateTodo(uid, t.id, { dueAt: dueValid })
+        return {
+          ok: true,
+          summary: dueValid
+            ? `Due date on "${t.text}" set to ${dueValid.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}.`
+            : `Cleared due date on "${t.text}".`,
+        }
       }
 
       default:

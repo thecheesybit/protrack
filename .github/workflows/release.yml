@@ -24,11 +24,11 @@ on:
   workflow_dispatch:
     inputs:
       bump:
-        description: 'Version bump'
-        required: true
-        default: 'patch'
+        description: 'Version bump (auto = detect from conventional commits)'
+        required: false
+        default: 'auto'
         type: choice
-        options: [patch, minor, major]
+        options: [auto, patch, minor, major]
 
 concurrency:
   group: release
@@ -66,22 +66,26 @@ jobs:
       - name: Bump package.json
         id: bump
         run: |
-          # Manual workflow_dispatch input wins; otherwise auto-detect from
-          # conventional commits since the previous tag.
-          if [ -n "${{ inputs.bump }}" ]; then
-            KIND="${{ inputs.bump }}"
-          else
-            PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-            RANGE=${PREV_TAG:+"$PREV_TAG..HEAD"}
-            COMMITS=$(git log $RANGE --no-merges --pretty=format:"%s%n%b")
-            if echo "$COMMITS" | grep -qE '(BREAKING CHANGE|^[a-zA-Z]+!:)'; then
-              KIND=major
-            elif echo "$COMMITS" | grep -qE '^feat(\(.+\))?:'; then
-              KIND=minor
-            else
-              KIND=patch
-            fi
-          fi
+          # patch/minor/major wins when explicitly chosen; everything else
+          # (including the "auto" default and the push trigger where inputs is
+          # empty) falls through to conventional-commit auto-detection.
+          case "${{ inputs.bump }}" in
+            patch|minor|major)
+              KIND="${{ inputs.bump }}"
+              ;;
+            *)
+              PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+              RANGE=${PREV_TAG:+"$PREV_TAG..HEAD"}
+              COMMITS=$(git log $RANGE --no-merges --pretty=format:"%s%n%b")
+              if echo "$COMMITS" | grep -qE '(BREAKING CHANGE|^[a-zA-Z]+!:)'; then
+                KIND=major
+              elif echo "$COMMITS" | grep -qE '^feat(\(.+\))?:'; then
+                KIND=minor
+              else
+                KIND=patch
+              fi
+              ;;
+          esac
           echo "Bump kind: $KIND"
           NEW_VERSION=$(npm version "$KIND" --no-git-tag-version | tr -d v)
           echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"

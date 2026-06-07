@@ -62,7 +62,7 @@ export function BoardCanvas() {
           </motion.div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid min-h-full grid-cols-1 gap-4 [grid-auto-rows:minmax(180px,1fr)] sm:grid-cols-2 lg:grid-cols-3">
           {WIDGETS.map((w) => (
             <Widget key={w.id} widget={w} variant="grid" />
           ))}

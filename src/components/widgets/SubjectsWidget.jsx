@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import toast from 'react-hot-toast'
 import { Plus, Layers } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { useSubjects } from '@/hooks/useSubjects'
@@ -27,7 +28,7 @@ export function SubjectsWidget({ widget, variant }) {
 
   const openCreate = () => {
     if (activeModeId === 'all') {
-      import('react-hot-toast').then(t => t.default.error('Please select a specific mode to add subjects.'))
+      toast.error('Please select a specific mode to add subjects.')
       return
     }
     setEditingSubject(null)

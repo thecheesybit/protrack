@@ -56,13 +56,13 @@ const CATEGORIES = [
     ],
   },
   {
-    label: 'Quick',
+    label: 'Shortcuts',
     Icon: Zap,
     color: 'text-cyan-400',
     commands: [
-      'How am I doing this week?',
-      'What should I focus on next?',
-      'Summarize my progress',
+      '/done Physics',
+      '/todo Drink water at 3pm',
+      '/progress Calculus 75',
     ],
   },
 ]
