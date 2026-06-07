@@ -69,26 +69,31 @@ export function AuthProvider({ children }) {
           setError(null)
 
           profileSlowTimer = setTimeout(() => {
-            setLoadingStatus('Still verifying profile — Firestore is responding slowly…')
+            setLoadingStatus('Network is slow — opening workspace from cache…')
           }, 3500)
 
-          await withTimeout(
-            ensureUserDocument(firebaseUser),
-            12000,
-            'Profile verification timed out. Please check your internet connection and reload.'
-          )
+          try {
+            await withTimeout(
+              ensureUserDocument(firebaseUser),
+              12000,
+              'Profile verification timed out — workspace loaded from cache.'
+            )
+          } catch (profileErr) {
+            // Firestore slowness / offline: the auth token is still valid.
+            // Log a non-fatal warning and open the workspace anyway — the
+            // persistent Firestore cache will serve data, and any queued
+            // writes replay on reconnect. Never sign the user out for this.
+            console.warn('[auth] profile init non-fatal:', profileErr.message)
+            setError(null) // clear any stale error; workspace opens normally
+          }
         }
         setUser(firebaseUser)
       } catch (err) {
-        console.error('[auth] failed to initialise user document', err)
+        // Only reach here on a genuine Firebase Auth failure (e.g. token
+        // revoked, network entirely unreachable before onAuthStateChanged fires).
+        // In this case we can't authenticate at all, so sign out cleanly.
+        console.error('[auth] critical auth failure', err)
         setError(err.message)
-        if (firebaseUser && !firebaseUser.isAnonymous) {
-          try {
-            await firebaseSignOut(auth)
-          } catch (signoutErr) {
-            console.error('[auth] failed to sign out after init failure', signoutErr)
-          }
-        }
         setUser(null)
       } finally {
         if (profileSlowTimer) clearTimeout(profileSlowTimer)

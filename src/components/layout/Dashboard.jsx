@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { useStore } from '@/store/useStore'
 import { useFocusEngine } from '@/hooks/useFocusEngine'
@@ -181,6 +181,8 @@ export function Dashboard() {
   )
 }
 
+const YT_PATTERN = /(?:youtube\.fr\/|youtube\.com\/(?:watch\?v=|embed\/|v\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i
+
 function BackgroundAudioPlayer() {
   const status = useStore((s) => s.status)
   const focusAudioUrl = useStore((s) => s.settings?.focusAudioUrl || '')
@@ -191,14 +193,11 @@ function BackgroundAudioPlayer() {
 
   if (status !== 'running' || !focusAudioUrl || muted) return null
 
-  // Check if it's a YouTube URL
-  const youtubeMatch = focusAudioUrl.match(
-    /(?:youtube\.fr\/|youtube\.com\/(?:watch\?v=|embed\/|v\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i
-  )
+  const youtubeMatch = focusAudioUrl.match(YT_PATTERN)
 
   if (youtubeMatch) {
     const videoId = youtubeMatch[1]
-    const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&loop=1&playlist=${videoId}&enablejsapi=1&origin=${window.location.origin}`
+    const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&loop=1&playlist=${videoId}&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`
     return (
       <YTVolumeSync iframeRef={iframeRef} volume={volume}>
         <iframe
@@ -207,13 +206,12 @@ function BackgroundAudioPlayer() {
           className="sr-only pointer-events-none"
           allow="autoplay"
           title="Background Audio Stream"
-          style={{ width: 0, height: 0, border: 0 }}
+          style={{ width: 1, height: 1, border: 0 }}
         />
       </YTVolumeSync>
     )
   }
 
-  // Fallback to standard HTML5 audio for direct audio files/streams
   return (
     <AudioVolumeSync audioRef={audioRef} volume={volume}>
       <audio
@@ -227,22 +225,60 @@ function BackgroundAudioPlayer() {
   )
 }
 
-/** Syncs volume to YouTube iframe via postMessage */
+/** Syncs volume to YouTube iframe via the IFrame Player API postMessage protocol. */
 function YTVolumeSync({ iframeRef, volume, children }) {
-  useEffect(() => {
+  const apiReadyRef = useRef(false)
+
+  const postVolume = (vol) => {
     const iframe = iframeRef.current
     if (!iframe?.contentWindow) return
     try {
       iframe.contentWindow.postMessage(JSON.stringify({
         event: 'command',
         func: 'setVolume',
-        args: [Math.round(volume * 100)],
-      }), '*')
+        args: [Math.round(vol * 100)],
+      }), 'https://www.youtube.com')
     } catch {
-      /* cross-origin — expected until YouTube API is ready */
+      /* cross-origin until YT API initialises */
     }
-  }, [volume, iframeRef])
-  return children
+  }
+
+  // Listen for the YT API ready signal, then sync the current volume
+  useEffect(() => {
+    const onMessage = (e) => {
+      if (e.origin !== 'https://www.youtube.com') return
+      try {
+        const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
+        if (data?.event === 'onReady') {
+          apiReadyRef.current = true
+          postVolume(volume)
+        }
+      } catch { /* not JSON */ }
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // On iframe load, register the listener with the YT IFrame API
+  const handleLoad = () => {
+    const iframe = iframeRef.current
+    if (!iframe?.contentWindow) return
+    try {
+      iframe.contentWindow.postMessage(JSON.stringify({
+        event: 'listening',
+        id: 1,
+        channel: 'widget',
+      }), 'https://www.youtube.com')
+    } catch { /* noop */ }
+  }
+
+  useEffect(() => {
+    if (apiReadyRef.current) postVolume(volume)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [volume])
+
+  return React.cloneElement(children, { onLoad: handleLoad })
 }
 
 /** Syncs volume to a regular <audio> element */

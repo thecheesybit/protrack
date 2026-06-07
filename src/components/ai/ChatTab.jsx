@@ -31,7 +31,7 @@ export function ChatTab({ onOpenSettings }) {
   const [loading, setLoading] = useState(false)
   const scrollRef = useRef(null)
 
-  const { supported, listening, transcript, interim, start, stop, reset: resetSpeech, setText } = useSpeechRecognition()
+  const { supported, listening, transcript, interim, error: speechError, transcribing, start, stop, reset: resetSpeech, setText } = useSpeechRecognition()
 
   const activeMode = modes.find((m) => m.id === activeModeId)
 
@@ -196,23 +196,38 @@ export function ChatTab({ onOpenSettings }) {
       </div>
 
       <div className="border-t border-line/60 p-3">
+        {/* Speech error */}
+        {speechError && (
+          <div className="mb-2 rounded-lg bg-red-500/10 px-3 py-1.5 text-xs text-red-400">
+            {speechError}
+          </div>
+        )}
         {/* Interim speech preview */}
         {listening && interim && (
           <div className="mb-2 rounded-lg bg-accent/5 px-3 py-1.5 text-xs text-accent italic">
             {interim}…
           </div>
         )}
+        {/* Gemini transcription in progress */}
+        {transcribing && (
+          <div className="mb-2 rounded-lg bg-accent/5 px-3 py-1.5 text-xs text-accent">
+            Transcribing…
+          </div>
+        )}
         <div className="flex items-end gap-2">
           {supported && (
             <button
               onClick={toggleMic}
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-all ${
+              disabled={transcribing}
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-all disabled:opacity-50 ${
                 listening
                   ? 'animate-pulse border-red-500/50 bg-red-500/10 text-red-400'
-                  : 'border-line text-muted hover:text-ink hover:border-accent/40'
+                  : speechError
+                    ? 'border-red-500/30 text-red-400/60 cursor-not-allowed'
+                    : 'border-line text-muted hover:text-ink hover:border-accent/40'
               }`}
               aria-label={listening ? 'Stop listening' : 'Start voice input'}
-              title={listening ? 'Listening… click to stop' : 'Voice input'}
+              title={speechError || (listening ? 'Listening… click to stop' : 'Voice input')}
             >
               {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
             </button>

@@ -138,7 +138,7 @@ Rules (`firestore.rules`): everything under `users/{uid}/**` is owner-only. Hand
 
 ### CI/CD
 - `.github/workflows/ci.yml` runs lint (if present) + multi-target build + an emoji-in-source guard on every non-master push and PR.
-- `.github/workflows/release.yml` runs on push to `master` (or `workflow_dispatch` with a bump choice): version bump → CHANGELOG regen from conventional commits → Netlify deploy → matrix Electron build (Win/Mac/Linux) → GitHub Release with installer assets and extracted release notes.
+- `.github/workflows/release.yml` runs on push to `master` (or `workflow_dispatch` with a bump choice): auto-detects version bump from conventional commits (feat→minor, feat!/BREAKING→major, else patch) → Netlify deploy → matrix Electron build (Win/Mac/Linux) → GitHub Release with installer assets and release notes extracted from `CHANGELOG.md`. **Never overwrites `CHANGELOG.md`** — the developer curates it before merging. Heading format must be `## v<semver> — YYYY-MM-DD` so the `awk` extractor in the finalize job finds the right section.
 - Required secrets: `GITHUB_TOKEN` (auto), `NETLIFY_AUTH_TOKEN` + `NETLIFY_SITE_ID` (optional). Code signing is intentionally skipped (`CSC_IDENTITY_AUTO_DISCOVERY: false`); add certs later when the project ships paid plans.
 
 ## 6. Maintenance guidelines

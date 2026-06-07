@@ -1,25 +1,27 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import toast from 'react-hot-toast'
-import { Plus, Minus } from 'lucide-react'
+import { GripHorizontal } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 
 /**
- * Floating flip-card clock — draggable, visible on ALL screen sizes.
- * Each digit (hour-tens, hour-ones, minute-tens, minute-ones) is its own card
- * that flips vertically when its value changes — same idea as the classic
- * split-flap train timetable boards. 12-hour with AM/PM + date.
+ * Floating flip-card clock — draggable, resizable, visible on ALL screen sizes.
+ *
+ * Interactions:
+ *  - Drag body (primary mouse button) → move
+ *  - Drag bottom-right grip handle → resize (scale)
+ *  - Scroll wheel over clock → resize (scale)
+ *  - Double-click body → toggle pin / auto-hide mode
  *
  * Visibility modes:
- *  - `pinned` (default) — always visible. Survives focus / fullscreen /
- *    chrome-hidden.
- *  - `auto`           — hides during focus / fullscreen / chrome-hidden so
- *    the clock stays out of the way during deep work.
+ *  - `pinned` (default) — always visible
+ *  - `auto`             — hides during focus / fullscreen / chrome-hidden
  *
- * Dragging: Pointer-event-based drag. Position persisted to localStorage.
- * Double-click toggles pinned/auto mode.
+ * All state persisted to localStorage.
  */
 
+const POS_KEY   = 'protrack:clock_pos'
+const MODE_KEY  = 'protrack:clock_mode'
 const SCALE_KEY = 'protrack:clock_scale'
 
 function readInitialMode() {
@@ -110,17 +112,20 @@ export function FlipClock() {
   const focusRunning = useStore((s) => s.status === 'running')
   const focusLocked = useStore((s) => s.focusLocked)
 
-  // Drag state refs (not in state to avoid re-renders during drag)
-  const dragging = useRef(false)
-  const dragStart = useRef({ px: 0, py: 0, ox: 0, oy: 0, pressed: false })
-  const clockRef = useRef(null)
+  // Separate refs for body drag vs grip resize — both use pointer capture
+  const dragging   = useRef(false)
+  const dragStart  = useRef({ px: 0, py: 0, ox: 0, oy: 0, pressed: false })
+  const resizing   = useRef(false)
+  const resizeStart = useRef({ py: 0, os: 1, pressed: false })
+  const clockRef   = useRef(null)
+  const gripRef    = useRef(null)
 
   useEffect(() => {
     const id = setInterval(() => setT(formatNow()), 1000)
     return () => clearInterval(id)
   }, [])
 
-  // Prevent default scroll when hovering over clock to allow scale without scrolling page
+  // Prevent scroll-wheel from propagating to page (for scale-on-wheel)
   useEffect(() => {
     const el = clockRef.current
     if (!el) return
@@ -129,9 +134,12 @@ export function FlipClock() {
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
+  /* ── Body drag (move) ──────────────────────────────── */
+
   const handlePointerDown = useCallback((e) => {
-    // Only primary button
     if (e.button !== 0) return
+    // Don't start a body drag if the grip is initiating a resize
+    if (resizing.current) return
     dragging.current = false
     dragStart.current = { px: e.clientX, py: e.clientY, ox: pos.x, oy: pos.y, pressed: true }
     const el = clockRef.current
@@ -147,31 +155,63 @@ export function FlipClock() {
     if (!dragging.current && Math.abs(dx) + Math.abs(dy) < 4) return
     dragging.current = true
 
-    // Give a bit more wiggle room for edges if scaled
-    const newX = Math.max(0, Math.min(window.innerWidth - (80 * scale), ds.ox + dx))
-    const newY = Math.max(0, Math.min(window.innerHeight - (80 * scale), ds.oy + dy))
+    const newX = Math.max(0, Math.min(window.innerWidth  - 80 * scale, ds.ox + dx))
+    const newY = Math.max(0, Math.min(window.innerHeight - 80 * scale, ds.oy + dy))
     setPos({ x: newX, y: newY })
   }, [scale])
 
   const handlePointerUp = useCallback(() => {
     dragStart.current.pressed = false
     if (dragging.current) {
-      // Persist position
-      try {
-        localStorage.setItem(POS_KEY, JSON.stringify(pos))
-      } catch { /* private mode */ }
+      try { localStorage.setItem(POS_KEY, JSON.stringify(pos)) } catch { /* private mode */ }
     }
     dragging.current = false
   }, [pos])
 
+  /* ── Grip resize (scale) ───────────────────────────── */
+
+  const handleGripPointerDown = useCallback((e) => {
+    if (e.button !== 0) return
+    e.stopPropagation() // prevent body drag from starting
+    resizing.current = true
+    resizeStart.current = { py: e.clientY, os: scale, pressed: true }
+    const el = gripRef.current
+    if (el) el.setPointerCapture(e.pointerId)
+  }, [scale])
+
+  const handleGripPointerMove = useCallback((e) => {
+    const rs = resizeStart.current
+    if (!rs.pressed) return
+    // Dragging up → larger, dragging down → smaller (intuitive)
+    const dy = e.clientY - rs.py
+    const next = Math.max(0.5, Math.min(3.0, rs.os - dy / 120))
+    setScale(Number(next.toFixed(2)))
+  }, [])
+
+  const handleGripPointerUp = useCallback(() => {
+    resizeStart.current.pressed = false
+    resizing.current = false
+    try { localStorage.setItem(SCALE_KEY, scale.toString()) } catch { /* private mode */ }
+  }, [scale])
+
+  /* ── Wheel resize (bonus) ──────────────────────────── */
+
+  const handleWheel = useCallback((e) => {
+    setScale((prev) => {
+      const ds = e.deltaY > 0 ? -0.1 : 0.1
+      const next = Math.max(0.5, Math.min(3.0, prev + ds))
+      try { localStorage.setItem(SCALE_KEY, next.toString()) } catch {}
+      return Number(next.toFixed(1))
+    })
+  }, [])
+
+  /* ── Double-click: toggle pin / auto-hide ─────────── */
+
   const toggleMode = useCallback(() => {
-    // Don't toggle if we were dragging
-    if (dragging.current) return
+    if (dragging.current) return // was a drag, not a dbl-click
     setMode((prev) => {
       const next = prev === 'pinned' ? 'auto' : 'pinned'
-      try {
-        localStorage.setItem(MODE_KEY, next)
-      } catch { /* private mode */ }
+      try { localStorage.setItem(MODE_KEY, next) } catch { /* private mode */ }
       toast.success(
         next === 'pinned'
           ? 'Clock pinned — always visible'
@@ -181,26 +221,8 @@ export function FlipClock() {
     })
   }, [])
 
-  const handleWheel = useCallback((e) => {
-    setScale((prev) => {
-      // deltaY positive means scrolling down, which we'll map to shrinking
-      const ds = e.deltaY > 0 ? -0.1 : 0.1
-      const next = Math.max(0.5, Math.min(3.0, prev + ds))
-      try { localStorage.setItem(SCALE_KEY, next.toString()) } catch {}
-      return Number(next.toFixed(1))
-    })
-  }, [])
+  /* ── Visibility ────────────────────────────────────── */
 
-  const handleZoom = (e, ds) => {
-    e.stopPropagation()
-    setScale((prev) => {
-      const next = Math.max(0.5, Math.min(3.0, prev + ds))
-      try { localStorage.setItem(SCALE_KEY, next.toString()) } catch {}
-      return Number(next.toFixed(1))
-    })
-  }
-
-  // During focus lock, always show if pinned
   const hiddenByAuto = mode === 'auto' && !focusLocked && (chromeHidden || fullscreen || focusRunning)
 
   return (
@@ -217,40 +239,21 @@ export function FlipClock() {
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
           onWheel={handleWheel}
           title={
             mode === 'pinned'
-              ? 'Double-click to enable auto-hide · Drag to move · Scroll to resize'
-              : 'Double-click to pin clock · Drag to move · Scroll to resize'
+              ? 'Double-click to enable auto-hide · Drag to move · Drag grip or scroll to resize'
+              : 'Double-click to pin clock · Drag to move · Drag grip or scroll to resize'
           }
           className="fixed z-[55] flex cursor-grab select-none flex-col items-center gap-2 rounded-2xl border border-line/50 bg-surface/40 px-3 py-3 shadow-glass backdrop-blur-xl transition-colors hover:border-accent/40 active:cursor-grabbing touch-none group"
           style={{
             left: pos.x,
             top: pos.y,
-            transformOrigin: 'top left', // Scale from the top left corner
+            transformOrigin: 'top left',
           }}
-          aria-label={`Flip clock — ${mode} mode (double-click to toggle, drag to move, scroll to scale)`}
+          aria-label={`Flip clock — ${mode} mode (double-click to toggle, drag to move, drag grip to resize)`}
         >
-          {/* Resize controls (visible on group hover) */}
-          <div className="absolute -right-3 -top-3 flex flex-col gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-            <button
-              onClick={(e) => handleZoom(e, 0.1)}
-              onPointerDown={(e) => e.stopPropagation()}
-              className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-2 border border-line text-muted hover:text-ink hover:border-accent"
-              title="Increase scale"
-            >
-              <Plus className="h-3 w-3" />
-            </button>
-            <button
-              onClick={(e) => handleZoom(e, -0.1)}
-              onPointerDown={(e) => e.stopPropagation()}
-              className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-2 border border-line text-muted hover:text-ink hover:border-accent"
-              title="Decrease scale"
-            >
-              <Minus className="h-3 w-3" />
-            </button>
-          </div>
-
           <div className="flex items-end gap-1">
             <Digit value={t.h1} />
             <Digit value={t.h2} />
@@ -258,19 +261,35 @@ export function FlipClock() {
             <Digit value={t.m1} />
             <Digit value={t.m2} />
           </div>
+
           <div className="flex w-full items-center justify-between gap-2 px-1">
             <span className="text-[10px] font-bold tracking-widest text-accent">
               {t.period}
             </span>
             <span className="text-[10px] text-muted">{t.dateLabel}</span>
           </div>
-          {/* Visual hint for the mode — tiny dot in the corner */}
+
+          {/* Mode indicator dot */}
           <span
             className={`absolute right-2 top-2 h-1.5 w-1.5 rounded-full ${
               mode === 'pinned' ? 'bg-accent' : 'bg-muted/50'
             }`}
             title={mode === 'pinned' ? 'Pinned' : 'Auto-hide'}
           />
+
+          {/* Bottom-right resize grip — visible on hover */}
+          <div
+            ref={gripRef}
+            onPointerDown={handleGripPointerDown}
+            onPointerMove={handleGripPointerMove}
+            onPointerUp={handleGripPointerUp}
+            onPointerCancel={handleGripPointerUp}
+            onDoubleClick={(e) => e.stopPropagation()} // don't toggle mode from grip
+            title="Drag to resize"
+            className="absolute -bottom-2 -right-2 flex h-5 w-5 cursor-nwse-resize items-center justify-center rounded-full border border-line bg-surface-2 text-muted opacity-0 shadow-sm transition-opacity group-hover:opacity-100 hover:text-ink hover:border-accent"
+          >
+            <GripHorizontal className="h-2.5 w-2.5 rotate-45" />
+          </div>
         </motion.div>
       )}
     </AnimatePresence>

@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Play, Pause, RotateCcw, Flame, Clock, CloudRain, Waves, Wind, VolumeX, Volume2, TreePine, Headphones, Coffee, Trees, Zap, AudioLines } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { Play, Pause, RotateCcw, Flame, Clock, CloudRain, Waves, Wind, VolumeX, Volume2, TreePine, Headphones, Coffee, Trees, AudioLines } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { WidgetFrame } from './WidgetFrame'
 import { ForestView } from '@/components/focus/ForestView'
@@ -53,6 +54,7 @@ function Ring({ progress, color, size = 200, children }) {
 export function FocusWidget({ widget, variant }) {
   const status = useStore((s) => s.status)
   const phase = useStore((s) => s.phase)
+  const session = useStore((s) => s.session)
   const secondsLeft = useStore((s) => s.secondsLeft)
   const customTimerSetting = useStore((s) => s.customTimerSetting)
   const audioTracks = useStore((s) => s.audioTracks)
@@ -125,11 +127,30 @@ export function FocusWidget({ widget, variant }) {
     }
   }
 
+  const YT_PATTERN = /(?:youtube\.com\/(?:watch\?v=|embed\/|v\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i
+
   const updateFocusAudioUrl = async (url) => {
     try {
       await updateSettings(user.uid, { focusAudioUrl: url })
     } catch (err) {
       console.error('[focus] failed to save audio URL', err)
+    }
+  }
+
+  const loadStream = async () => {
+    const url = focusAudioUrl.trim()
+    if (!url) {
+      toast.error('Paste a YouTube or audio URL first')
+      return
+    }
+    if (YT_PATTERN.test(url)) {
+      await updateFocusAudioUrl(url)
+      toast.success('YouTube stream saved — starts when focus begins')
+    } else if (url.startsWith('http')) {
+      await updateFocusAudioUrl(url)
+      toast.success('Audio URL saved — plays when focus begins')
+    } else {
+      toast.error('Not a recognised YouTube or audio URL')
     }
   }
 
@@ -285,11 +306,11 @@ export function FocusWidget({ widget, variant }) {
                     placeholder="YouTube URL..."
                     className="w-full flex-1 rounded-xl border border-line bg-surface-2/60 px-3 py-2 text-xs outline-none focus:border-accent"
                   />
-                  <button 
-                    onClick={() => toggleConcurrentTrack('ytTrack', focusAudioUrl)}
+                  <button
+                    onClick={loadStream}
                     className="flex shrink-0 items-center gap-1 rounded-xl border border-line bg-surface-2 px-3 py-2 text-xs font-semibold text-ink transition-colors hover:bg-surface hover:text-accent"
                   >
-                    Load Stream
+                    Save
                   </button>
                 </div>
               </div>

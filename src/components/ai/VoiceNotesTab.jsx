@@ -13,7 +13,7 @@ export function VoiceNotesTab({ onOpenSettings }) {
   const { user } = useAuth()
   const activeModeId = useStore((s) => s.activeModeId)
   const notes = useNotes()
-  const { supported, listening, transcript, interim, start, stop, reset, setText } =
+  const { supported, listening, transcript, interim, error: speechError, transcribing, start, stop, reset, setText } =
     useSpeechRecognition()
 
   const [generating, setGenerating] = useState(false)
@@ -66,15 +66,29 @@ export function VoiceNotesTab({ onOpenSettings }) {
             <div className="flex flex-col items-center gap-3">
               <button
                 onClick={listening ? stop : start}
+                disabled={transcribing}
                 className={cn(
-                  'flex h-16 w-16 items-center justify-center rounded-full text-white transition-transform active:scale-95',
-                  listening ? 'animate-pulse bg-red-500' : 'bg-accent',
+                  'flex h-16 w-16 items-center justify-center rounded-full text-white transition-transform active:scale-95 disabled:opacity-50',
+                  listening ? 'animate-pulse bg-red-500' : speechError ? 'bg-red-400/60' : 'bg-accent',
                 )}
+                title={speechError || undefined}
               >
-                {listening ? <Square className="h-6 w-6" /> : <Mic className="h-7 w-7" />}
+                {transcribing ? (
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                ) : listening ? (
+                  <Square className="h-6 w-6" />
+                ) : (
+                  <Mic className="h-7 w-7" />
+                )}
               </button>
-              <span className="text-xs text-muted">
-                {listening ? 'Listening… tap to stop' : 'Tap to record a voice note'}
+              <span className="text-xs text-muted text-center max-w-[200px]">
+                {transcribing
+                  ? 'Transcribing…'
+                  : speechError
+                    ? speechError
+                    : listening
+                      ? 'Listening… tap to stop'
+                      : 'Tap to record a voice note'}
               </span>
             </div>
           )}

@@ -83,6 +83,22 @@ export async function chatWithGemini(history, contextText, ctx = {}) {
   return { text: result.response.text(), toolEvents }
 }
 
+/**
+ * Transcribe a recorded audio blob via the Gemini multimodal API.
+ * Used as the Electron fallback when webkitSpeechRecognition is unavailable.
+ */
+export async function transcribeAudio(blob) {
+  const model = client().getGenerativeModel({ model: MODEL })
+  const arrayBuffer = await blob.arrayBuffer()
+  const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
+  const mimeType = blob.type || 'audio/webm'
+  const result = await model.generateContent([
+    { text: 'Transcribe this audio recording verbatim. Return only the transcript text, no other commentary.' },
+    { inlineData: { mimeType, data: base64 } },
+  ])
+  return result.response.text().trim()
+}
+
 /** Turn a raw voice transcript into a structured note. */
 export async function summarizeTranscript(transcript) {
   const model = client().getGenerativeModel({

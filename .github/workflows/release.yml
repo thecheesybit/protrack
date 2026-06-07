@@ -1,10 +1,11 @@
 name: Release
 
 # Production pipeline. A push to `master` is the single source of truth for
-# shipping: this workflow bumps the version, regenerates CHANGELOG.md from the
-# new commits, deploys the marketing/web shell to Netlify, builds Electron
+# shipping: this workflow auto-detects the version bump from conventional commits
+# (major/minor/patch), deploys the marketing/web shell to Netlify, builds Electron
 # installers for Windows / macOS / Linux, and publishes them as GitHub Release
-# assets so the in-app auto-updater picks them up.
+# assets so the in-app auto-updater picks them up. CHANGELOG.md is curated by the
+# developer before committing — CI never overwrites it.
 #
 # Manual `workflow_dispatch` is also supported for ad-hoc releases (e.g. a
 # point fix that doesn't land on master through the normal commit flow).
@@ -35,7 +36,7 @@ concurrency:
 
 jobs:
   prepare:
-    name: Bump version & changelog
+    name: Bump version
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -64,42 +65,34 @@ jobs:
 
       - name: Bump package.json
         id: bump
-        env:
-          BUMP_KIND: ${{ inputs.bump || 'patch' }}
         run: |
-          NEW_VERSION=$(npm version "$BUMP_KIND" --no-git-tag-version | tr -d v)
+          # Manual workflow_dispatch input wins; otherwise auto-detect from
+          # conventional commits since the previous tag.
+          if [ -n "${{ inputs.bump }}" ]; then
+            KIND="${{ inputs.bump }}"
+          else
+            PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            RANGE=${PREV_TAG:+"$PREV_TAG..HEAD"}
+            COMMITS=$(git log $RANGE --no-merges --pretty=format:"%s%n%b")
+            if echo "$COMMITS" | grep -qE '(BREAKING CHANGE|^[a-zA-Z]+!:)'; then
+              KIND=major
+            elif echo "$COMMITS" | grep -qE '^feat(\(.+\))?:'; then
+              KIND=minor
+            else
+              KIND=patch
+            fi
+          fi
+          echo "Bump kind: $KIND"
+          NEW_VERSION=$(npm version "$KIND" --no-git-tag-version | tr -d v)
           echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$NEW_VERSION" >> "$GITHUB_OUTPUT"
           echo "PRO TRACK → v$NEW_VERSION"
 
-      - name: Regenerate CHANGELOG.md from conventional commits
+      - name: Commit version bump
         env:
           NEW_VERSION: ${{ steps.bump.outputs.version }}
         run: |
-          DATE=$(date -u +"%Y-%m-%d")
-          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          RANGE=${PREV_TAG:+$PREV_TAG..HEAD}
-          {
-            echo "# Changelog"
-            echo
-            echo "## v$NEW_VERSION — $DATE"
-            echo
-            git log $RANGE --no-merges --pretty=format:"- %s (%h)" \
-              | grep -E '^- (feat|fix|perf|refactor|docs|chore|ci|test|build|style)(\(.+\))?:' \
-              || echo "- Maintenance release"
-            echo
-            if [ -f CHANGELOG.md ]; then
-              # Drop the previous "# Changelog" header so we don't duplicate it.
-              tail -n +2 CHANGELOG.md
-            fi
-          } > CHANGELOG.new.md
-          mv CHANGELOG.new.md CHANGELOG.md
-
-      - name: Commit version + changelog
-        env:
-          NEW_VERSION: ${{ steps.bump.outputs.version }}
-        run: |
-          git add package.json package-lock.json CHANGELOG.md
+          git add package.json package-lock.json
           git commit -m "chore(release): v$NEW_VERSION [skip ci]"
           git tag "v$NEW_VERSION"
           git push origin HEAD --tags

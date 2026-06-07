@@ -262,13 +262,20 @@ export function MicroKanban({ modeId, subjectId, subjectName }) {
   const [activeId, setActiveId] = useState(null)
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 2 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 120, tolerance: 6 } }),
   )
 
   const add = (title, column) =>
     addTask(user.uid, modeId, subjectId, { title, column, priority: 'medium' })
-  const del = (taskId) => deleteTask(user.uid, modeId, subjectId, taskId)
+  const del = (taskId) => {
+    deleteTask(user.uid, modeId, subjectId, taskId)
+    const remaining = tasks.filter((t) => t.id !== taskId)
+    const total = remaining.length
+    const done = remaining.filter((t) => t.column === 'done').length
+    const pct = total ? Math.round((done / total) * 100) : 0
+    setSubjectProgress(user.uid, modeId, subjectId, pct)
+  }
   const upd = (taskId, patch) => updateTask(user.uid, modeId, subjectId, taskId, patch)
 
   /** Find which column a draggable id belongs to (task id OR column id). */
