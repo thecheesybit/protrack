@@ -19,7 +19,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Plus, X, GripVertical, Flag, StickyNote, ChevronDown, Calendar } from 'lucide-react'
+import { Plus, X, GripVertical, Flag, StickyNote, ChevronDown, Calendar, Pencil, Copy } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
 import { useTasks } from '@/hooks/useSubjects'
@@ -82,7 +82,7 @@ function PriorityDot({ priority, onCycle }) {
   )
 }
 
-function TaskCard({ task, index, onDelete, onUpdate, dragging }) {
+function TaskCard({ task, index, onDelete, onUpdate, onDuplicate, dragging }) {
   const {
     attributes,
     listeners,
@@ -94,6 +94,8 @@ function TaskCard({ task, index, onDelete, onUpdate, dragging }) {
 
   const [expanded, setExpanded] = useState(false)
   const [notesDraft, setNotesDraft] = useState(task.notes || '')
+  const [editing, setEditing] = useState(false)
+  const [titleDraft, setTitleDraft] = useState(task.title)
 
   const style = {
     transform: CSS.Translate.toString(transform),
@@ -105,6 +107,13 @@ function TaskCard({ task, index, onDelete, onUpdate, dragging }) {
   const saveNotes = () => {
     if (notesDraft !== (task.notes || '')) onUpdate({ notes: notesDraft })
   }
+  const startEdit = () => { setTitleDraft(task.title); setEditing(true) }
+  const saveEdit = () => {
+    const v = titleDraft.trim()
+    if (v && v !== task.title) onUpdate({ title: v })
+    setEditing(false)
+  }
+  const cancelEdit = () => setEditing(false)
 
   return (
     <div
@@ -116,7 +125,7 @@ function TaskCard({ task, index, onDelete, onUpdate, dragging }) {
         task.column === 'done' && !expanded && 'opacity-80',
       )}
     >
-      <div className="flex items-start gap-1.5 px-2 py-2 pr-6">
+      <div className="flex items-start gap-1.5 px-2 py-2">
         <button
           {...attributes}
           {...listeners}
@@ -125,16 +134,33 @@ function TaskCard({ task, index, onDelete, onUpdate, dragging }) {
         >
           <GripVertical className="h-3.5 w-3.5" />
         </button>
-        <button
-          onDoubleClick={() => setExpanded((v) => !v)}
-          className={cn(
-            'min-w-0 flex-1 break-words text-left flex items-start gap-1.5',
-            task.column === 'done' && 'text-muted line-through',
-          )}
-        >
+        <div className="min-w-0 flex-1 flex items-start gap-1.5">
           <span className="text-muted/50 font-mono text-[10px] mt-0.5 select-none shrink-0">{index + 1}.</span>
-          <span>{task.title}</span>
-        </button>
+          {editing ? (
+            <input
+              autoFocus
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={saveEdit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); saveEdit() }
+                if (e.key === 'Escape') cancelEdit()
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="min-w-0 flex-1 rounded border border-accent/60 bg-surface-2/60 px-1.5 py-0.5 text-sm outline-none"
+            />
+          ) : (
+            <span
+              onDoubleClick={() => setExpanded((v) => !v)}
+              className={cn(
+                'flex-1 min-w-0 break-words cursor-default',
+                task.column === 'done' && 'text-muted line-through',
+              )}
+            >
+              {task.title}
+            </span>
+          )}
+        </div>
         {task.notes && !expanded && (
           <StickyNote
             className="mt-0.5 h-3 w-3 shrink-0 text-amber-400/80"
@@ -153,11 +179,29 @@ function TaskCard({ task, index, onDelete, onUpdate, dragging }) {
         <PriorityDot priority={task.priority} onCycle={cycleP} />
         <button
           onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); startEdit() }}
+          className="mt-0.5 opacity-0 transition-opacity group-hover/card:opacity-100 text-muted hover:text-ink"
+          aria-label="Edit card"
+          title="Edit"
+        >
+          <Pencil className="h-3 w-3" />
+        </button>
+        <button
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onDuplicate(task) }}
+          className="mt-0.5 opacity-0 transition-opacity group-hover/card:opacity-100 text-muted hover:text-ink"
+          aria-label="Duplicate card"
+          title="Duplicate"
+        >
+          <Copy className="h-3 w-3" />
+        </button>
+        <button
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={() => onDelete(task.id)}
-          className="absolute right-1 top-1.5 opacity-0 transition-opacity group-hover/card:opacity-100"
+          className="mt-0.5 opacity-0 transition-opacity group-hover/card:opacity-100 text-muted hover:text-ink"
           aria-label="Delete card"
         >
-          <X className="h-3 w-3 text-muted" />
+          <X className="h-3 w-3" />
         </button>
       </div>
 
@@ -217,7 +261,7 @@ function TaskCard({ task, index, onDelete, onUpdate, dragging }) {
   )
 }
 
-function Column({ col, tasks, onAdd, onDelete, onUpdate }) {
+function Column({ col, tasks, onAdd, onDelete, onUpdate, onDuplicate }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.id })
   const [adding, setAdding] = useState(false)
   const [text, setText] = useState('')
@@ -270,6 +314,7 @@ function Column({ col, tasks, onAdd, onDelete, onUpdate }) {
                 index={idx}
                 onDelete={onDelete}
                 onUpdate={(patch) => onUpdate(t.id, patch)}
+                onDuplicate={onDuplicate}
               />
             ))}
           </div>
@@ -313,6 +358,14 @@ export function MicroKanban({ modeId, subjectId, subjectName }) {
 
   const add = (title, column) =>
     addTask(user.uid, modeId, subjectId, { title, column, priority: 'medium' })
+  const dup = (task) =>
+    addTask(user.uid, modeId, subjectId, {
+      title: task.title,
+      column: task.column,
+      priority: task.priority || 'medium',
+      notes: task.notes || '',
+      dueAt: task.dueAt || null,
+    })
   const del = (taskId) => {
     deleteTask(user.uid, modeId, subjectId, taskId)
     const remaining = tasks.filter((t) => t.id !== taskId)
@@ -411,6 +464,7 @@ export function MicroKanban({ modeId, subjectId, subjectName }) {
               onAdd={add}
               onDelete={del}
               onUpdate={upd}
+              onDuplicate={dup}
             />
           ))}
         </div>

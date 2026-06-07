@@ -14,7 +14,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Plus, Check, X, Flag, GripVertical, StickyNote, Calendar } from 'lucide-react'
+import { Plus, Check, X, Flag, GripVertical, StickyNote, Calendar, Pencil, Copy } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
 import { useTodos } from '@/hooks/useWellness'
@@ -57,7 +57,7 @@ function PriorityDot({ priority, onCycle }) {
   )
 }
 
-function Row({ t, index, onToggle, onDelete, onUpdate }) {
+function Row({ t, index, onToggle, onDelete, onUpdate, onDuplicate }) {
   const {
     attributes,
     listeners,
@@ -69,6 +69,8 @@ function Row({ t, index, onToggle, onDelete, onUpdate }) {
 
   const [expanded, setExpanded] = useState(false)
   const [notesDraft, setNotesDraft] = useState(t.notes || '')
+  const [editing, setEditing] = useState(false)
+  const [textDraft, setTextDraft] = useState(t.text)
 
   const style = { transform: CSS.Translate.toString(transform), transition }
 
@@ -76,6 +78,13 @@ function Row({ t, index, onToggle, onDelete, onUpdate }) {
   const saveNotes = () => {
     if (notesDraft !== (t.notes || '')) onUpdate({ notes: notesDraft })
   }
+  const startEdit = () => { setTextDraft(t.text); setEditing(true) }
+  const saveEdit = () => {
+    const v = textDraft.trim()
+    if (v && v !== t.text) onUpdate({ text: v })
+    setEditing(false)
+  }
+  const cancelEdit = () => setEditing(false)
 
   return (
     <div
@@ -107,16 +116,30 @@ function Row({ t, index, onToggle, onDelete, onUpdate }) {
         >
           <Check className="h-3 w-3" />
         </button>
-        <button
-          onDoubleClick={() => setExpanded((v) => !v)}
-          className={cn(
-            'min-w-0 flex-1 truncate text-left text-sm flex items-center',
-            t.done && 'text-muted line-through',
-          )}
-        >
+        <div className="min-w-0 flex-1 flex items-center">
           <span className="text-muted/50 font-mono text-xs mr-2 select-none shrink-0">{index + 1}.</span>
-          <span>{t.text}</span>
-        </button>
+          {editing ? (
+            <input
+              autoFocus
+              value={textDraft}
+              onChange={(e) => setTextDraft(e.target.value)}
+              onBlur={saveEdit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); saveEdit() }
+                if (e.key === 'Escape') cancelEdit()
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="min-w-0 flex-1 rounded border border-accent/60 bg-surface-2/60 px-1.5 py-0.5 text-sm outline-none"
+            />
+          ) : (
+            <span
+              onDoubleClick={() => setExpanded((v) => !v)}
+              className={cn('flex-1 min-w-0 truncate text-sm cursor-default', t.done && 'text-muted line-through')}
+            >
+              {t.text}
+            </span>
+          )}
+        </div>
         {t.notes && !expanded && (
           <StickyNote className="h-3 w-3 shrink-0 text-amber-400/80" />
         )}
@@ -130,6 +153,24 @@ function Row({ t, index, onToggle, onDelete, onUpdate }) {
           />
         )}
         <PriorityDot priority={t.priority} onCycle={cycleP} />
+        <button
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); startEdit() }}
+          className="text-muted opacity-0 transition-opacity hover:text-ink group-hover:opacity-100"
+          aria-label="Edit"
+          title="Edit"
+        >
+          <Pencil className="h-3 w-3" />
+        </button>
+        <button
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onDuplicate(t) }}
+          className="text-muted opacity-0 transition-opacity hover:text-ink group-hover:opacity-100"
+          aria-label="Duplicate"
+          title="Duplicate"
+        >
+          <Copy className="h-3 w-3" />
+        </button>
         <button
           onClick={() => onDelete(t.id)}
           className="text-muted opacity-0 transition-opacity hover:text-ink group-hover:opacity-100"
@@ -236,6 +277,21 @@ export function TodosWidget({ widget, variant }) {
   }
   const onDelete = (id) => deleteTodo(user.uid, id)
   const onUpdate = (id, patch) => updateTodo(user.uid, id, patch)
+  const onDuplicate = async (t) => {
+    try {
+      playPop()
+      await addTodo(user.uid, {
+        text: t.text,
+        modeId: t.modeId || activeModeId,
+        priority: t.priority,
+        notes: t.notes,
+        dueAt: t.dueAt,
+        subjectId: t.subjectId,
+      })
+    } catch (err) {
+      console.error('[todo] duplicate failed', err)
+    }
+  }
 
   const onDragEnd = ({ active: a, over }) => {
     if (!over || a.id === over.id) return
@@ -293,6 +349,7 @@ export function TodosWidget({ widget, variant }) {
                   onToggle={onToggle}
                   onDelete={onDelete}
                   onUpdate={(patch) => onUpdate(t.id, patch)}
+                  onDuplicate={onDuplicate}
                 />
               ))}
             </SortableContext>
