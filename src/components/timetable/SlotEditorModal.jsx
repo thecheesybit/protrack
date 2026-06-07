@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Trash2, CalendarPlus } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
@@ -9,7 +9,7 @@ import {
   DAYS,
   DAY_START_MIN,
   DAY_END_MIN,
-  minutesToLabel,
+  clampMin,
 } from '@/lib/time'
 import { addSlot, updateSlot, deleteSlot } from '@/services/timetableService'
 import {
@@ -18,9 +18,25 @@ import {
 } from '@/services/calendarService'
 import { cn } from '@/utils/cn'
 
-export function SlotEditorModal({ open, onClose, modeId: propModeId, slot }) {
+/** Convert minutes-from-midnight → "HH:MM" for <input type="time"> */
+function toTimeValue(min) {
+  if (min == null) return ''
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
+/** Parse "HH:MM" from <input type="time"> → minutes-from-midnight */
+function timeValueToMin(val) {
+  if (!val) return DAY_START_MIN
+  const [h, m] = val.split(':').map(Number)
+  return clampMin(h * 60 + (m || 0))
+}
+
+export function SlotEditorModal({ open, onClose, modeId: propModeId, slot, allModes }) {
   const { user } = useAuth()
   const modeId = slot?._modeId || propModeId
+  const [targetModeId, setTargetModeId] = useState(modeId)
   const [draft, setDraft] = useState(() => ({
     recurrenceType: 'weekly',
     recurrenceDays: [],
@@ -35,6 +51,7 @@ export function SlotEditorModal({ open, onClose, modeId: propModeId, slot }) {
 
   useEffect(() => {
     if (open) {
+      setTargetModeId(slot?._modeId || propModeId)
       setDraft({
         recurrenceType: 'weekly',
         recurrenceDays: [],
@@ -45,13 +62,7 @@ export function SlotEditorModal({ open, onClose, modeId: propModeId, slot }) {
         ...slot,
       })
     }
-  }, [open, slot])
-
-  const timeOptions = useMemo(() => {
-    const out = []
-    for (let m = DAY_START_MIN; m <= DAY_END_MIN; m += 15) out.push(m)
-    return out
-  }, [])
+  }, [open, slot, propModeId])
 
   if (!draft) return null
 
@@ -77,8 +88,9 @@ export function SlotEditorModal({ open, onClose, modeId: propModeId, slot }) {
         tag: draft.tag || '',
         tagStyle: draft.tagStyle || 'standard',
       }
-      if (isEdit) await updateSlot(user.uid, modeId, draft.id, payload)
-      else await addSlot(user.uid, modeId, payload)
+      const saveToMode = isEdit ? modeId : (targetModeId || modeId)
+      if (isEdit) await updateSlot(user.uid, saveToMode, draft.id, payload)
+      else await addSlot(user.uid, saveToMode, payload)
       onClose()
     } catch (err) {
       console.error('[timetable] save failed', err)
@@ -140,6 +152,24 @@ export function SlotEditorModal({ open, onClose, modeId: propModeId, slot }) {
         </>
       }
     >
+      {/* Mode selector — shown when creating in All Scopes view */}
+      {!isEdit && allModes?.length > 1 && (
+        <div className="mb-4">
+          <label className="mb-1.5 block text-xs font-medium text-muted">Mode</label>
+          <select
+            value={targetModeId || ''}
+            onChange={(e) => setTargetModeId(e.target.value)}
+            className="w-full rounded-xl border border-line bg-surface-2/60 px-2.5 py-2.5 text-sm outline-none focus:border-accent"
+          >
+            {allModes.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <label className="mb-1.5 block text-xs font-medium text-muted">Label</label>
       <input
         autoFocus
@@ -166,31 +196,25 @@ export function SlotEditorModal({ open, onClose, modeId: propModeId, slot }) {
         </div>
         <div>
           <label className="mb-1.5 block text-xs font-medium text-muted">From</label>
-          <select
-            value={draft.startMin}
-            onChange={(e) => patch({ startMin: Number(e.target.value) })}
+          <input
+            type="time"
+            value={toTimeValue(draft.startMin)}
+            onChange={(e) => patch({ startMin: timeValueToMin(e.target.value) })}
+            min={toTimeValue(DAY_START_MIN)}
+            max={toTimeValue(DAY_END_MIN)}
             className="w-full rounded-xl border border-line bg-surface-2/60 px-2.5 py-2.5 text-sm outline-none focus:border-accent"
-          >
-            {timeOptions.map((m) => (
-              <option key={m} value={m}>
-                {minutesToLabel(m)}
-              </option>
-            ))}
-          </select>
+          />
         </div>
         <div>
           <label className="mb-1.5 block text-xs font-medium text-muted">To</label>
-          <select
-            value={draft.endMin}
-            onChange={(e) => patch({ endMin: Number(e.target.value) })}
+          <input
+            type="time"
+            value={toTimeValue(draft.endMin)}
+            onChange={(e) => patch({ endMin: timeValueToMin(e.target.value) })}
+            min={toTimeValue(DAY_START_MIN)}
+            max={toTimeValue(DAY_END_MIN)}
             className="w-full rounded-xl border border-line bg-surface-2/60 px-2.5 py-2.5 text-sm outline-none focus:border-accent"
-          >
-            {timeOptions.map((m) => (
-              <option key={m} value={m}>
-                {minutesToLabel(m)}
-              </option>
-            ))}
-          </select>
+          />
         </div>
       </div>
 

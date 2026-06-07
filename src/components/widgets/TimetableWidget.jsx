@@ -61,10 +61,6 @@ export function TimetableWidget({ widget, variant }) {
   }
 
   const openEditor = (slot) => {
-    if (!slot.id && activeModeId === 'all') {
-      toast.error('Please select a specific mode to add sessions.')
-      return
-    }
     setEditingSlot(slot)
     setEditorOpen(true)
   }
@@ -76,11 +72,11 @@ export function TimetableWidget({ widget, variant }) {
       slotId: slot.id,
     })
   }
-  const quickAdd = () =>
+  const quickAdd = (startMin, endMin) =>
     openEditor({
       dayOfWeek: todayDow(),
-      startMin: DAY_START_MIN + 3 * 60,
-      endMin: DAY_START_MIN + 4 * 60,
+      startMin: startMin ?? DAY_START_MIN + 3 * 60,
+      endMin: endMin ?? DAY_START_MIN + 4 * 60,
       label: '',
       color: defaultColor,
     })
@@ -174,6 +170,7 @@ export function TimetableWidget({ widget, variant }) {
         onClose={() => setEditorOpen(false)}
         modeId={editingSlot?._modeId || (activeModeId === 'all' ? modes[0]?.id : activeModeId)}
         slot={editingSlot}
+        allModes={activeModeId === 'all' ? modes : undefined}
       />
 
       <NlQuickCapture

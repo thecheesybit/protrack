@@ -151,6 +151,14 @@ export function TimetableGrid({
     }
   }
 
+  /** Right-click anywhere on a column → open slot editor pre-filled at that time */
+  const onContextMenu = (day) => (e) => {
+    e.preventDefault()
+    const min = yToMin(e.clientY, e.currentTarget.getBoundingClientRect())
+    const endMin = Math.min(min + 60, DAY_END_MIN)
+    onCreate({ dayOfWeek: day, startMin: min, endMin, label: '', color: defaultColor })
+  }
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex border-b border-line/60 pb-2 pl-12">
@@ -196,6 +204,7 @@ export function TimetableGrid({
                 onPointerDown={onDown(day)}
                 onPointerMove={onMove}
                 onPointerUp={onUp}
+                onContextMenu={onContextMenu(day)}
                 className={cn(
                   'relative flex-1 touch-none border-l border-line/30',
                   day === today && 'bg-accent/5',

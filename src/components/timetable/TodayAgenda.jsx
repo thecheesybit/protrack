@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react'
 import { Plus } from 'lucide-react'
-import { DAY_FULL, todayDow, minutesToLabel, durationLabel, isSlotOnDay } from '@/lib/time'
+import { DAY_FULL, todayDow, minutesToLabel, durationLabel, isSlotOnDay, snap } from '@/lib/time'
 import { useNowMinutes } from '@/hooks/useNowMinutes'
 
 // -------------------------------------------------------------------
@@ -97,8 +97,19 @@ export function TodayAgenda({ slots, onOpenSlot, onAdd }) {
             ))}
           </div>
 
-          {/* Grid column — hour lines + slot blocks + now indicator */}
-          <div className="relative flex-1 border-l border-line/25">
+          {/* Grid column — hour lines + slot blocks + now indicator.
+              Clicking empty space pre-fills that time in the creation modal. */}
+          <div
+            className="relative flex-1 cursor-crosshair border-l border-line/25"
+            onClick={(e) => {
+              // Only fire when clicking the background, not a slot block
+              if (e.target !== e.currentTarget) return
+              const rect = e.currentTarget.getBoundingClientRect()
+              const raw = START + (e.clientY - rect.top) / PX
+              const startMin = Math.max(START, Math.min(END - 30, snap(raw, 5)))
+              onAdd(startMin, Math.min(startMin + 60, END))
+            }}
+          >
 
             {/* Hour grid lines */}
             {HOUR_TICKS.map((h) => (
@@ -128,7 +139,7 @@ export function TodayAgenda({ slots, onOpenSlot, onAdd }) {
               return (
                 <button
                   key={slot.id}
-                  onClick={() => onOpenSlot(slot)}
+                  onClick={(e) => { e.stopPropagation(); onOpenSlot(slot) }}
                   title={`${slot.label || 'Session'} · ${minutesToLabel(slot.startMin)} – ${minutesToLabel(slot.endMin)}`}
                   className="group absolute inset-x-1 overflow-hidden rounded-md border-l-2 px-1.5 py-0.5 text-left text-white shadow-sm transition-all hover:brightness-110 hover:shadow-md active:scale-[0.98]"
                   style={{
