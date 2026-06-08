@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.8.0 — 2026-06-08
+
+### Added
+- **Deep Focus music / scene picker on the lock screen:** the curated background scenes (Forest River, Lo-fi Jazz, mantras, …) plus an Off switch are now reachable directly from the Deep Focus lock screen — tap the music button under the volume slider to start or change the ambient scene without leaving focus or opening Settings. Previously the picker only lived in the maximized Focus widget and in Settings, so it was effectively hidden once a session started. The preset list is now a single shared source (`src/lib/focusScenes.js`) used by the lock screen, the Focus widget, and Settings so it can never drift between surfaces.
+
 ## v1.7.2 — 2026-06-08
 
 ### Fixed

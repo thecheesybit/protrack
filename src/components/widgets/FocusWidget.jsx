@@ -10,6 +10,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { updateSettings } from '@/services/userService'
 import { logFailedFocusSession } from '@/services/focusService'
 import { addLedgerEntry } from '@/services/ledgerService'
+import { VIDEO_PRESETS } from '@/lib/focusScenes'
 
 import f1 from '@/assets/f1.jpg'
 import f2 from '@/assets/f2.jpg'
@@ -21,13 +22,6 @@ const FOCUS_IMAGES = [f1, f2, f3, f4, f5]
 
 const PRESETS = [15, 25, 50]
 
-const VIDEO_PRESETS = [
-  { label: 'Forest River', url: 'https://youtu.be/1GzKYoyrlkA' },
-  { label: 'Varanasi Temple', url: 'https://youtu.be/tAk4G8Rs1RQ' },
-  { label: 'Lo-fi Jazz', url: 'https://youtu.be/BYTxPFj44uo' },
-  { label: 'Hari Mantra', url: 'https://youtu.be/6x5xtNhOts0' },
-  { label: 'Shiv Stuti', url: 'https://youtu.be/AQFI1PJfV_I' },
-]
 const AMBIENTS = [
   { id: 'none', label: 'Off', Icon: VolumeX },
   { id: 'rain', label: 'Rain', Icon: CloudRain },

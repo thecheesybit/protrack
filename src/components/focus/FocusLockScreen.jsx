@@ -8,6 +8,7 @@ import {
   Volume2,
   VolumeX,
   Volume1,
+  Music2,
   TreePine,
   Sunrise,
   Sun,
@@ -20,6 +21,8 @@ import { useYouTubeVolume } from '@/hooks/useYouTubeVolume'
 import { bandForHour, CHRONO_ACCENT } from '@/hooks/useChronoTheme'
 import { logFailedFocusSession } from '@/services/focusService'
 import { addLedgerEntry } from '@/services/ledgerService'
+import { updateSettings } from '@/services/userService'
+import { VIDEO_PRESETS } from '@/lib/focusScenes'
 import { withAlpha } from '@/lib/color'
 import { cn } from '@/utils/cn'
 
@@ -115,8 +118,10 @@ export function FocusLockScreen() {
 
   const focusAudioUrl = useStore((s) => s.settings?.focusAudioUrl || '')
   const focusVideoEnabled = useStore((s) => s.settings?.focusVideoEnabled !== false)
+  const customPresets = useStore((s) => s.settings?.customPresets || [])
 
   const [confirmQuit, setConfirmQuit] = useState(false)
+  const [showScenes, setShowScenes] = useState(false)
 
   const iframeRef = useRef(null)
   const onIframeLoad = useYouTubeVolume(iframeRef, volume, muted)
@@ -149,6 +154,25 @@ export function FocusLockScreen() {
   const onMain = () => (status === 'running' ? pause() : resume())
 
   const VolIcon = muted || volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2
+
+  // Live ambient-scene picker — available right here in the lock screen so the
+  // user can start/change the background music or scene without leaving Deep
+  // Focus. Writes settings; the iframe above reacts to focusAudioUrl.
+  const allScenes = [...VIDEO_PRESETS, ...customPresets]
+  const activeScene = allScenes.find((p) => p.url === focusAudioUrl)
+  const activeSceneLabel = activeScene?.label || (focusAudioUrl ? 'Custom scene' : 'No music')
+
+  const applyScene = async (url) => {
+    if (!user?.uid) return
+    try {
+      await updateSettings(
+        user.uid,
+        url ? { focusAudioUrl: url, focusVideoEnabled: true } : { focusAudioUrl: '' },
+      )
+    } catch (err) {
+      console.error('[focus] scene change failed', err)
+    }
+  }
 
   const giveUp = async () => {
     const st = useStore.getState()
@@ -323,6 +347,63 @@ export function FocusLockScreen() {
               <span className="w-9 text-right text-[11px] tabular-nums text-white/50">
                 {muted ? 'Off' : `${Math.round(volume * 100)}%`}
               </span>
+            </div>
+
+            {/* Scene / music picker — start or change the ambient background live */}
+            <div className="w-full">
+              <button
+                onClick={() => setShowScenes((v) => !v)}
+                className="flex w-full items-center justify-between rounded-xl border border-white/15 bg-white/5 px-3.5 py-2.5 text-xs font-semibold text-white/80 backdrop-blur-md transition-colors hover:border-white/30 hover:text-white"
+              >
+                <span className="flex items-center gap-2">
+                  <Music2 className="h-4 w-4" />
+                  {activeSceneLabel}
+                </span>
+                <span className="text-[11px] font-medium text-white/40">
+                  {showScenes ? 'Hide' : 'Music'}
+                </span>
+              </button>
+
+              <AnimatePresence initial={false}>
+                {showScenes && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-2 grid grid-cols-3 gap-1.5">
+                      {allScenes.map((p) => (
+                        <button
+                          key={p.url}
+                          onClick={() => applyScene(p.url)}
+                          title={p.label}
+                          className={cn(
+                            'truncate rounded-lg border px-2 py-1.5 text-[10px] transition-colors',
+                            focusAudioUrl === p.url
+                              ? 'border-white/60 bg-white/15 text-white'
+                              : 'border-white/15 bg-white/5 text-white/70 hover:border-white/40 hover:text-white',
+                          )}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => applyScene('')}
+                        className={cn(
+                          'truncate rounded-lg border px-2 py-1.5 text-[10px] transition-colors',
+                          !focusAudioUrl
+                            ? 'border-white/60 bg-white/15 text-white'
+                            : 'border-white/15 bg-white/5 text-white/70 hover:border-white/40 hover:text-white',
+                        )}
+                      >
+                        Off
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {/* Give up */}

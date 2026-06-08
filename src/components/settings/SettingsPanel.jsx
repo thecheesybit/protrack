@@ -44,16 +44,9 @@ import { isDesktop, desktopBridge } from '@/desktop/isDesktop'
 import { CHANGELOG } from '@/content/changelog'
 import { CREATOR } from '@/lib/constants'
 import { APP_VERSION } from '@/lib/version'
+import { VIDEO_PRESETS } from '@/lib/focusScenes'
 import { cn } from '@/utils/cn'
 import { isCalendarConnected, connectCalendar, clearCalToken } from '@/services/calendarService'
-
-const VIDEO_PRESETS = [
-  { label: 'Forest River', url: 'https://youtu.be/1GzKYoyrlkA' },
-  { label: 'Varanasi Temple', url: 'https://youtu.be/tAk4G8Rs1RQ' },
-  { label: 'Lo-fi Jazz', url: 'https://youtu.be/BYTxPFj44uo' },
-  { label: 'Hari Mantra', url: 'https://youtu.be/6x5xtNhOts0' },
-  { label: 'Shiv Stuti', url: 'https://youtu.be/AQFI1PJfV_I' },
-]
 
 function prettyAccelerator(acc) {
   if (!acc) return ''
