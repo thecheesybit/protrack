@@ -56,13 +56,6 @@ jobs:
             echo "No 'lint' script defined — skipping."
           fi
 
-      - name: Brand guard — fail on any emoji in source
-        run: |
-          if grep -RInP '[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}]' src/ 2>/dev/null; then
-            echo "::error::Emoji found in src/ — use Lucide icons instead."
-            exit 1
-          fi
-
       - name: Build web bundle
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}

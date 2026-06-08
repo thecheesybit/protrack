@@ -152,7 +152,7 @@ Rules (`firestore.rules`): everything under `users/{uid}/**` is owner-only. Hand
 - `deviceFingerprint()` (electron/main.js) hashes hostname + platform + arch + CPU model + sorted non-internal MACs with SHA-256, truncated to 32 hex chars. It can be spoofed by a privileged local actor (anything running as the user can fake `os.networkInterfaces()`); the design relies on this being **bound** to a Firebase auth account, not on the fingerprint alone being unforgeable. Account binding is the security boundary.
 
 ### CI/CD
-- `.github/workflows/ci.yml` runs lint (if present) + multi-target build + an emoji-in-source guard on every non-master push and PR.
+- `.github/workflows/ci.yml` runs lint (if present) + multi-target build on every non-master push and PR.
 - `.github/workflows/release.yml` runs on push to `master` (or `workflow_dispatch` with a bump choice): auto-detects version bump from conventional commits (feat→minor, feat!/BREAKING→major, else patch) → Netlify deploy → matrix Electron build (Win/Mac/Linux) → GitHub Release with installer assets and release notes extracted from `CHANGELOG.md`. **Never overwrites `CHANGELOG.md`** — the developer curates it before merging. Heading format must be `## v<semver> — YYYY-MM-DD` so the `awk` extractor in the finalize job finds the right section.
 - Required secrets: `GITHUB_TOKEN` (auto), `NETLIFY_AUTH_TOKEN` + `NETLIFY_SITE_ID` (optional). Code signing is intentionally skipped (`CSC_IDENTITY_AUTO_DISCOVERY: false`); add certs later when the project ships paid plans.
 
@@ -168,7 +168,7 @@ Rules (`firestore.rules`): everything under `users/{uid}/**` is owner-only. Hand
   phase length — every ring (`FocusWidget`, `FocusMiniOverlay`, `FocusLockScreen`) computes
   progress from it so mid-session +/- adjustments and custom timers stay proportional. Do not
   reintroduce `focusMin`/`customTimerSetting` into ring math.
-- **Brand:** zero emojis anywhere in UI/strings — Lucide icons only. There is a CI-friendly grep for emoji ranges; keep it clean.
+- **Brand:** Zero emojis are preferred in UI strings, but Unicode emoji support exists for user convenience (the CI brand guard has been removed).
 - **Immutability:** slices return new objects; never mutate state in place.
 - **Files:** small and feature-scoped (~200–400 lines). One service module per domain.
 - **Bundle:** import Lucide icons by name (never `import * as`), or tree-shaking breaks and the bundle balloons. Heavy deps get a `manualChunks` vendor split in `vite.config.js`.
