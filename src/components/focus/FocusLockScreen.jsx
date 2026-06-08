@@ -139,16 +139,16 @@ export function FocusLockScreen() {
   const total = phaseTotalSec || secondsLeft || 1
   const progress = Math.min(1, Math.max(0, 1 - secondsLeft / total))
 
-  // NOTE: mute is intentionally NOT in the URL — toggling it would reload the
-  // iframe and restart the video. Mute/volume are driven via the IFrame API
-  // (useYouTubeVolume) so the scene plays continuously.
+  // mute=1: cross-origin iframes are subject to Chromium's autoplay policy
+  // independently of the main window's autoplayPolicy. Unmuted autoplay in a
+  // cross-origin iframe gets blocked even in Electron. Starting muted guarantees
+  // the video begins; useYouTubeVolume sends unMute + setVolume via the IFrame
+  // API once onReady fires so audio plays normally.
   //
-  // Do NOT add `&origin=` here. The packaged app loads over file://, so
-  // window.location.origin is "file://" — YouTube's enablejsapi origin check
-  // then rejects that opaque origin and the player never starts (black screen).
-  // postMessage volume control still works without it (see useYouTubeVolume).
+  // Do NOT add `&origin=` — the packaged app loads over file://, which is an
+  // opaque origin that YouTube's enablejsapi check rejects (black screen).
   const embedUrl = videoId
-    ? `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&loop=1&playlist=${videoId}&controls=0&rel=0&showinfo=0&modestbranding=1&enablejsapi=1`
+    ? `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=0&rel=0&showinfo=0&modestbranding=1&enablejsapi=1`
     : ''
 
   const onMain = () => (status === 'running' ? pause() : resume())

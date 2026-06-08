@@ -282,10 +282,11 @@ function BackgroundAudioPlayer() {
 
   if (youtubeMatch) {
     const videoId = youtubeMatch[1]
-    // No `&origin=` — the packaged app runs over file:// (origin "file://"),
-    // which YouTube's enablejsapi check rejects, killing playback. Volume sync
-    // via postMessage (YTVolumeSync) works without it.
-    const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&loop=1&playlist=${videoId}&enablejsapi=1`
+    // mute=1: cross-origin iframes block unmuted autoplay independently of the
+    // main window's autoplayPolicy. Starting muted guarantees playback; YTVolumeSync
+    // sends unMute via the IFrame API once onReady fires. No &origin= — file://
+    // is an opaque origin YouTube rejects.
+    const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&enablejsapi=1`
     return (
       <YTVolumeSync iframeRef={iframeRef} volume={volume}>
         <iframe
@@ -317,18 +318,24 @@ function BackgroundAudioPlayer() {
 function YTVolumeSync({ iframeRef, volume, children }) {
   const apiReadyRef = useRef(false)
 
-  const postVolume = (vol) => {
+  const postCommand = (func, args = []) => {
     const iframe = iframeRef.current
     if (!iframe?.contentWindow) return
     try {
-      iframe.contentWindow.postMessage(JSON.stringify({
-        event: 'command',
-        func: 'setVolume',
-        args: [Math.round(vol * 100)],
-      }), 'https://www.youtube.com')
+      iframe.contentWindow.postMessage(
+        JSON.stringify({ event: 'command', func, args }),
+        'https://www.youtube.com',
+      )
     } catch {
       /* cross-origin until YT API initialises */
     }
+  }
+
+  const postVolume = (vol) => {
+    postCommand('setVolume', [Math.round(vol * 100)])
+    // unMute explicitly — embed starts muted (mute=1) for reliable autoplay;
+    // this is the only way to restore audio without reloading the iframe.
+    postCommand('unMute')
   }
 
   // Listen for the YT API ready signal, then sync the current volume
