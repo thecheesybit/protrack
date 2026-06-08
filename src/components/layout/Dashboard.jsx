@@ -29,6 +29,7 @@ import { HydrationReminder } from '@/components/wellness/HydrationReminder'
 import { SupportModal } from '@/components/support/SupportModal'
 import aiGif from '@/assets/ai.gif'
 import { APP_VERSION } from '@/lib/version'
+import { DEFAULT_FOCUS_SCENE } from '@/lib/focusScenes'
 import { cn } from '@/utils/cn'
 
 /**
@@ -264,13 +265,16 @@ const YT_PATTERN = /(?:youtube\.fr\/|youtube\.com\/(?:watch\?v=|embed\/|v\/)|you
 
 function BackgroundAudioPlayer() {
   const status = useStore((s) => s.status)
-  const focusAudioUrl = useStore((s) => s.settings?.focusAudioUrl || '')
+  const userFocusAudioUrl = useStore((s) => s.settings?.focusAudioUrl || '')
   const muted = useStore((s) => s.muted)
   const volume = useStore((s) => s.volume)
   const focusLocked = useStore((s) => s.focusLocked)
   const focusVideoEnabled = useStore((s) => s.settings?.focusVideoEnabled !== false)
   const iframeRef = useRef(null)
   const audioRef = useRef(null)
+
+  // Use default scene if no user preference is set
+  const focusAudioUrl = userFocusAudioUrl || DEFAULT_FOCUS_SCENE.url
 
   if (status !== 'running' || !focusAudioUrl || muted) return null
 

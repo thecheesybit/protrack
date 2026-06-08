@@ -14,3 +14,6 @@ export const VIDEO_PRESETS = [
   { label: 'Hari Mantra', url: 'https://youtu.be/6x5xtNhOts0' },
   { label: 'Shiv Stuti', url: 'https://youtu.be/AQFI1PJfV_I' },
 ]
+
+// Default scene for new users (Forest River ambient)
+export const DEFAULT_FOCUS_SCENE = VIDEO_PRESETS[0]

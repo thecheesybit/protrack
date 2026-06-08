@@ -22,7 +22,7 @@ import { bandForHour, CHRONO_ACCENT } from '@/hooks/useChronoTheme'
 import { logFailedFocusSession } from '@/services/focusService'
 import { addLedgerEntry } from '@/services/ledgerService'
 import { updateSettings } from '@/services/userService'
-import { VIDEO_PRESETS } from '@/lib/focusScenes'
+import { VIDEO_PRESETS, DEFAULT_FOCUS_SCENE } from '@/lib/focusScenes'
 import { withAlpha } from '@/lib/color'
 import { cn } from '@/utils/cn'
 
@@ -116,9 +116,12 @@ export function FocusLockScreen() {
   const setVolume = useStore((s) => s.adjustTrackVolume)
   const toggleMute = useStore((s) => s.toggleMute)
 
-  const focusAudioUrl = useStore((s) => s.settings?.focusAudioUrl || '')
+  const userFocusAudioUrl = useStore((s) => s.settings?.focusAudioUrl || '')
   const focusVideoEnabled = useStore((s) => s.settings?.focusVideoEnabled !== false)
   const customPresets = useStore((s) => s.settings?.customPresets || [])
+
+  // Use default scene if no user preference is set
+  const focusAudioUrl = userFocusAudioUrl || DEFAULT_FOCUS_SCENE.url
 
   const [confirmQuit, setConfirmQuit] = useState(false)
   const [showScenes, setShowScenes] = useState(false)
@@ -174,7 +177,7 @@ export function FocusLockScreen() {
   // Focus. Writes settings; the iframe above reacts to focusAudioUrl.
   const allScenes = [...VIDEO_PRESETS, ...customPresets]
   const activeScene = allScenes.find((p) => p.url === focusAudioUrl)
-  const activeSceneLabel = activeScene?.label || (focusAudioUrl ? 'Custom scene' : 'No music')
+  const activeSceneLabel = activeScene?.label || (userFocusAudioUrl ? 'Custom scene' : 'Default scene')
 
   const applyScene = async (url) => {
     if (!user?.uid) return
