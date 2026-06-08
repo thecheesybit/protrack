@@ -413,6 +413,11 @@ function createTray() {
   }
 }
 
+// Must be called before app.whenReady() — webPreferences.autoplayPolicy only
+// affects the main renderer. Cross-origin iframes (YouTube) run in a separate
+// renderer process and require this Chromium-level switch to autoplay with audio.
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
+
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
   app.quit()
