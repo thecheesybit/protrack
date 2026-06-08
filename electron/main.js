@@ -119,22 +119,33 @@ function toggleWindow() {
 }
 
 /**
+ * Transient network/CDN failures (GitHub 502/503/504, timeouts, DNS, dropped
+ * sockets) are routine and self-heal on the next check — they must NOT be shown
+ * to the user as "Update failed". electron-updater polls GitHub's releases feed,
+ * which 504s during GitHub hiccups; we classify those, retry quietly, and only
+ * surface genuinely persistent errors (e.g. a missing/corrupt release).
+ */
+const TRANSIENT_UPDATE_ERROR =
+  /(\b50[234]\b|gateway\s*time-?out|ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|socket hang up|network|net::|timed?\s*out)/i
+function isTransientUpdateError(err) {
+  return TRANSIENT_UPDATE_ERROR.test(String(err?.message || err || ''))
+}
+
+/**
  * Over-the-air updates from the GitHub release feed. Older clients download the
  * new build automatically; the renderer surfaces progress + a one-click restart
  * via the Dynamic Island (see useAutoUpdate). Only runs in packaged builds.
  *
- * Hardening (v1.1.6+):
- *  - Every autoUpdater event is forwarded to the renderer (was just 4) so the
- *    Settings panel can show real status instead of "did anything happen?".
- *  - Errors are NO LONGER silently swallowed — they reach the renderer and
- *    surface on the diagnostics row.
- *  - Initial check kicks off at ready-to-show with a 15-min retry cadence for
- *    the first hour, then settles into hourly checks. Trades a bit of bandwidth
- *    for catching brand-new releases within minutes of publish.
- *  - Window-focus event also triggers a check (re-activating the app after
- *    sleep / lock typically means hours have passed).
- *  - Manual `update:check` IPC handler lets the user force a check from
- *    Settings without restarting.
+ * Hardening:
+ *  - Transient GitHub/network errors (504s, timeouts) are retried with backoff
+ *    and NEVER reach the UI — only persistent errors surface. This is what kept
+ *    flashing "Update failed" at users during GitHub's intermittent 504s.
+ *  - Lifecycle events are forwarded to the renderer so Settings shows real
+ *    status; the initial check runs immediately, then every 15 min for the
+ *    first hour, then hourly.
+ *  - Focus re-checks are debounced (≥10 min apart) so window-flipping doesn't
+ *    hammer GitHub and multiply the odds of a transient failure.
+ *  - Manual `update:check` IPC lets the user force a check from Settings.
  */
 function initAutoUpdate() {
   if (!app.isPackaged) return
@@ -142,6 +153,7 @@ function initAutoUpdate() {
   autoUpdater.autoInstallOnAppQuit = true
 
   const send = (channel, payload) => win?.webContents.send(channel, payload)
+  let lastCheckAt = 0
 
   autoUpdater.on('checking-for-update', () => send('update:checking', {}))
   autoUpdater.on('update-available', (info) =>
@@ -157,27 +169,39 @@ function initAutoUpdate() {
     send('update:downloaded', { version: info?.version }),
   )
   autoUpdater.on('error', (err) => {
+    // checkForUpdates() emits 'error' AND rejects; this handler owns what the
+    // UI sees, the check() wrapper below owns the quiet backoff retries.
+    if (isTransientUpdateError(err)) {
+      console.warn('[autoUpdate] transient error:', String(err?.message || err).split('\n')[0])
+      return
+    }
     console.error('[autoUpdate] error', err)
     send('update:error', { message: String(err?.message || err) })
   })
 
-  const check = () => autoUpdater.checkForUpdates().catch((err) => {
-    console.error('[autoUpdate] check failed', err)
-    send('update:error', { message: String(err?.message || err) })
-  })
+  const check = (attempt = 0) => {
+    lastCheckAt = Date.now()
+    autoUpdater.checkForUpdates().catch((err) => {
+      if (isTransientUpdateError(err) && attempt < 3) {
+        const delay = [30, 90, 180][attempt] * 1000
+        console.warn(`[autoUpdate] transient check failure; retrying in ${delay / 1000}s`)
+        setTimeout(() => check(attempt + 1), delay)
+      }
+    })
+  }
 
   check() // immediate
-  // Aggressive for the first hour (every 15 min) — catches brand-new releases
-  // before the user notices anything is off.
-  const fast = setInterval(check, 15 * 60 * 1000)
+  const fast = setInterval(() => check(), 15 * 60 * 1000)
   setTimeout(() => {
     clearInterval(fast)
-    setInterval(check, 60 * 60 * 1000)
+    setInterval(() => check(), 60 * 60 * 1000)
   }, 60 * 60 * 1000)
 
-  // Re-checking on focus is cheap and catches the case where the user left the
-  // app idle overnight (or the laptop slept through several check intervals).
-  app.on('browser-window-focus', check)
+  // Re-check on focus, debounced — catches the wake-from-sleep case without
+  // hammering GitHub when the user flips between windows.
+  app.on('browser-window-focus', () => {
+    if (Date.now() - lastCheckAt > 10 * 60 * 1000) check()
+  })
 }
 
 function createWindow() {
@@ -528,6 +552,15 @@ ipcMain.handle('update:check', async () => {
       currentVersion: app.getVersion(),
     }
   } catch (err) {
-    return { ok: false, error: String(err?.message || err) }
+    const transient = isTransientUpdateError(err)
+    return {
+      ok: false,
+      transient,
+      // Don't dump a raw 504 HTML/headers blob into a toast — give a calm,
+      // actionable message for the common "GitHub is briefly down" case.
+      error: transient
+        ? 'GitHub is temporarily unavailable. Please try again in a moment.'
+        : String(err?.message || err),
+    }
   }
 })

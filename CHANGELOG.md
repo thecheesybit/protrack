@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.7.2 — 2026-06-08
+
+### Fixed
+- **Auto-update "504 Gateway Time-out" spam:** the installed app polls GitHub's releases feed, which intermittently 504s during GitHub-side hiccups; every blip surfaced an alarming "Update failed" notice with a raw HTML/headers dump. Transient network/CDN errors (502/503/504, timeouts, dropped sockets, DNS) are now retried quietly with backoff and never shown — only genuinely persistent errors surface. Focus-triggered checks are debounced (≥10 min apart) to stop hammering GitHub, and the manual "Check for updates" returns a calm "GitHub is temporarily unavailable" message instead of the raw error.
+
 ## v1.7.1 — 2026-06-08
 
 ### Fixed
