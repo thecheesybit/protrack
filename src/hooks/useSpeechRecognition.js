@@ -109,7 +109,7 @@ export function useSpeechRecognition() {
           vadIntervalRef.current = null
         }
         if (audioCtxRef.current) {
-          try { audioCtxRef.current.close() } catch (e) {}
+          try { audioCtxRef.current.close() } catch { /* already closed */ }
           audioCtxRef.current = null
         }
         stream.getTracks().forEach((t) => t.stop())
@@ -181,7 +181,7 @@ export function useSpeechRecognition() {
       vadIntervalRef.current = null
     }
     if (audioCtxRef.current) {
-      try { audioCtxRef.current.close() } catch (e) {}
+      try { audioCtxRef.current.close() } catch { /* already closed */ }
       audioCtxRef.current = null
     }
     if (mrRef.current && mrRef.current.state !== 'inactive') {

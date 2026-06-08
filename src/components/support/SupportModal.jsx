@@ -5,6 +5,7 @@ import { ContributionCard } from './ContributionCard'
 import { WallOfHonor } from './WallOfHonor'
 import { useIsPatreon } from '@/hooks/useWall'
 import { CREATOR } from '@/lib/constants'
+import { APP_VERSION } from '@/lib/version'
 import { AnimatePresence, motion } from 'framer-motion'
 import { isDesktop, desktopBridge } from '@/desktop/isDesktop'
 
@@ -116,7 +117,7 @@ export function SupportModal({ open, onClose }) {
 
               {/* Footer info/branding */}
               <div className="mt-4 border-t border-line/30 pt-3 text-center text-[10px] text-muted/70 font-semibold select-none uppercase tracking-wider">
-                PRO TRACK · {appInfo?.version ? `v${appInfo.version}` : 'v1.0.0'}
+                PRO TRACK · v{appInfo?.version || APP_VERSION}
               </div>
             </div>
           </motion.div>

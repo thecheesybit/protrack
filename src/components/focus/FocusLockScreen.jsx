@@ -137,8 +137,13 @@ export function FocusLockScreen() {
   // NOTE: mute is intentionally NOT in the URL — toggling it would reload the
   // iframe and restart the video. Mute/volume are driven via the IFrame API
   // (useYouTubeVolume) so the scene plays continuously.
+  //
+  // Do NOT add `&origin=` here. The packaged app loads over file://, so
+  // window.location.origin is "file://" — YouTube's enablejsapi origin check
+  // then rejects that opaque origin and the player never starts (black screen).
+  // postMessage volume control still works without it (see useYouTubeVolume).
   const embedUrl = videoId
-    ? `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&loop=1&playlist=${videoId}&controls=0&rel=0&showinfo=0&modestbranding=1&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`
+    ? `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&loop=1&playlist=${videoId}&controls=0&rel=0&showinfo=0&modestbranding=1&enablejsapi=1`
     : ''
 
   const onMain = () => (status === 'running' ? pause() : resume())

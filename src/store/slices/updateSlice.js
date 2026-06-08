@@ -1,7 +1,8 @@
 /**
- * Auto-update state, fed by Electron's autoUpdater via useAutoUpdate. When an
- * update is downloading or ready, the UpdateGate obscures the dashboard and
- * background operations are frozen — older clients cannot keep running stale.
+ * Auto-update state, fed by Electron's autoUpdater via useAutoUpdate. Status
+ * transitions are surfaced as non-blocking Dynamic Island notifications
+ * (download progress → "ready to install"); a running focus session is paused
+ * while an update downloads. Settings also reads this for its diagnostics row.
  *
  * @typedef {'idle'|'checking'|'up-to-date'|'downloading'|'ready'|'error'} UpdateStatus
  */

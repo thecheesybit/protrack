@@ -9,7 +9,6 @@ import { LinkGcalPage } from '@/components/auth/LinkGcalPage'
 import { PatreonApprovePage } from '@/components/patreon/PatreonApprovePage'
 import { Workspace } from '@/components/layout/Workspace'
 import { FirestoreSyncProvider } from '@/providers/FirestoreSyncProvider'
-import { UpdateGate } from '@/components/desktop/UpdateGate'
 import { SetupRequired } from '@/components/common/SetupRequired'
 import { useAutoUpdate } from '@/hooks/useAutoUpdate'
 import { useFontScale } from '@/hooks/useFontScale'
@@ -75,7 +74,7 @@ function Routes() {
 }
 
 export default function App() {
-  useAutoUpdate() // desktop-only: bridges Electron autoUpdater → UpdateGate
+  useAutoUpdate() // desktop-only: bridges Electron autoUpdater → Dynamic Island
   useFontScale() // mirrors uiSlice.fontScale → <html data-font-scale>
 
   return (

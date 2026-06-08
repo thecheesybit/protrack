@@ -2,6 +2,14 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import electron from 'vite-plugin-electron/simple'
 import path from 'node:path'
+import { readFileSync } from 'node:fs'
+
+// Single source of truth for the app version: package.json. Baked in at build
+// time as __APP_VERSION__ so the renderer (web AND desktop) can always show the
+// real version without a hardcoded literal drifting out of sync.
+const pkgVersion = JSON.parse(
+  readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf-8'),
+).version
 
 // Build the Electron layer only when explicitly targeting desktop, so the
 // normal `vite build` for Netlify stays a pure web build.
@@ -36,6 +44,7 @@ export default defineConfig({
   // marketing LandingPage from ever flashing inside the desktop app.
   define: {
     __IS_ELECTRON__: JSON.stringify(withElectron),
+    __APP_VERSION__: JSON.stringify(pkgVersion),
   },
   resolve: {
     alias: {

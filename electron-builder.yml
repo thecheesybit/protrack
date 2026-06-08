@@ -44,8 +44,18 @@ mac:
   category: public.app-category.productivity
   icon: build/icon.png
 
+# Space-free artifact names. The productName "PRO TRACK" contains a space; left
+# to the default, electron-builder emits "PRO TRACK-…dmg" and GitHub rewrites the
+# uploaded asset's spaces to dots ("PRO.TRACK-…"), so it no longer matches the
+# url/path electron-updater reads from latest-mac.yml / latest-linux.yml → 404 on
+# update. Hyphenated names keep on-disk == latest*.yml == GitHub asset (Windows
+# nsis already does this via its own artifactName above).
+dmg:
+  artifactName: PRO-TRACK-${version}-${arch}.${ext}
+
 linux:
   target:
     - AppImage
   category: Productivity
   icon: build/icon.png
+  artifactName: PRO-TRACK-${version}-${arch}.${ext}

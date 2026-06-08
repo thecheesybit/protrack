@@ -28,6 +28,7 @@ import { SettingsPanel } from '@/components/settings/SettingsPanel'
 import { HydrationReminder } from '@/components/wellness/HydrationReminder'
 import { SupportModal } from '@/components/support/SupportModal'
 import aiGif from '@/assets/ai.gif'
+import { APP_VERSION } from '@/lib/version'
 import { cn } from '@/utils/cn'
 
 /**
@@ -281,7 +282,10 @@ function BackgroundAudioPlayer() {
 
   if (youtubeMatch) {
     const videoId = youtubeMatch[1]
-    const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&loop=1&playlist=${videoId}&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`
+    // No `&origin=` — the packaged app runs over file:// (origin "file://"),
+    // which YouTube's enablejsapi check rejects, killing playback. Volume sync
+    // via postMessage (YTVolumeSync) works without it.
+    const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&loop=1&playlist=${videoId}&enablejsapi=1`
     return (
       <YTVolumeSync iframeRef={iframeRef} volume={volume}>
         <iframe
@@ -431,7 +435,7 @@ function DynamicBranding({ firstName }) {
           {line1}
           {line1.toLowerCase().includes('welcome') && (
             <span className="rounded bg-accent/10 px-1 py-0.2 text-[9px] font-bold text-accent normal-case tracking-normal">
-              v1.4.0
+              v{APP_VERSION}
             </span>
           )}
         </p>
@@ -448,7 +452,7 @@ function DynamicBranding({ firstName }) {
         {text}
         {phase === 'done' && (
           <span className="rounded bg-accent/10 px-1 py-0.2 text-[9px] font-bold text-accent normal-case tracking-normal">
-            v1.4.0
+            v{APP_VERSION}
           </span>
         )}
         {phase === 'typing' && (

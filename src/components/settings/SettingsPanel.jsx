@@ -43,6 +43,7 @@ import { ensureNotificationPermission } from '@/lib/notify'
 import { isDesktop, desktopBridge } from '@/desktop/isDesktop'
 import { CHANGELOG } from '@/content/changelog'
 import { CREATOR } from '@/lib/constants'
+import { APP_VERSION } from '@/lib/version'
 import { cn } from '@/utils/cn'
 import { isCalendarConnected, connectCalendar, clearCalToken } from '@/services/calendarService'
 
@@ -1476,7 +1477,7 @@ export function SettingsPanel() {
                     </div>
 
                     <div className="rounded-2xl border border-line bg-surface-2/30 p-4 text-[10px] text-muted text-center">
-                      Last Updated: June 2026 · v{appInfo?.version || '1.4.0'}
+                      Last Updated: June 2026 · v{appInfo?.version || APP_VERSION}
                     </div>
                   </div>
                 )}

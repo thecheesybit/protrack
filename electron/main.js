@@ -120,8 +120,8 @@ function toggleWindow() {
 
 /**
  * Over-the-air updates from the GitHub release feed. Older clients download the
- * new build automatically; the renderer's UpdateGate obscures the dashboard and
- * offers a one-click restart. Only runs in packaged builds.
+ * new build automatically; the renderer surfaces progress + a one-click restart
+ * via the Dynamic Island (see useAutoUpdate). Only runs in packaged builds.
  *
  * Hardening (v1.1.6+):
  *  - Every autoUpdater event is forwarded to the renderer (was just 4) so the
@@ -205,6 +205,9 @@ function createWindow() {
       sandbox: false, // ESM preload needs sandbox off; contextIsolation still isolates
       // Keep the Pomodoro tick, alarms, and chimes alive when minimized/in tray.
       backgroundThrottling: false,
+      // Let the Deep Focus YouTube scene autoplay (with sound) without a click —
+      // explicit so a future Electron default change can't silently break it.
+      autoplayPolicy: 'no-user-gesture-required',
       // Lock zoom at 1.0 so the renderer renders at native device pixels.
       // Any cached zoomLevel from a prior session is ignored.
       zoomFactor: 1.0,

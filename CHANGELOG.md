@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.7.1 — 2026-06-08
+
+### Fixed
+- **Version display drift:** the version shown in the top-left workspace branding (and a couple of Settings/Support fallbacks) was hardcoded to an old `v1.4.0` / `v1.0.0`. The version is now baked in from `package.json` at build time (`__APP_VERSION__`, exposed via `src/lib/version.js`) so every surface always shows the real shipped version in both the web and desktop builds.
+- **Deep Focus video background:** the curated YouTube scene stopped playing in the packaged app. The embed URL had gained an `&origin=` parameter; in the installed build the renderer runs over `file://`, so the origin is the opaque `"file://"` and YouTube's `enablejsapi` check rejected the player (black screen). Removed the parameter from both the lock-screen and background-audio iframes — playback is restored and postMessage volume control is unaffected — and pinned `autoplayPolicy: no-user-gesture-required` on the Electron window.
+- **Auto-update release pipeline:** a transient electron-builder binary-mirror 504 on a single OS used to fail the whole `build-electron` job — which `finalize` depends on — and silently drop the entire release (v1.6.0 was lost this way). The build step now retries up to 3× and the electron / electron-builder binary downloads are cached across runs.
+- **macOS/Linux auto-update 404:** installer artifact names now use hyphens (`PRO-TRACK-…`) instead of the space-containing product name, so the on-disk file, `latest-*.yml`, and the uploaded GitHub asset all match (GitHub rewrites spaces in asset names to dots, which broke the updater's download).
+- **Lint gate:** fixed two `no-empty` errors in `useSpeechRecognition.js` and several unused-variable warnings so `npm run lint` is green again.
+
+### Changed
+- Removed the dead `UpdateGate` overlay (superseded by Dynamic Island update notifications in v1.6.0) and refreshed the related docstrings.
+
 ## v1.6.0 — 2026-06-08
 
 ### Added
