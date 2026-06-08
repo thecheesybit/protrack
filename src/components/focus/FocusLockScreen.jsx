@@ -242,7 +242,6 @@ export function FocusLockScreen() {
                   src={embedUrl}
                   onLoad={onIframeLoad}
                   allow="autoplay; fullscreen"
-                  sandbox="allow-scripts allow-same-origin allow-presentation"
                   title="Focus Background"
                   style={{
                     border: 0,

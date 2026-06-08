@@ -291,8 +291,8 @@ function createWindow() {
         " wss://*.firebaseio.com https://*.firebaseio.com" +
         " https://generativelanguage.googleapis.com" +
         " https://securetoken.googleapis.com https://identitytoolkit.googleapis.com",
-      "frame-src https://www.youtube.com https://*.firebaseapp.com https://accounts.google.com",
-      "media-src 'self' blob: mediastream:",
+      "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://*.firebaseapp.com https://accounts.google.com",
+      "media-src 'self' blob: mediastream: https://www.youtube.com https://www.youtube-nocookie.com https://*.googlevideo.com",
       "worker-src blob: 'self'",
     ].join('; ')
     ses.webRequest.onHeadersReceived((details, callback) => {

@@ -300,7 +300,6 @@ function BackgroundAudioPlayer() {
         <iframe
           ref={iframeRef}
           src={embedUrl}
-          sandbox="allow-scripts allow-same-origin allow-presentation"
           className="sr-only pointer-events-none"
           allow="autoplay"
           title="Background Audio Stream"
