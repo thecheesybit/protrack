@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '@/store/useStore'
 import { useFocusEngine } from '@/hooks/useFocusEngine'
@@ -318,7 +318,7 @@ function BackgroundAudioPlayer() {
 function YTVolumeSync({ iframeRef, volume, children }) {
   const apiReadyRef = useRef(false)
 
-  const postCommand = (func, args = []) => {
+  const postCommand = useCallback((func, args = []) => {
     const iframe = iframeRef.current
     if (!iframe?.contentWindow) return
     try {
@@ -329,14 +329,14 @@ function YTVolumeSync({ iframeRef, volume, children }) {
     } catch {
       /* cross-origin until YT API initialises */
     }
-  }
+  }, [iframeRef])
 
-  const postVolume = (vol) => {
+  const postVolume = useCallback((vol) => {
     postCommand('setVolume', [Math.round(vol * 100)])
     // unMute explicitly — embed starts muted (mute=1) for reliable autoplay;
     // this is the only way to restore audio without reloading the iframe.
     postCommand('unMute')
-  }
+  }, [postCommand])
 
   // Listen for the YT API ready signal, then sync the current volume
   useEffect(() => {
@@ -352,8 +352,7 @@ function YTVolumeSync({ iframeRef, volume, children }) {
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [volume, postVolume])
 
   // On iframe load, register the listener with the YT IFrame API
   const handleLoad = () => {
@@ -370,8 +369,7 @@ function YTVolumeSync({ iframeRef, volume, children }) {
 
   useEffect(() => {
     if (apiReadyRef.current) postVolume(volume)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [volume])
+  }, [volume, postVolume])
 
   return React.cloneElement(children, { onLoad: handleLoad })
 }

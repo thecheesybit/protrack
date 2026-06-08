@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 
 /**
  * Syncs volume (0-1) and mute state to a YouTube iframe via the IFrame Player
@@ -19,7 +19,7 @@ import { useEffect, useRef } from 'react'
 export function useYouTubeVolume(iframeRef, volume, muted) {
   const readyRef = useRef(false)
 
-  const post = (func, args = []) => {
+  const post = useCallback((func, args = []) => {
     const iframe = iframeRef.current
     if (!iframe?.contentWindow) return
     try {
@@ -30,13 +30,13 @@ export function useYouTubeVolume(iframeRef, volume, muted) {
     } catch {
       /* cross-origin until the API initialises */
     }
-  }
+  }, [iframeRef])
 
-  const sync = () => {
+  const sync = useCallback(() => {
     post('setVolume', [Math.round((volume ?? 0.5) * 100)])
     if (muted) post('mute')
     else post('unMute')
-  }
+  }, [post, volume, muted])
 
   // Listen for the YT API ready signal, then push the current state.
   useEffect(() => {
@@ -54,14 +54,12 @@ export function useYouTubeVolume(iframeRef, volume, muted) {
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [sync])
 
   // Re-sync whenever volume or mute changes (once the API is ready).
   useEffect(() => {
     if (readyRef.current) sync()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [volume, muted])
+  }, [sync])
 
   // Register this frame with the IFrame API on load.
   return () => {
