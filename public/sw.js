@@ -37,8 +37,9 @@ self.addEventListener('fetch', (event) => {
     caches.match(event.request).then((response) => {
       // Stale-while-revalidate strategy for the app shell
       const fetchPromise = fetch(event.request).then((networkResponse) => {
+        const responseToCache = networkResponse.clone()
         caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, networkResponse.clone())
+          cache.put(event.request, responseToCache)
         })
         return networkResponse
       }).catch(() => response) // If network fails, just return cache

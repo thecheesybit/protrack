@@ -20,15 +20,25 @@ import {
   Calendar,
   Film,
   Quote,
+  ChevronDown,
+  X,
+  ShieldCheck,
 } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
 import { useTheme } from '@/hooks/useTheme'
 import { useStore } from '@/store/useStore'
-import { Sheet } from '@/components/ui/Sheet'
 import { Button } from '@/components/ui/Button'
-import { getGeminiKey, setGeminiKey, hasGeminiKey } from '@/services/geminiService'
-import { updateSettings } from '@/services/userService'
+import {
+  getGeminiKey, setGeminiKey,
+  getElevenLabsKey, setElevenLabsKey,
+  getOpenAIKey, setOpenAIKey,
+  getAnthropicKey, setAnthropicKey,
+  getDeepSeekKey, setDeepSeekKey,
+  hasApiKey
+} from '@/services/geminiService'
+import { updateSettings, updateProfile } from '@/services/userService'
 import { ensureNotificationPermission } from '@/lib/notify'
 import { isDesktop, desktopBridge } from '@/desktop/isDesktop'
 import { CHANGELOG } from '@/content/changelog'
@@ -53,14 +63,22 @@ function prettyAccelerator(acc) {
     .join(' + ')
 }
 
-function Section({ title, icon, children }) {
+function Section({ title, icon, children, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="border-b border-line/50 px-5 py-4">
-      <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+    <div className="border-b border-line/50">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-5 py-3.5 text-sm font-semibold transition-colors hover:bg-surface-2/30"
+      >
         {icon}
-        {title}
-      </div>
-      {children}
+        <span className="flex-1 text-left">{title}</span>
+        <ChevronDown
+          className={cn('h-4 w-4 shrink-0 text-muted transition-transform', open && 'rotate-180')}
+        />
+      </button>
+      {open && <div className="px-5 pb-4">{children}</div>}
     </div>
   )
 }
@@ -76,6 +94,47 @@ function ShortcutRow({ label, acc }) {
   )
 }
 
+function renderMarkdownInline(text) {
+  if (!text) return ''
+  const parts = []
+  let lastIndex = 0
+  const regex = /(\*\*.*?\*\*|`.*?`)/g
+  let match
+
+  while ((match = regex.exec(text)) !== null) {
+    const matchIndex = match.index
+    const matchText = match[0]
+
+    if (matchIndex > lastIndex) {
+      parts.push(text.substring(lastIndex, matchIndex))
+    }
+
+    if (matchText.startsWith('**') && matchText.endsWith('**')) {
+      const boldContent = matchText.slice(2, -2)
+      parts.push(
+        <strong key={matchIndex} className="font-semibold text-ink">
+          {boldContent}
+        </strong>
+      )
+    } else if (matchText.startsWith('`') && matchText.endsWith('`')) {
+      const codeContent = matchText.slice(1, -1)
+      parts.push(
+        <code key={matchIndex} className="rounded bg-accent/15 px-1 py-0.2 text-[10px] text-accent font-mono border border-accent/10">
+          {codeContent}
+        </code>
+      )
+    }
+
+    lastIndex = regex.lastIndex
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex))
+  }
+
+  return parts
+}
+
 export function SettingsPanel() {
   const { user, deleteAccount } = useAuth()
   const { theme, setTheme, toggleTheme } = useTheme()
@@ -84,10 +143,14 @@ export function SettingsPanel() {
   const settings = useStore((s) => s.settings)
   const fontScale = useStore((s) => s.fontScale)
   const setFontScale = useStore((s) => s.setFontScale)
+  const fontFamily = useStore((s) => s.fontFamily)
+  const setFontFamily = useStore((s) => s.setFontFamily)
   const updateStatus = useStore((s) => s.updateStatus)
   const updateVersion = useStore((s) => s.updateVersion)
   const updateError = useStore((s) => s.updateError)
+  const userDoc = useStore((s) => s.userDoc)
   const [checking, setChecking] = useState(false)
+  const [activeTab, setActiveTab] = useState('account')
 
   const checkForUpdates = async () => {
     if (!isDesktop || !desktopBridge?.update?.check) return
@@ -119,10 +182,15 @@ export function SettingsPanel() {
   // Deep Focus video
   const [focusUrlInput, setFocusUrlInput] = useState('')
   const [focusVideoEnabled, setFocusVideoEnabled] = useState(true)
+  const [customPresets, setCustomPresets] = useState([])
+  const [newPresetUrl, setNewPresetUrl] = useState('')
+  const [newPresetLabel, setNewPresetLabel] = useState('')
 
   // Zen & Motivation
   const [zenEnabled, setZenEnabled] = useState(true)
-  const [zenDurationSec, setZenDurationSec] = useState(30)
+  const [zenDurationSec, setZenDurationSec] = useState(60)
+  const [zenCategories, setZenCategories] = useState(['stoic', 'philosophy', 'productivity', 'proverbs', 'hindi_urdu', 'modern'])
+  const [zenVoiceEnabled, setZenVoiceEnabled] = useState(true)
 
   // Google Calendar Connection state
   const [calConnected, setCalConnected] = useState(isCalendarConnected())
@@ -131,9 +199,29 @@ export function SettingsPanel() {
   const [deleteStage, setDeleteStage] = useState(0)
   const [deleteInput, setDeleteInput] = useState('')
 
+  // Profile fields state
+  const [profileFirstName, setProfileFirstName] = useState('')
+  const [profileLastName, setProfileLastName] = useState('')
+  const [profileAge, setProfileAge] = useState('')
+  const [profileGender, setProfileGender] = useState('male')
+  const [profilePhoto, setProfilePhoto] = useState('')
+
+  // Other AI Provider Keys state
+  const [openaiInput, setOpenaiInput] = useState('')
+  const [anthropicInput, setAnthropicInput] = useState('')
+  const [elevenlabsInput, setElevenlabsInput] = useState('')
+  const [deepseekInput, setDeepseekInput] = useState('')
+  const [expandedProvider, setExpandedProvider] = useState(null)
+  const [aiPreferred, setAiPreferred] = useState('auto')
+
   useEffect(() => {
     if (open) {
       setKeyInput(getGeminiKey())
+      setOpenaiInput(getOpenAIKey())
+      setAnthropicInput(getAnthropicKey())
+      setElevenlabsInput(getElevenLabsKey())
+      setDeepseekInput(getDeepSeekKey())
+      setAiPreferred(localStorage.getItem('protrack:ai_preferred_provider') || 'auto')
       setHydration(settings?.hydrationIntervalMin || 60)
       setNotifOn(
         typeof Notification !== 'undefined' && Notification.permission === 'granted',
@@ -141,8 +229,33 @@ export function SettingsPanel() {
       setCalConnected(isCalendarConnected())
       setFocusUrlInput(settings?.focusAudioUrl || '')
       setFocusVideoEnabled(settings?.focusVideoEnabled !== false)
+      setCustomPresets(settings?.customPresets || [])
       setZenEnabled(settings?.zenEnabled !== false)
-      setZenDurationSec(Math.round((settings?.zenDuration || 30000) / 1000))
+      setZenDurationSec(Math.round((settings?.zenDuration || 60000) / 1000))
+      
+      const allCats = ['stoic', 'philosophy', 'productivity', 'proverbs', 'hindi_urdu', 'modern']
+      setZenCategories(settings?.zenCategories || allCats)
+      setZenVoiceEnabled(settings?.zenVoiceEnabled !== false)
+      
+      // Initialize profile fields on settings load
+      let fName = userDoc?.profile?.firstName || ''
+      let lName = userDoc?.profile?.lastName || ''
+      if (!fName && !lName) {
+        const dName = userDoc?.profile?.displayName || user?.displayName || ''
+        const parts = dName.trim().split(/\s+/)
+        fName = parts[0] || 'Explorer'
+        lName = parts.slice(1).join(' ') || ''
+      }
+      setProfileFirstName(fName)
+      setProfileLastName(lName)
+      setProfileAge(userDoc?.profile?.age || '')
+      setProfileGender(userDoc?.profile?.gender || 'male')
+      
+      // Auto take Google photo URL if present and local photoURL is empty
+      const googlePhoto = user?.photoURL || ''
+      const currentPhoto = userDoc?.profile?.photoURL || googlePhoto || `https://api.dicebear.com/7.x/bottts/svg?seed=${user?.uid}`
+      setProfilePhoto(currentPhoto)
+      
       if (isDesktop && desktopBridge?.appInfo) {
         desktopBridge.appInfo().then(setAppInfo).catch(() => setAppInfo(null))
       }
@@ -150,11 +263,85 @@ export function SettingsPanel() {
       setDeleteStage(0)
       setDeleteInput('')
     }
-  }, [open, settings])
+  }, [open, settings, userDoc, user])
+
+  const saveProfile = async () => {
+    try {
+      const displayName = `${profileFirstName.trim()} ${profileLastName.trim()}`.trim()
+      await updateProfile(user.uid, {
+        firstName: profileFirstName.trim(),
+        lastName: profileLastName.trim(),
+        displayName,
+        age: Number(profileAge) || '',
+        gender: profileGender,
+        photoURL: profilePhoto,
+      })
+      toast.success('Profile updated successfully')
+    } catch (err) {
+      toast.error('Failed to update profile: ' + err.message)
+    }
+  }
 
   const saveKey = () => {
     setGeminiKey(keyInput)
     toast.success(keyInput ? 'Gemini key saved' : 'Gemini key cleared')
+  }
+
+  const saveOpenAIKey = () => {
+    setOpenAIKey(openaiInput)
+    toast.success(openaiInput ? 'OpenAI key saved' : 'OpenAI key cleared')
+  }
+
+  const saveAnthropicKey = () => {
+    setAnthropicKey(anthropicInput)
+    toast.success(anthropicInput ? 'Anthropic key saved' : 'Anthropic key cleared')
+  }
+
+  const saveElevenLabsKey = () => {
+    setElevenLabsKey(elevenlabsInput)
+    toast.success(elevenlabsInput ? 'ElevenLabs key saved' : 'ElevenLabs key cleared')
+  }
+
+  const saveDeepSeekKey = () => {
+    setDeepSeekKey(deepseekInput)
+    toast.success(deepseekInput ? 'DeepSeek key saved' : 'DeepSeek key cleared')
+  }
+
+  const savePreferredProvider = (val) => {
+    setAiPreferred(val)
+    localStorage.setItem('protrack:ai_preferred_provider', val)
+    toast.success(`Preferred AI provider set to ${val === 'auto' ? 'Automatic' : val}`)
+  }
+
+  const toggleZenCategory = async (cat) => {
+    let next = [...zenCategories]
+    if (next.includes(cat)) {
+      if (next.length > 1) {
+        next = next.filter((c) => c !== cat)
+      } else {
+        toast.error('At least one category must be active')
+        return
+      }
+    } else {
+      next.push(cat)
+    }
+    setZenCategories(next)
+    try {
+      await updateSettings(user.uid, { zenCategories: next })
+    } catch (err) {
+      console.error('[settings] zenCategories save failed', err)
+    }
+  }
+
+  const toggleZenVoice = async () => {
+    const next = !zenVoiceEnabled
+    setZenVoiceEnabled(next)
+    try {
+      await updateSettings(user.uid, { zenVoiceEnabled: next })
+      toast.success(next ? 'Zen voice enabled' : 'Zen voice disabled')
+    } catch (err) {
+      console.error('[settings] zenVoice save failed', err)
+    }
   }
 
   const saveHydration = async (val) => {
@@ -200,8 +387,16 @@ export function SettingsPanel() {
 
   const saveFocusAudio = async (url) => {
     setFocusUrlInput(url)
+    // Selecting a non-empty URL implicitly enables the video background
+    // (in case it was previously turned off).
+    if (url) setFocusVideoEnabled(true)
     try {
-      await updateSettings(user.uid, { focusAudioUrl: url })
+      await updateSettings(
+        user.uid,
+        url
+          ? { focusAudioUrl: url, focusVideoEnabled: true }
+          : { focusAudioUrl: '' },
+      )
     } catch (err) {
       console.error('[settings] focusAudio save failed', err)
     }
@@ -214,6 +409,63 @@ export function SettingsPanel() {
       await updateSettings(user.uid, { focusVideoEnabled: next })
     } catch (err) {
       console.error('[settings] focusVideo save failed', err)
+    }
+  }
+
+  const addCustomPreset = async () => {
+    if (!newPresetUrl.trim()) {
+      toast.error('Please enter a video URL')
+      return
+    }
+    if (customPresets.length >= 5) {
+      toast.error('You can add a maximum of 5 custom scenes')
+      return
+    }
+    
+    let label = newPresetLabel.trim()
+    if (!label) {
+      label = `Custom Scene ${customPresets.length + 1}`
+    }
+    
+    const newPreset = {
+      label,
+      url: newPresetUrl.trim(),
+    }
+    
+    const updated = [...customPresets, newPreset]
+    setCustomPresets(updated)
+    setNewPresetUrl('')
+    setNewPresetLabel('')
+    
+    try {
+      await updateSettings(user.uid, {
+        customPresets: updated,
+        focusAudioUrl: newPreset.url,
+        focusVideoEnabled: true
+      })
+      toast.success('Custom focus scene added')
+    } catch (err) {
+      toast.error('Failed to save preset: ' + err.message)
+    }
+  }
+
+  const deleteCustomPreset = async (index, e) => {
+    e.stopPropagation()
+    const presetToDelete = customPresets[index]
+    const updated = customPresets.filter((_, i) => i !== index)
+    setCustomPresets(updated)
+    
+    const wasActive = focusUrlInput === presetToDelete.url
+    const patch = { customPresets: updated }
+    if (wasActive) {
+      patch.focusAudioUrl = ''
+    }
+    
+    try {
+      await updateSettings(user.uid, patch)
+      toast.success('Custom focus scene deleted')
+    } catch (err) {
+      toast.error('Failed to delete preset: ' + err.message)
     }
   }
 
@@ -239,15 +491,21 @@ export function SettingsPanel() {
   const handleDeleteWipe = async () => {
     if (deleteStage === 0) {
       setDeleteStage(1)
+      setDeleteInput('')
       return
     }
     if (deleteStage === 1) {
+      if (deleteInput !== 'WIPE') {
+        toast.error("Please type 'WIPE' to confirm.")
+        return
+      }
       setDeleteStage(2)
+      setDeleteInput('')
       return
     }
     if (deleteStage === 2) {
-      if (deleteInput !== 'DELETE') {
-        toast.error("Please type 'DELETE' exactly to confirm Wiping.")
+      if (deleteInput !== user?.email) {
+        toast.error(`Please type '${user?.email}' exactly to confirm.`)
         return
       }
       try {
@@ -271,395 +529,967 @@ export function SettingsPanel() {
     }
   }
 
+  if (!open) return null
+
+  const tabs = [
+    { id: 'account', label: 'Account', icon: Settings },
+    { id: 'appearance', label: 'Appearance', icon: Sun },
+    { id: 'audio', label: 'Sound & Alerts', icon: Volume2 },
+    { id: 'scene', label: 'Focus Scene', icon: Film },
+    { id: 'zen', label: 'Zen & Quotes', icon: Quote },
+    { id: 'integrations', label: 'Integrations', icon: KeyRound },
+    { id: 'updates', label: 'Updates', icon: RefreshCw },
+    { id: 'system', label: 'System & Safety', icon: AlertTriangle },
+    { id: 'legal', label: 'Privacy & Terms', icon: ShieldCheck },
+  ]
+
+  const ActiveIcon = tabs.find((t) => t.id === activeTab)?.icon || Settings
+  const activeLabel = tabs.find((t) => t.id === activeTab)?.label || 'Settings'
+
   return (
-    <Sheet
-      open={open}
-      onClose={() => setSettingsOpen(false)}
-      title="Settings"
-      icon={<Settings className="h-5 w-5 text-muted" />}
-    >
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        
-        {/* SECTION 1: Account Infrastructure */}
-        <Section title="Account Infrastructure" icon={<Settings className="h-4 w-4 text-accent" />}>
-          <div className="space-y-3">
-            <div className="rounded-xl border border-line bg-surface-2/20 px-3.5 py-2.5 text-xs text-muted">
-              Signed in as: <span className="font-semibold text-ink">{user?.email}</span>
-            </div>
-            
-            {isDesktop && (
-              <button
-                onClick={checkForUpdates}
-                disabled={checking || updateStatus === 'downloading' || updateStatus === 'ready'}
-                className="flex w-full items-center justify-between rounded-xl border border-line bg-surface-2/40 px-3.5 py-2.5 text-sm transition-colors hover:border-accent/40 disabled:opacity-60"
-              >
-                <span className="flex items-center gap-2">
-                  <RefreshCw className={cn('h-3.5 w-3.5', checking && 'animate-spin')} />
-                  Check for updates
-                </span>
-                <span className="text-xs text-muted">
-                  {updateStatus === 'checking' && 'Checking…'}
-                  {updateStatus === 'up-to-date' && 'Up to date'}
-                  {updateStatus === 'downloading' && `Downloading v${updateVersion}…`}
-                  {updateStatus === 'ready' && `v${updateVersion} ready — restart`}
-                  {updateStatus === 'error' && 'Check failed'}
-                  {updateStatus === 'idle' && 'Click to check'}
-                </span>
-              </button>
-            )}
-            {updateError && (
-              <p className="mt-1 text-xs text-rose-400">{updateError}</p>
-            )}
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-4 md:p-8"
+        >
+          {/* Backdrop click to close */}
+          <div className="absolute inset-0" onClick={() => setSettingsOpen(false)} />
 
-            {isDesktop && appInfo?.shortcuts && (
-              <div className="space-y-2">
-                <ShortcutRow label="Show / hide window" acc={appInfo.shortcuts.toggleWindow} />
-                <ShortcutRow label="Pause / resume focus" acc={appInfo.shortcuts.toggleFocus} />
+          {/* Main Card */}
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+            className="relative flex h-full w-full max-w-5xl max-h-[85vh] flex-col overflow-hidden rounded-3xl border border-line bg-surface/90 shadow-glass backdrop-blur-3xl md:flex-row"
+          >
+            {/* Sidebar Navigation */}
+            <div className="flex w-full shrink-0 flex-col border-b border-line/60 bg-surface-2/15 md:w-64 md:border-b-0 md:border-r">
+              {/* Header */}
+              <div className="flex items-center gap-2.5 px-6 py-5">
+                <Settings className="h-5 w-5 text-accent animate-spin-slow" />
+                <h3 className="font-bold tracking-tight text-ink text-base">Settings</h3>
               </div>
-            )}
 
-            <div className="flex flex-col gap-1 rounded-xl border border-line bg-surface-2/20 p-3 text-xs text-muted">
-              <p>PRO TRACK {appInfo?.version ? `v${appInfo.version}` : ''} — a calm, all-in-one productivity workspace.</p>
-              <a
-                href={CREATOR.githubUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-1 inline-flex items-center gap-1.5 font-semibold text-accent hover:underline"
-              >
-                <Github className="h-3.5 w-3.5" />
-                Crafted by {CREATOR.name}
-                <ExternalLink className="h-3 w-3" />
-              </a>
-            </div>
-          </div>
-        </Section>
-
-        {/* SECTION 2: Display & Chrono-Theme Configurations */}
-        <Section title="Display & Chrono-Theme Configurations" icon={<Sun className="h-4 w-4 text-accent" />}>
-          <div className="space-y-4">
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold text-muted">Theme Preference</label>
-              <button
-                onClick={toggleTheme}
-                className="flex w-full items-center justify-between rounded-xl border border-line bg-surface-2/40 px-3.5 py-2.5 text-sm"
-              >
-                <span>Theme</span>
-                <span className="font-medium capitalize text-accent">{theme === 'auto' ? 'Auto (Time of Day)' : theme}</span>
-              </button>
+              {/* Navigation list */}
+              <nav className="flex flex-row gap-1 overflow-x-auto px-4 pb-3 md:flex-col md:overflow-x-visible md:pb-6 md:pe-2">
+                {tabs.map((tab) => {
+                  const TabIcon = tab.icon
+                  const active = activeTab === tab.id
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={cn(
+                        'flex items-center gap-3 rounded-xl px-4 py-2.5 text-xs font-semibold tracking-wide transition-all duration-200 whitespace-nowrap md:w-full',
+                        active
+                          ? 'bg-accent/10 text-accent border border-accent/20'
+                          : 'text-muted border border-transparent hover:bg-surface-2 hover:text-ink'
+                      )}
+                    >
+                      <TabIcon className={cn('h-4 w-4 shrink-0', active ? 'text-accent' : 'text-muted')} />
+                      {tab.label}
+                    </button>
+                  )
+                })}
+              </nav>
             </div>
 
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold text-muted">Workspace Scale</label>
-              <div className="flex gap-1.5" role="radiogroup" aria-label="Font size">
-                {[
-                  { key: 'compact', label: 'Compact' },
-                  { key: 'standard', label: 'Standard' },
-                  { key: 'large', label: 'Large' },
-                ].map((opt) => (
-                  <button
-                    key={opt.key}
-                    role="radio"
-                    aria-checked={fontScale === opt.key}
-                    onClick={() => setFontScale(opt.key)}
-                    className={cn(
-                      'flex-1 rounded-lg border py-2 text-sm transition-colors',
-                      fontScale === opt.key
-                        ? 'border-accent/50 bg-accent/15 text-accent'
-                        : 'border-line text-muted hover:text-ink',
-                    )}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </Section>
-
-        {/* SECTION 3: Audio Profiles & Event Chimes */}
-        <Section title="Audio Profiles & Event Chimes" icon={<Volume2 className="h-4 w-4 text-accent" />}>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <button
-                onClick={toggleSounds}
-                className="flex w-full items-center justify-between rounded-xl border border-line bg-surface-2/40 px-3.5 py-2.5 text-sm"
-              >
-                <span>UI Sound Effects & Event Chimes</span>
-                <span className={cn('font-medium', soundsOn ? 'text-emerald-400' : 'text-muted')}>
-                  {soundsOn ? 'Enabled' : 'Muted'}
-                </span>
-              </button>
-              
-              <button
-                onClick={enableNotifications}
-                disabled={notifOn}
-                className="flex w-full items-center justify-between rounded-xl border border-line bg-surface-2/40 px-3.5 py-2.5 text-sm disabled:opacity-70"
-              >
-                <span>Desktop notifications</span>
-                <span className={cn('font-medium', notifOn ? 'text-emerald-400' : 'text-accent')}>
-                  {notifOn ? 'Enabled' : 'Enable'}
-                </span>
-              </button>
-            </div>
-
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold text-muted font-medium">Hydration Check Frequency</label>
-              <div className="flex gap-1.5">
-                {[30, 45, 60, 90].map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => saveHydration(m)}
-                    className={cn(
-                      'flex-1 rounded-lg border py-2 text-sm transition-colors',
-                      hydration === m
-                        ? 'border-accent/50 bg-accent/15 text-accent'
-                        : 'border-line text-muted hover:text-ink',
-                    )}
-                  >
-                    {m}m
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </Section>
-
-        {/* SECTION 4: Deep Focus Video */}
-        <Section title="Deep Focus Scene" icon={<Film className="h-4 w-4 text-accent" />}>
-          <div className="space-y-3">
-            <p className="text-[11px] text-muted">
-              Plays a YouTube video as a fullscreen background behind the focus timer.
-              Select a preset or paste any YouTube URL.
-            </p>
-
-            {/* Preset grid */}
-            <div className="grid grid-cols-2 gap-1.5">
-              {VIDEO_PRESETS.map((p) => (
-                <button
-                  key={p.url}
-                  onClick={() => saveFocusAudio(p.url)}
-                  className={cn(
-                    'rounded-xl border px-3 py-2 text-left text-xs transition-colors',
-                    focusUrlInput === p.url
-                      ? 'border-accent/50 bg-accent/15 text-accent'
-                      : 'border-line bg-surface-2/40 text-muted hover:border-accent/40 hover:text-ink',
-                  )}
-                >
-                  {p.label}
-                </button>
-              ))}
-              <button
-                onClick={() => saveFocusAudio('')}
-                className={cn(
-                  'rounded-xl border px-3 py-2 text-left text-xs transition-colors',
-                  !focusUrlInput
-                    ? 'border-accent/50 bg-accent/15 text-accent'
-                    : 'border-line bg-surface-2/40 text-muted hover:border-accent/40 hover:text-ink',
-                )}
-              >
-                Off / None
-              </button>
-            </div>
-
-            {/* Custom URL */}
-            <input
-              type="url"
-              value={focusUrlInput}
-              onChange={(e) => setFocusUrlInput(e.target.value)}
-              onBlur={() => saveFocusAudio(focusUrlInput.trim())}
-              placeholder="Or paste a custom YouTube URL…"
-              className="w-full rounded-xl border border-line bg-surface-2/60 px-3.5 py-2.5 text-sm outline-none focus:border-accent"
-            />
-
-            {/* Video visibility toggle */}
-            <button
-              onClick={toggleFocusVideo}
-              className="flex w-full items-center justify-between rounded-xl border border-line bg-surface-2/40 px-3.5 py-2.5 text-sm"
-            >
-              <span>Show as fullscreen background</span>
-              <span className={cn('font-medium', focusVideoEnabled ? 'text-emerald-400' : 'text-muted')}>
-                {focusVideoEnabled ? 'Enabled' : 'Disabled'}
-              </span>
-            </button>
-          </div>
-        </Section>
-
-        {/* SECTION 4b: Zen & Motivation */}
-        <Section title="Zen & Motivation" icon={<Quote className="h-4 w-4 text-accent" />}>
-          <div className="space-y-3">
-            {/* Toggle zen overlay on/off */}
-            <button
-              onClick={toggleZen}
-              className="flex w-full items-center justify-between rounded-xl border border-line bg-surface-2/40 px-3.5 py-2.5 text-sm"
-            >
-              <span>Motivational quotes when idle</span>
-              <span className={cn('font-medium', zenEnabled ? 'text-emerald-400' : 'text-muted')}>
-                {zenEnabled ? 'Enabled' : 'Disabled'}
-              </span>
-            </button>
-
-            {/* Quote display duration */}
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold text-muted">
-                Quote display time
-              </label>
-              <div className="flex gap-1.5">
-                {[15, 30, 60, 120].map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => saveZenDuration(s)}
-                    className={cn(
-                      'flex-1 rounded-lg border py-2 text-sm transition-colors',
-                      zenDurationSec === s
-                        ? 'border-accent/50 bg-accent/15 text-accent'
-                        : 'border-line text-muted hover:text-ink',
-                    )}
-                  >
-                    {s < 60 ? `${s}s` : `${s / 60}m`}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </Section>
-
-        {/* SECTION 5: Synchronization Keys */}
-        <Section title="Synchronization Keys" icon={<KeyRound className="h-4 w-4 text-accent" />}>
-          <div className="space-y-4">
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-muted">Gemini API Key</label>
-              <p className="mb-2 text-[11px] text-muted">
-                Powers AI companion features and audio voice-recognition intakes.
-              </p>
-              <div className="flex gap-2">
-                <input
-                  type="password"
-                  value={keyInput}
-                  onChange={(e) => setKeyInput(e.target.value)}
-                  placeholder="AIza…"
-                  className="flex-1 rounded-xl border border-line bg-surface-2/60 px-3.5 py-2.5 text-sm outline-none focus:border-accent"
-                />
-                <Button size="md" onClick={saveKey}>
-                  {hasGeminiKey() ? <Check className="h-4 w-4" /> : 'Save'}
-                </Button>
-              </div>
-              <a
-                href="https://aistudio.google.com/app/apikey"
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 inline-flex items-center gap-1 text-[11px] text-accent hover:underline"
-              >
-                Get a free key <ExternalLink className="h-3 w-3" />
-              </a>
-            </div>
-
-            <div className="border-t border-line/40 pt-4">
-              <label className="mb-1 block text-xs font-semibold text-muted">Google Calendar Sync</label>
-              <p className="mb-3 text-[11px] text-muted">
-                Synchronizes weekly agenda items and tasks using Netlify Edge functions.
-              </p>
-              {calConnected ? (
-                <div className="flex items-center justify-between rounded-xl border border-emerald-500/25 bg-emerald-500/5 px-3 py-2">
-                  <span className="flex items-center gap-2 text-xs font-semibold text-emerald-500">
-                    <Check className="h-4 w-4" /> Connected
-                  </span>
-                  <button
-                    onClick={handleDisconnectCal}
-                    className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-muted hover:text-ink hover:border-accent"
-                  >
-                    Unlink Calendar
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between rounded-xl border border-line bg-surface-2/20 px-3 py-2">
-                  <span className="flex items-center gap-2 text-xs text-muted">
-                    <Calendar className="h-4 w-4" /> Not Connected
-                  </span>
-                  <button
-                    onClick={handleConnectCal}
-                    className="rounded-lg bg-accent text-white px-3 py-1.5 text-xs font-semibold hover:bg-accent/90"
-                  >
-                    Connect Calendar
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </Section>
-
-        {/* SECTION 6: Danger Zone (Data Erasure) */}
-        <Section title="Danger Zone (Data Erasure)" icon={<AlertTriangle className="h-4 w-4 text-rose-500" />}>
-          <div className="space-y-3">
-            <p className="text-xs text-muted">
-              Wipes all local cache tokens (`protrack:auth_core`), removes keys, and permanently deletes your cloud profile.
-            </p>
-            
-            <div className="flex flex-col gap-2.5">
-              {deleteStage === 1 && (
-                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-500">
-                  <p className="font-bold">Are you absolutely sure?</p>
-                  <p className="mt-1">All syllabus progress and focus history will be lost forever.</p>
-                </div>
-              )}
-
-              {deleteStage === 2 && (
-                <div className="space-y-2 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-500">
-                  <p className="font-bold">Critical Confirmation Needed</p>
-                  <label className="block mt-1">Please type <span className="font-mono font-bold select-all bg-black/25 px-1 py-0.5 rounded">DELETE</span> below:</label>
-                  <input
-                    type="text"
-                    value={deleteInput}
-                    onChange={(e) => setDeleteInput(e.target.value)}
-                    placeholder="DELETE"
-                    className="w-full rounded-lg border border-red-500/30 bg-surface px-3 py-2 text-xs text-ink outline-none focus:border-red-500"
-                  />
-                </div>
-              )}
-
-              <button
-                onClick={handleDeleteWipe}
-                className={cn(
-                  "flex w-full items-center justify-center rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-colors",
-                  deleteStage === 0 && "border border-rose-500/20 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20",
-                  deleteStage === 1 && "bg-amber-500 text-white hover:bg-amber-600",
-                  deleteStage === 2 && "bg-red-500 text-white hover:bg-red-600"
-                )}
-              >
-                {deleteStage === 0 && "Delete Account & Wipe Workspace"}
-                {deleteStage === 1 && "I Understand, Confirm Deletion"}
-                {deleteStage === 2 && "Destroy Account & Wipe Cache"}
-              </button>
-            </div>
-            
-            {/* Interactive Changelog Window */}
-            <div className="mt-5 border-t border-line/40 pt-4">
-              <h4 className="text-xs font-semibold mb-2.5 flex items-center gap-1.5 text-ink">
-                <History className="h-4 w-4 text-accent" /> Changelog & System History
-              </h4>
-              <div className="max-h-56 overflow-y-auto rounded-xl border border-line bg-surface-2/30 p-3.5 text-xs space-y-4 shadow-inner">
-                {CHANGELOG.map((c, idx) => (
-                  <div key={idx} className="border-b border-line/30 pb-3 last:border-0 last:pb-0">
-                    <div className="font-bold flex items-center gap-1.5 mb-1.5">
-                      <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] text-accent">v{c.version}</span>
-                      {c.date && <span className="text-[10px] font-normal text-muted">{c.date}</span>}
-                    </div>
-                    {c.title && <div className="font-semibold text-ink/80 mb-1">{c.title}</div>}
-                    <ul className="list-disc pl-4 space-y-1 text-[11px] text-muted">
-                      {c.highlights.map((h, i) => (
-                        <li key={i}>{h}</li>
-                      ))}
-                    </ul>
+            {/* Content Pane */}
+            <div className="flex min-h-0 flex-1 flex-col p-6 md:p-8">
+              {/* Active Tab Header */}
+              <div className="mb-6 flex items-center justify-between border-b border-line/40 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/10 text-accent">
+                    <ActiveIcon className="h-5 w-5" />
                   </div>
-                ))}
+                  <div>
+                    <h2 className="text-lg font-bold text-ink leading-tight">{activeLabel}</h2>
+                    <p className="text-[11px] text-muted uppercase tracking-wider mt-0.5">Preferences</p>
+                  </div>
+                </div>
+
+                {/* Close Button */}
+                <button
+                  onClick={() => setSettingsOpen(false)}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-surface text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+                  aria-label="Close settings"
+                  title="Close Settings (Esc)"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Scrollable Content Area */}
+              <div className="min-h-0 flex-1 overflow-y-auto pr-2">
+                {activeTab === 'account' && (() => {
+                  const deriveUniqueCode = (uid) => {
+                    if (!uid) return '0000000'
+                    const hash = Array.from(uid).reduce((acc, char) => (acc << 5) - acc + char.charCodeAt(0), 0)
+                    return String(Math.abs(hash) % 9000000 + 1000000)
+                  }
+                  const uniqueCode = userDoc?.profile?.uniqueCode || deriveUniqueCode(user?.uid)
+                  const fullName = `${profileFirstName} ${profileLastName}`.trim() || 'Explorer'
+
+                  return (
+                    <div className="space-y-6">
+                      {/* User Code and Account Info Card */}
+                      <div className="flex flex-col sm:flex-row gap-4 items-center rounded-2xl border border-line bg-surface-2/15 p-5 shadow-sm">
+                        {/* Avatar Preview */}
+                        <div className="relative group flex-shrink-0">
+                          {profilePhoto ? (
+                            <img
+                              src={profilePhoto}
+                              alt="Avatar"
+                              className="h-16 w-16 rounded-2xl object-cover border border-line bg-surface-2"
+                              onError={(e) => {
+                                e.target.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${user?.uid}`
+                              }}
+                            />
+                          ) : (
+                            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-accent/10 border border-accent/15 text-accent text-xl font-bold">
+                              {profileFirstName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || '?'}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex-1 text-center sm:text-left space-y-1">
+                          <div className="text-[10px] font-bold text-muted/80 uppercase tracking-widest">Workspace Member</div>
+                          <h4 className="font-bold text-ink truncate text-sm">{fullName}</h4>
+                          <p className="text-[11px] text-muted truncate">{user?.email}</p>
+                        </div>
+
+                        {/* Unique Code Display */}
+                        <div className="rounded-xl border border-accent/25 bg-accent/5 px-4 py-2.5 text-center flex-shrink-0">
+                          <div className="text-[9px] font-bold text-accent uppercase tracking-widest">Unique Code</div>
+                          <div className="text-sm font-black text-ink tracking-widest mt-0.5">PT-{uniqueCode}</div>
+                        </div>
+                      </div>
+
+                      {/* Profile Editor Fields */}
+                      <div className="space-y-4 rounded-2xl border border-line bg-surface-2/10 p-5">
+                        <h4 className="text-xs font-bold uppercase tracking-widest text-muted">Edit Profile</h4>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {/* First Name Input */}
+                          <div className="space-y-1.5">
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-muted/80">First Name</label>
+                            <input
+                              type="text"
+                              value={profileFirstName}
+                              onChange={(e) => setProfileFirstName(e.target.value)}
+                              placeholder="Enter first name"
+                              className="w-full rounded-xl border border-line bg-surface/40 px-3 py-2 text-xs text-ink outline-none focus:border-accent/40"
+                            />
+                          </div>
+
+                          {/* Last Name Input */}
+                          <div className="space-y-1.5">
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-muted/80">Last Name</label>
+                            <input
+                              type="text"
+                              value={profileLastName}
+                              onChange={(e) => setProfileLastName(e.target.value)}
+                              placeholder="Enter last name"
+                              className="w-full rounded-xl border border-line bg-surface/40 px-3 py-2 text-xs text-ink outline-none focus:border-accent/40"
+                            />
+                          </div>
+
+                          {/* Age Input */}
+                          <div className="space-y-1.5">
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-muted/80">Age</label>
+                            <input
+                              type="number"
+                              min="1"
+                              max="150"
+                              value={profileAge}
+                              onChange={(e) => setProfileAge(e.target.value)}
+                              placeholder="Enter your age"
+                              className="w-full rounded-xl border border-line bg-surface/40 px-3 py-2 text-xs text-ink outline-none focus:border-accent/40"
+                            />
+                          </div>
+
+                          {/* Gender Select */}
+                          <div className="space-y-1.5 col-span-1">
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-muted/80">Gender</label>
+                            <div className="flex gap-2">
+                              {['male', 'female', 'others'].map((g) => (
+                                <button
+                                  key={g}
+                                  type="button"
+                                  onClick={() => setProfileGender(g)}
+                                  className={cn(
+                                    "flex-1 rounded-xl border py-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200",
+                                    profileGender === g
+                                      ? "border-accent/30 bg-accent/10 text-accent font-semibold"
+                                      : "border-line bg-surface/40 text-muted hover:bg-surface-2 hover:text-ink"
+                                  )}
+                                >
+                                  {g}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={saveProfile}
+                          className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-md hover:bg-accent/90 transition-all active:scale-[0.98]"
+                        >
+                          Save Profile
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {activeTab === 'updates' && (
+                  <div className="space-y-6">
+                    {isDesktop && (
+                      <div>
+                        <h4 className="text-xs font-bold uppercase tracking-widest text-muted mb-3">App Updates</h4>
+                        <button
+                          onClick={updateStatus === 'ready' ? () => desktopBridge?.update?.install?.() : checkForUpdates}
+                          disabled={checking || updateStatus === 'downloading'}
+                          className="flex w-full items-center justify-between rounded-xl border border-line bg-surface-2/40 px-4 py-3 text-sm transition-colors hover:border-accent/40 disabled:opacity-60"
+                        >
+                          <span className="flex items-center gap-2.5 font-medium">
+                            <RefreshCw className={cn('h-4 w-4', (checking || updateStatus === 'ready') && 'animate-spin')} />
+                            {updateStatus === 'ready' ? 'Restart & apply update' : 'Check for updates'}
+                          </span>
+                          <span className="text-xs text-muted font-semibold">
+                            {updateStatus === 'checking' && 'Checking…'}
+                            {updateStatus === 'up-to-date' && 'Up to date'}
+                            {updateStatus === 'downloading' && `Downloading v${updateVersion}…`}
+                            {updateStatus === 'ready' && `v${updateVersion} ready`}
+                            {updateStatus === 'error' && 'Check failed'}
+                            {updateStatus === 'idle' && 'Click to check'}
+                          </span>
+                        </button>
+                        {updateError && (
+                          <p className="mt-2 text-xs text-rose-400 font-medium">{updateError}</p>
+                        )}
+                      </div>
+                    )}
+
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-muted mb-3">Version & Info</h4>
+                      <div className="flex flex-col gap-1.5 rounded-xl border border-line bg-surface-2/20 p-4 text-xs text-muted">
+                        <p className="font-medium text-ink/80">PRO TRACK {appInfo?.version ? `v${appInfo.version}` : ''} — a calm, all-in-one productivity workspace.</p>
+                        <a
+                          href={CREATOR.githubUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-1 inline-flex items-center gap-1.5 font-semibold text-accent hover:underline"
+                        >
+                          <Github className="h-4 w-4" />
+                          Crafted by {CREATOR.name}
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-line/40 pt-6">
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-muted mb-4 flex items-center gap-2">
+                        <History className="h-4.5 w-4.5 text-accent" /> Changelog & Release Notes
+                      </h4>
+                      <div className="max-h-[38vh] overflow-y-auto rounded-2xl border border-line bg-surface-2/15 p-6 shadow-inner pr-4">
+                        <div className="relative border-l border-line/70 ml-2 pl-6 space-y-7 py-1">
+                          {CHANGELOG.map((c, idx) => (
+                            <div key={idx} className="relative group">
+                              {/* Timeline Node Dot */}
+                              <div className="absolute -left-[32px] top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-accent/30 bg-accent/10 shadow-sm transition-all duration-300 group-hover:border-accent/60 group-hover:scale-110">
+                                <div className="h-1.5 w-1.5 rounded-full bg-accent" />
+                              </div>
+
+                              {/* Release Content */}
+                              <div>
+                                <div className="flex items-center gap-2 mb-1.5">
+                                  <span className="rounded bg-accent/10 border border-accent/20 px-2 py-0.5 text-[9px] font-bold text-accent tracking-wider uppercase">
+                                    v{c.version}
+                                  </span>
+                                  {c.date && (
+                                    <span className="text-[9px] font-bold text-muted/80 uppercase tracking-wider">
+                                      {c.date}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {c.title && (
+                                  <h5 className="font-bold text-ink text-xs mb-2 leading-tight">
+                                    {c.title}
+                                  </h5>
+                                )}
+
+                                <ul className="space-y-3">
+                                  {c.highlights.map((h, i) => {
+                                    // Match "**Title:** Description" or "**Title**: Description"
+                                    const match = h.match(/^\*\*(.*?)\*\*:\s*(.*)$/)
+                                    if (match) {
+                                      const [_, title, desc] = match
+                                      return (
+                                        <li key={i} className="flex items-start gap-2">
+                                          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent/60" />
+                                          <div className="flex-1">
+                                            <div className="font-bold text-ink text-[11px] leading-none mb-1">
+                                              {title}
+                                            </div>
+                                            <div className="text-[10.5px] leading-relaxed text-muted font-medium">
+                                              {renderMarkdownInline(desc)}
+                                            </div>
+                                          </div>
+                                        </li>
+                                      )
+                                    }
+                                    return (
+                                      <li key={i} className="flex items-start gap-2">
+                                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-muted/40" />
+                                        <div className="flex-1 text-[10.5px] leading-relaxed text-muted font-medium">
+                                          {renderMarkdownInline(h)}
+                                        </div>
+                                      </li>
+                                    )
+                                  })}
+                                </ul>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'appearance' && (
+                  <div className="space-y-6">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-muted mb-3">Theme Settings</h4>
+                      <label className="mb-2.5 block text-xs font-medium text-muted/80">Theme Preference</label>
+                      <button
+                        onClick={toggleTheme}
+                        className="flex w-full items-center justify-between rounded-xl border border-line bg-surface-2/40 px-4 py-3.5 text-sm"
+                      >
+                        <span className="font-medium">Active Theme Mode</span>
+                        <span className="font-bold capitalize text-accent">{theme === 'auto' ? 'Auto (Time of Day)' : theme}</span>
+                      </button>
+                    </div>
+
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-muted mb-3">Typography Scaling</h4>
+                      <label className="mb-2.5 block text-xs font-medium text-muted/80">Workspace Scale</label>
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2" role="radiogroup" aria-label="Font size">
+                        {[
+                          { key: 'tiny', label: 'Tiny' },
+                          { key: 'compact', label: 'Compact' },
+                          { key: 'standard', label: 'Standard' },
+                          { key: 'large', label: 'Large' },
+                          { key: 'huge', label: 'Huge' },
+                        ].map((opt) => (
+                          <button
+                            key={opt.key}
+                            role="radio"
+                            aria-checked={fontScale === opt.key}
+                            onClick={() => setFontScale(opt.key)}
+                            className={cn(
+                              'rounded-xl border py-3 text-xs font-semibold transition-colors text-center',
+                              fontScale === opt.key
+                                ? 'border-accent/50 bg-accent/15 text-accent shadow-glow-sm'
+                                : 'border-line text-muted hover:text-ink hover:bg-surface-2/30',
+                            )}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="mt-6 border-t border-line/40 pt-5">
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-muted mb-3">Workspace Font Style</h4>
+                      <label className="mb-2.5 block text-xs font-medium text-muted/80">Font Family</label>
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                        {[
+                          { key: 'inter', label: 'Inter', desc: 'Modern Sans' },
+                          { key: 'outfit', label: 'Outfit', desc: 'Sleek Sans' },
+                          { key: 'lora', label: 'Lora', desc: 'Scholarly Serif' },
+                          { key: 'playfair', label: 'Playfair', desc: 'Classic Serif' },
+                          { key: 'mono', label: 'JetBrains', desc: 'Coder Mono' },
+                        ].map((opt) => (
+                          <button
+                            key={opt.key}
+                            onClick={() => setFontFamily(opt.key)}
+                            className={cn(
+                              'flex flex-col items-center justify-center rounded-xl border py-2.5 transition-colors',
+                              fontFamily === opt.key
+                                ? 'border-accent/50 bg-accent/15 text-accent shadow-glow-sm'
+                                : 'border-line text-muted hover:text-ink hover:bg-surface-2/30',
+                            )}
+                          >
+                            <span className="text-xs font-bold">{opt.label}</span>
+                            <span className="text-[9px] font-semibold uppercase tracking-wider opacity-70 mt-0.5">{opt.desc}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'audio' && (
+                  <div className="space-y-6">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-muted mb-3">Sounds & Notifications</h4>
+                      <div className="space-y-3">
+                        <button
+                          onClick={toggleSounds}
+                          className="flex w-full items-center justify-between rounded-xl border border-line bg-surface-2/40 px-4 py-3.5 text-sm transition-colors hover:border-line-2"
+                        >
+                          <span className="font-medium">UI Sound Effects & Event Chimes</span>
+                          <span className={cn('font-bold', soundsOn ? 'text-emerald-400' : 'text-muted')}>
+                            {soundsOn ? 'Enabled' : 'Muted'}
+                          </span>
+                        </button>
+                        
+                        <button
+                          onClick={enableNotifications}
+                          disabled={notifOn}
+                          className="flex w-full items-center justify-between rounded-xl border border-line bg-surface-2/40 px-4 py-3.5 text-sm disabled:opacity-70 transition-colors hover:border-line-2"
+                        >
+                          <span className="font-medium">Desktop Notification alerts</span>
+                          <span className={cn('font-bold', notifOn ? 'text-emerald-400' : 'text-accent')}>
+                            {notifOn ? 'Enabled' : 'Enable'}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-muted mb-3">Wellness Controls</h4>
+                      <label className="mb-2.5 block text-xs font-medium text-muted/80">Hydration Reminder Check Frequency</label>
+                      <div className="flex gap-2.5">
+                        {[30, 45, 60, 90].map((m) => (
+                          <button
+                            key={m}
+                            onClick={() => saveHydration(m)}
+                            className={cn(
+                              'flex-1 rounded-xl border py-3 text-sm font-semibold transition-colors',
+                              hydration === m
+                                ? 'border-accent/50 bg-accent/15 text-accent shadow-glow-sm'
+                                : 'border-line text-muted hover:text-ink hover:bg-surface-2/30',
+                            )}
+                          >
+                            {m}m
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'scene' && (
+                  <div className="space-y-6">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-muted mb-3">Focus Scenes</h4>
+                      <p className="text-xs text-muted mb-4 leading-relaxed">
+                        Plays a quiet ambient YouTube scene as a fullscreen background behind the Pomodoro timer.
+                        Select a beautiful preset, toggle audio/video settings, or add up to 5 custom scenes.
+                      </p>
+
+                      {/* Preset grid */}
+                      <div className="grid grid-cols-2 gap-2.5 mb-4">
+                        {VIDEO_PRESETS.map((p) => (
+                          <button
+                            key={p.url}
+                            onClick={() => saveFocusAudio(p.url)}
+                            className={cn(
+                              'rounded-xl border px-4 py-3 text-left text-xs font-semibold transition-colors',
+                              focusUrlInput === p.url
+                                ? 'border-accent/50 bg-accent/15 text-accent shadow-glow-sm'
+                                : 'border-line bg-surface-2/40 text-muted hover:border-accent/40 hover:text-ink',
+                            )}
+                          >
+                            {p.label}
+                          </button>
+                        ))}
+
+                        {customPresets.map((p, idx) => (
+                          <div key={p.url + idx} className="relative group">
+                            <button
+                              onClick={() => saveFocusAudio(p.url)}
+                              className={cn(
+                                'w-full rounded-xl border pl-4 pr-10 py-3 text-left text-xs font-semibold transition-colors truncate',
+                                focusUrlInput === p.url
+                                  ? 'border-accent/50 bg-accent/15 text-accent shadow-glow-sm'
+                                  : 'border-line bg-surface-2/40 text-muted hover:border-accent/40 hover:text-ink',
+                              )}
+                            >
+                              {p.label}
+                            </button>
+                            <button
+                              onClick={(e) => deleteCustomPreset(idx, e)}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-lg border border-line/60 bg-surface/80 text-muted hover:text-rose-500 hover:border-rose-500/30 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                              title="Delete custom scene"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+
+                        <button
+                          onClick={() => saveFocusAudio('')}
+                          className={cn(
+                            'rounded-xl border px-4 py-3 text-left text-xs font-semibold transition-colors',
+                            !focusUrlInput
+                              ? 'border-accent/50 bg-accent/15 text-accent shadow-glow-sm'
+                              : 'border-line bg-surface-2/40 text-muted hover:border-accent/40 hover:text-ink',
+                          )}
+                        >
+                          Off / None
+                        </button>
+                      </div>
+
+                      {/* Add Custom Scene Section */}
+                      <div className="space-y-3 bg-surface-2/15 border border-line/40 rounded-2xl p-4 mt-4">
+                        <label className="block text-xs font-semibold text-ink">Add Custom Scene</label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-muted/85">Video URL</label>
+                            <input
+                              type="url"
+                              value={newPresetUrl}
+                              onChange={(e) => setNewPresetUrl(e.target.value)}
+                              placeholder="https://youtu.be/..."
+                              disabled={customPresets.length >= 5}
+                              className="w-full rounded-xl border border-line bg-surface px-3 py-2 text-xs text-ink outline-none focus:border-accent disabled:opacity-50"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-muted/85">Scene Title</label>
+                            <input
+                              type="text"
+                              value={newPresetLabel}
+                              onChange={(e) => setNewPresetLabel(e.target.value)}
+                              placeholder="e.g. Rainy Cafe (optional)"
+                              disabled={customPresets.length >= 5}
+                              className="w-full rounded-xl border border-line bg-surface px-3 py-2 text-xs text-ink outline-none focus:border-accent disabled:opacity-50"
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between gap-4 pt-1">
+                          <span className="text-[10px] text-muted font-medium">
+                            {customPresets.length >= 5 
+                              ? 'Maximum of 5 custom scenes added' 
+                              : `${5 - customPresets.length} slots remaining (max 5)`}
+                          </span>
+                          <button
+                            onClick={addCustomPreset}
+                            disabled={!newPresetUrl.trim() || customPresets.length >= 5}
+                            className="rounded-xl bg-accent text-white px-4 py-2 text-xs font-bold hover:bg-accent/90 disabled:opacity-50 transition-colors shadow-glow-sm"
+                          >
+                            Add to Presets
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Video visibility toggle */}
+                      <button
+                        onClick={toggleFocusVideo}
+                        className="flex w-full items-center justify-between rounded-xl border border-line bg-surface-2/40 px-4 py-3.5 text-sm transition-colors hover:border-line-2 mt-4"
+                      >
+                        <span className="font-medium">Show video background on focus screen</span>
+                        <span className={cn('font-bold', focusVideoEnabled ? 'text-emerald-400' : 'text-muted')}>
+                          {focusVideoEnabled ? 'Enabled' : 'Disabled'}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'zen' && (
+                  <div className="space-y-6">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-muted mb-3">Zen Mode</h4>
+                      <p className="text-xs text-muted mb-4 leading-relaxed">
+                        Fades in calming wisdom, inspiration, and motivational quotes on the full screen when the workstation stays idle.
+                      </p>
+
+                      <button
+                        onClick={toggleZen}
+                        className="flex w-full items-center justify-between rounded-xl border border-line bg-surface-2/40 px-4 py-3.5 text-sm transition-colors hover:border-line-2 mb-4"
+                      >
+                        <span className="font-medium">Motivational quotes when idle</span>
+                        <span className={cn('font-bold', zenEnabled ? 'text-emerald-400' : 'text-muted')}>
+                          {zenEnabled ? 'Enabled' : 'Disabled'}
+                        </span>
+                      </button>
+
+                      {/* Voice Settings */}
+                      <button
+                        onClick={toggleZenVoice}
+                        className="flex w-full items-center justify-between rounded-xl border border-line bg-surface-2/40 px-4 py-3.5 text-sm transition-colors hover:border-line-2 mb-4"
+                      >
+                        <span className="font-medium">Read quotes aloud (Zen Voice)</span>
+                        <span className={cn('font-bold', zenVoiceEnabled ? 'text-emerald-400' : 'text-muted')}>
+                          {zenVoiceEnabled ? 'Enabled' : 'Disabled'}
+                        </span>
+                      </button>
+
+                      {/* Quote Categories Checklist */}
+                      <div className="mb-5">
+                        <label className="mb-2 block text-xs font-semibold text-muted">
+                          Configure Quote Categories
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[
+                            { id: 'stoic', label: 'Stoic Philosophy' },
+                            { id: 'philosophy', label: 'Philosophers & Thinkers' },
+                            { id: 'productivity', label: 'Productivity & Focus' },
+                            { id: 'proverbs', label: 'Proverbs & Koans' },
+                            { id: 'hindi_urdu', label: 'Hindi / Urdu Dohe' },
+                            { id: 'modern', label: 'Modern Quotes' },
+                          ].map((cat) => {
+                            const active = zenCategories.includes(cat.id)
+                            return (
+                              <button
+                                key={cat.id}
+                                onClick={() => toggleZenCategory(cat.id)}
+                                className={cn(
+                                  'flex items-center justify-between rounded-xl border px-3.5 py-2.5 text-xs font-medium transition-colors',
+                                  active
+                                    ? 'border-accent/40 bg-accent/10 text-ink'
+                                    : 'border-line text-muted hover:text-ink hover:bg-surface-2/30',
+                                )}
+                              >
+                                <span>{cat.label}</span>
+                                <span className={cn('h-2 w-2 rounded-full transition-all', active ? 'bg-accent shadow-glow-sm' : 'bg-transparent')} />
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Quote display duration */}
+                      <div className="mt-4">
+                        <label className="mb-2.5 block text-xs font-semibold text-muted">
+                          Quote Display Duration
+                        </label>
+                        <div className="flex gap-2.5">
+                          {[
+                            { value: 60, label: '1m', desc: 'Standard' },
+                            { value: 120, label: '2m', desc: 'Reflective' },
+                            { value: 300, label: '5m', desc: 'Meditative' },
+                            { value: 1800, label: '30m', desc: 'Ambient' },
+                            { value: 3600, label: '1h', desc: 'Poster' },
+                          ].map((opt) => (
+                            <button
+                              key={opt.value}
+                              onClick={() => saveZenDuration(opt.value)}
+                              className={cn(
+                                'flex-1 flex flex-col items-center justify-center rounded-xl border py-2 transition-colors',
+                                zenDurationSec === opt.value
+                                  ? 'border-accent/50 bg-accent/15 text-accent shadow-glow-sm'
+                                  : 'border-line text-muted hover:text-ink hover:bg-surface-2/30',
+                              )}
+                            >
+                              <span className="text-xs font-bold">{opt.label}</span>
+                              <span className="text-[9px] font-semibold uppercase tracking-wider opacity-70 mt-0.5">{opt.desc}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'integrations' && (
+                  <div className="space-y-6">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-muted mb-3">Artificial Intelligence</h4>
+                      <p className="mb-4 text-xs text-muted leading-relaxed">
+                        Configure AI services and preferred routing. Keys are stored safely on your local device.
+                      </p>
+
+                      {/* Preferred AI Provider Dropdown */}
+                      <div className="mb-4 bg-surface-2/15 border border-line/50 rounded-2xl p-4">
+                        <label className="mb-1.5 block text-xs font-semibold text-ink">Preferred AI Provider</label>
+                        <p className="mb-3 text-[11px] text-muted">
+                          Choose which AI model handles chat assistant, summaries, and quotes. If set to Automatic, the app will auto-detect and switch to the next active provider if the primary choice fails.
+                        </p>
+                        <select
+                          value={aiPreferred}
+                          onChange={(e) => savePreferredProvider(e.target.value)}
+                          className="w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-xs outline-none focus:border-accent"
+                        >
+                          <option value="auto">Automatic (Auto-Fallback)</option>
+                          <option value="gemini">Google Gemini</option>
+                          <option value="openai">OpenAI (GPT-4o-mini)</option>
+                          <option value="anthropic">Anthropic Claude</option>
+                          <option value="deepseek">DeepSeek-V3</option>
+                        </select>
+                      </div>
+
+                      {/* Expandable Accordion Provider Key Configuration List */}
+                      <div className="space-y-2">
+                        {[
+                          { id: 'gemini', label: 'Google Gemini', desc: 'Powers your study companion, voice transcript summaries, and custom quotes.', keyPlaceholder: 'AIzaSy...', link: 'https://aistudio.google.com/app/apikey', linkText: 'Get free key', val: keyInput, setVal: setKeyInput, onSave: saveKey },
+                          { id: 'openai', label: 'OpenAI', desc: 'Use OpenAI models for chat, tutoring assistance, and general intelligence features.', keyPlaceholder: 'sk-proj-...', val: openaiInput, setVal: setOpenaiInput, onSave: saveOpenAIKey },
+                          { id: 'anthropic', label: 'Anthropic (Claude)', desc: 'Connect Claude models for advanced coding assistance, brainstorming, and explanations.', keyPlaceholder: 'sk-ant-...', val: anthropicInput, setVal: setAnthropicInput, onSave: saveAnthropicKey },
+                          { id: 'elevenlabs', label: 'ElevenLabs Voice', desc: 'Enables hyper-realistic, natural voice generation when reading Zen Mode quotes aloud.', keyPlaceholder: 'ElevenLabs Key...', val: elevenlabsInput, setVal: setElevenlabsInput, onSave: saveElevenLabsKey },
+                          { id: 'deepseek', label: 'DeepSeek', desc: 'Access cost-efficient, high-performance DeepSeek-V3 and DeepSeek-R1 reasoning models.', keyPlaceholder: 'DeepSeek Key...', val: deepseekInput, setVal: setDeepseekInput, onSave: saveDeepSeekKey },
+                        ].map((prov) => {
+                          const isConfigured = hasApiKey(prov.id)
+                          const isExpanded = expandedProvider === prov.id
+                          return (
+                            <div key={prov.id} className="rounded-2xl border border-line/50 bg-surface-2/15 overflow-hidden transition-all duration-200">
+                              {/* Row Header (always visible) */}
+                              <button
+                                onClick={() => setExpandedProvider(isExpanded ? null : prov.id)}
+                                className="w-full flex items-center justify-between p-4 hover:bg-surface-2/30 transition-colors"
+                              >
+                                <div className="flex flex-col items-start gap-1">
+                                  <span className="text-xs font-bold text-ink">{prov.label}</span>
+                                  <span className="text-[10px] text-muted text-left line-clamp-1">{prov.desc}</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className={cn('text-[9px] font-bold px-2 py-0.5 rounded-full border', isConfigured ? 'bg-emerald-500/5 text-emerald-400 border-emerald-500/20' : 'bg-surface-2 border-line text-muted')}>
+                                    {isConfigured ? 'Configured' : 'Missing'}
+                                  </span>
+                                  <ChevronDown className={cn('h-3.5 w-3.5 text-muted transition-transform duration-200', isExpanded && 'rotate-180')} />
+                                </div>
+                              </button>
+
+                              {/* Row Content (visible only when expanded) */}
+                              <AnimatePresence>
+                                {isExpanded && (
+                                  <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="border-t border-line/30 bg-surface-2/10 p-4 space-y-3"
+                                  >
+                                    <div className="flex gap-2.5">
+                                      <input
+                                        type="password"
+                                        value={prov.val}
+                                        onChange={(e) => prov.setVal(e.target.value)}
+                                        placeholder={prov.keyPlaceholder}
+                                        className="flex-1 rounded-xl border border-line bg-surface px-3 py-2.5 text-xs outline-none focus:border-accent"
+                                      />
+                                      <Button size="sm" onClick={prov.onSave}>
+                                        Save
+                                      </Button>
+                                    </div>
+                                    {prov.link && (
+                                      <a
+                                        href={prov.link}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="inline-flex items-center gap-1 text-[10px] text-accent hover:underline font-semibold"
+                                      >
+                                        {prov.linkText} <ExternalLink className="h-3 w-3" />
+                                      </a>
+                                    )}
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      {/* Hands-Free Loop Turn Limit Slider */}
+                      <div className="mt-4 bg-surface-2/15 border border-line/50 rounded-2xl p-4">
+                        <label className="mb-1.5 block text-xs font-semibold text-ink">Hands-Free Turn Limit</label>
+                        <p className="mb-3 text-[11px] text-muted">
+                          Adjust the maximum number of continuous conversational turns in Hands-Free mode to conserve API tokens.
+                        </p>
+                        <div className="flex items-center gap-4">
+                          <input
+                            type="range"
+                            min="1"
+                            max="20"
+                            value={settings?.handsFreeTurnLimit || 6}
+                            onChange={(e) => updateSettings(user.uid, { handsFreeTurnLimit: Number(e.target.value) })}
+                            className="flex-1 accent-accent"
+                          />
+                          <span className="text-xs font-bold text-ink w-16 text-center bg-surface-2 border border-line/60 rounded px-2 py-1 select-none">
+                            {settings?.handsFreeTurnLimit || 6} turns
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-line/40 pt-6">
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-muted mb-3">Schedules Sync</h4>
+                      <label className="mb-1 block text-xs font-semibold text-muted">Google Calendar Connection</label>
+                      <p className="mb-3 text-[11px] text-muted font-normal">
+                        Synchronizes study session alerts, habits, and tasks directly to your Google Calendar.
+                      </p>
+                      {calConnected ? (
+                        <div className="flex items-center justify-between rounded-xl border border-emerald-500/25 bg-emerald-500/5 px-4 py-3.5">
+                          <span className="flex items-center gap-2 text-xs font-bold text-emerald-500">
+                            <Check className="h-4 w-4" /> Sync Connected
+                          </span>
+                          <button
+                            onClick={handleDisconnectCal}
+                            className="rounded-lg border border-line bg-surface px-4 py-2 text-xs font-semibold text-muted hover:text-ink hover:border-accent transition-colors"
+                          >
+                            Unlink Calendar
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between rounded-xl border border-line bg-surface-2/20 px-4 py-3.5">
+                          <span className="flex items-center gap-2 text-xs text-muted font-medium">
+                            <Calendar className="h-4 w-4" /> Not Connected
+                          </span>
+                          <button
+                            onClick={handleConnectCal}
+                            className="rounded-lg bg-accent text-white px-4 py-2 text-xs font-bold hover:bg-accent/90 transition-colors shadow-glow-sm"
+                          >
+                            Connect Calendar
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'system' && (
+                  <div className="space-y-6">
+                    {isDesktop && appInfo?.shortcuts && (
+                      <div>
+                        <h4 className="text-xs font-bold uppercase tracking-widest text-muted mb-3">System Hotkeys</h4>
+                        <div className="space-y-2.5">
+                          <ShortcutRow label="Show / hide window" acc={appInfo.shortcuts.toggleWindow} />
+                          <ShortcutRow label="Pause / resume focus" acc={appInfo.shortcuts.toggleFocus} />
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-rose-500 mb-3">Security & Danger Zone</h4>
+                      <p className="text-xs text-muted mb-4 leading-relaxed">
+                        Wipes all cache tokens, settings key overrides, calendar credentials, and permanently deletes your cloud workspace profile.
+                      </p>
+                      
+                       <div className="flex flex-col gap-3">
+                        {deleteStage === 1 && (
+                          <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-500">
+                            <div>
+                              <p className="font-bold">Are you absolutely sure? (Step 1 of 2)</p>
+                              <p className="mt-1">All syllabus progress, focus sessions, and metrics will be wiped forever.</p>
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="block font-medium">To proceed, please type <span className="font-mono font-bold bg-black/20 px-1 py-0.5 rounded text-amber-600">WIPE</span> below:</label>
+                              <input
+                                type="text"
+                                value={deleteInput}
+                                onChange={(e) => setDeleteInput(e.target.value)}
+                                placeholder="WIPE"
+                                className="w-full rounded-xl border border-amber-500/30 bg-surface px-3 py-2 text-xs text-ink outline-none focus:border-amber-500 font-semibold"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {deleteStage === 2 && (
+                          <div className="space-y-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-xs text-red-500">
+                            <div>
+                              <p className="font-bold">Critical Confirmation Required (Step 2 of 2)</p>
+                              <p className="mt-1">This action is irreversible. All settings, database nodes, and cloud files will be deleted.</p>
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="block font-medium">Please type your email address <span className="font-mono font-bold bg-black/20 px-1.5 py-0.5 rounded text-red-600 select-all">{user?.email}</span> to confirm Wiping:</label>
+                              <input
+                                type="text"
+                                value={deleteInput}
+                                onChange={(e) => setDeleteInput(e.target.value)}
+                                placeholder={user?.email}
+                                className="w-full rounded-xl border border-red-500/30 bg-surface px-3 py-2 text-xs text-ink outline-none focus:border-red-500 font-semibold"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        <button
+                          onClick={handleDeleteWipe}
+                          disabled={
+                            (deleteStage === 1 && deleteInput !== 'WIPE') ||
+                            (deleteStage === 2 && deleteInput !== user?.email)
+                          }
+                          className={cn(
+                            "flex w-full items-center justify-center rounded-xl px-4 py-3 text-xs font-bold uppercase tracking-wider transition-all duration-200 disabled:opacity-45 disabled:cursor-not-allowed disabled:shadow-none",
+                            deleteStage === 0 && "border border-rose-500/20 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20",
+                            deleteStage === 1 && "bg-amber-500 text-white hover:bg-amber-600 shadow-glow-sm",
+                            deleteStage === 2 && "bg-red-500 text-white hover:bg-red-600 shadow-glow-sm"
+                          )}
+                        >
+                          {deleteStage === 0 && "Delete Account & Wipe Workspace"}
+                          {deleteStage === 1 && "Confirm Step 1 of 2"}
+                          {deleteStage === 2 && "Destroy Account & Wipe Cache"}
+                        </button>
+                        
+                        {deleteStage > 0 && (
+                          <button
+                            onClick={() => {
+                              setDeleteStage(0)
+                              setDeleteInput('')
+                            }}
+                            className="mt-1 text-center text-[10px] font-bold uppercase tracking-wider text-muted hover:text-ink transition-colors"
+                          >
+                            Cancel Deletion
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'legal' && (
+                  <div className="space-y-6 text-sm text-ink/90">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-muted mb-3">Privacy Policy</h4>
+                      <p className="text-xs leading-relaxed text-muted mb-3">
+                        Your privacy is extremely important. Here is how your data is handled in <strong>PRO TRACK</strong>:
+                      </p>
+                      <ul className="list-disc pl-5 space-y-2 text-xs text-muted">
+                        <li><strong>AI API Keys:</strong> Your provider API keys (Gemini, OpenAI, Anthropic, DeepSeek) are stored <strong>strictly locally</strong> in your browser or desktop application's <code>localStorage</code>. They are never sent to our servers or written to Firestore.</li>
+                        <li><strong>Sync and Cloud Storage:</strong> If you sign in, your subjects, timetable slots, habits, and todos are synced to a secure Google Firebase database. Your data is private to your authenticated account and is never shared.</li>
+                        <li><strong>Microphone Audio:</strong> The Hands-Free Mode transcription runs direct client-side requests to the configured AI API endpoints. Audio recordings are processed on-the-fly and are never permanently stored or monitored by us.</li>
+                      </ul>
+                    </div>
+
+                    <div className="border-t border-line/45 pt-4">
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-muted mb-3">Terms and Conditions</h4>
+                      <p className="text-xs leading-relaxed text-muted mb-3">
+                        By using the PRO TRACK study companion, you agree to the following terms:
+                      </p>
+                      <ul className="list-disc pl-5 space-y-2 text-xs text-muted">
+                        <li><strong>Personal Use:</strong> PRO TRACK is provided as a productivity and focus-assisting workspace for personal study use.</li>
+                        <li><strong>API Usage Constraints:</strong> You are responsible for any charges or rate limits incurred on your personal AI provider accounts (Gemini, OpenAI, etc.) when using your custom API keys.</li>
+                        <li><strong>Liability Limitation:</strong> The software is provided "as is" without warranty of any kind. We are not liable for any data loss, study delays, or device problems.</li>
+                      </ul>
+                    </div>
+
+                    <div className="rounded-2xl border border-line bg-surface-2/30 p-4 text-[10px] text-muted text-center">
+                      Last Updated: June 2026 · v{appInfo?.version || '1.4.0'}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer user branding */}
+              <div className="mt-4 border-t border-line/30 pt-3 text-center text-[10px] text-muted/70 font-semibold select-none uppercase tracking-wider">
+                PRO TRACK · Active Account: {user?.email}
               </div>
             </div>
-          </div>
-        </Section>
-
-        <div className="px-5 py-4 text-center text-xs text-muted">
-          PRO TRACK · signed in as {user?.email}
-        </div>
-      </div>
-    </Sheet>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

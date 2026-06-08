@@ -1,31 +1,61 @@
+import { useState, useRef, useCallback } from 'react'
 import { LayoutGroup, AnimatePresence, motion } from 'framer-motion'
 import { useStore } from '@/store/useStore'
 import { getIcon } from '@/lib/icons'
 import { WIDGETS } from '@/components/widgets/widgetRegistry'
 import { getWidgetComponent } from '@/components/widgets/widgetComponents'
+import { cn } from '@/utils/cn'
+
+// ── Layout config ─────────────────────────────────────────────────────────────
+// Timetable is permanently anchored on the left.
+// The right slot starts with Todos but is swappable with any mini-card.
+const LEFT_ID = 'timetable'
+const DEFAULT_RIGHT_ID = 'todos'
+
+// Natural display order for the bottom row (used to keep consistent ordering)
+const ALL_SWAPPABLE = ['todos', 'focus', 'habits', 'subjects', 'analytics', 'ledger']
+
+const MINI_META = {
+  todos:     { desc: 'Task backlog',         gradient: 'from-sky-500/15 to-blue-500/10' },
+  focus:     { desc: 'Deep work sessions',   gradient: 'from-violet-500/15 to-indigo-500/10' },
+  habits:    { desc: 'Track daily routines', gradient: 'from-emerald-500/15 to-teal-500/10' },
+  subjects:  { desc: 'Study progress',       gradient: 'from-cyan-500/15 to-sky-500/10' },
+  analytics: { desc: 'Progress insights',    gradient: 'from-amber-500/15 to-orange-500/10' },
+  ledger:    { desc: 'Achievement history',  gradient: 'from-rose-500/15 to-pink-500/10' },
+}
+
+// ── Components ────────────────────────────────────────────────────────────────
 
 function Widget({ widget, variant }) {
   const Component = getWidgetComponent(widget.id)
   return <Component widget={widget} variant={variant} />
 }
 
-/** Minimal off-board trigger — the widget's content lives off-screen; tap to focus it. */
-function DockChip({ widget, onClick }) {
+/** Minimal dock trigger shown alongside the hero when a widget is maximised. */
+function DockChip({ widget, onClick, isActive }) {
   const Icon = getIcon(widget.icon)
   return (
     <motion.button
       layout
-      initial={{ opacity: 0, x: -16, scale: 0.8 }}
-      animate={{ opacity: 1, x: 0, scale: 1 }}
-      exit={{ opacity: 0, x: -16, scale: 0.8 }}
-      transition={{ type: 'spring', stiffness: 420, damping: 32 }}
       onClick={onClick}
       title={widget.title}
-      className="group relative flex h-12 w-12 items-center justify-center rounded-2xl border border-line/60 bg-surface/60 text-muted backdrop-blur-xl transition-colors hover:border-accent/50 hover:text-ink"
+      className={cn(
+        "group relative flex h-12 w-12 items-center justify-center rounded-2xl border transition-all duration-200 backdrop-blur-xl",
+        isActive
+          ? "border-accent bg-accent/20 text-accent shadow-glow-sm"
+          : "border-line/60 bg-surface/60 text-muted hover:border-accent/40 hover:text-ink"
+      )}
     >
+      {/* Active Indicator bar on the left */}
+      {isActive && (
+        <motion.div
+          layoutId="active-indicator"
+          className="absolute -left-1.5 h-6 w-1 rounded-r-full bg-accent"
+          transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+        />
+      )}
       <Icon className="h-5 w-5" />
-      {/* Title flyout on hover */}
-      <span className="pointer-events-none absolute left-14 z-20 whitespace-nowrap rounded-lg border border-line/60 bg-surface px-2 py-1 text-xs opacity-0 shadow-glass transition-opacity group-hover:opacity-100">
+      <span className="pointer-events-none absolute right-14 top-1/2 -translate-y-1/2 z-20 whitespace-nowrap rounded-lg border border-line/60 bg-surface px-2.5 py-1.5 text-xs font-medium opacity-0 shadow-glass transition-opacity group-hover:opacity-100">
         {widget.title}
       </span>
     </motion.button>
@@ -33,41 +63,154 @@ function DockChip({ widget, onClick }) {
 }
 
 /**
- * The single unified board. Engaging a widget morphs it into a hero pane (shared
- * layoutId) while every neighbor slides off-screen into a minimalist trigger
- * dock — the accordion "focused-zoom" mechanic, no routing, no perceived remount.
+ * Beautiful mini card for secondary widgets in the bottom row.
+ * Single-click: swap into the right primary slot.
+ * Double-click: open in full-screen hero mode.
+ */
+function MiniCard({ widget, onSingleClick, onDoubleClick }) {
+  const Icon = getIcon(widget.icon)
+  const meta = MINI_META[widget.id] || { desc: '', gradient: 'from-accent/15 to-accent-2/10' }
+  const clickTimer = useRef(null)
+
+  const handleClick = () => {
+    if (clickTimer.current) {
+      // Second click within 280ms → double-click
+      clearTimeout(clickTimer.current)
+      clickTimer.current = null
+      onDoubleClick()
+    } else {
+      clickTimer.current = setTimeout(() => {
+        clickTimer.current = null
+        onSingleClick()
+      }, 280)
+    }
+  }
+
+  return (
+    <motion.button
+      layout
+      layoutId={`mini-${widget.id}`}
+      onClick={handleClick}
+      whileHover={{ scale: 1.03, y: -2 }}
+      whileTap={{ scale: 0.97 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+      className="edge-light group relative flex flex-1 flex-col items-center justify-center gap-2.5 overflow-hidden rounded-2xl border border-line/70 bg-surface/60 p-4 backdrop-blur-2xl transition-colors hover:border-accent/50"
+    >
+      {/* Subtle gradient backdrop */}
+      <div className={cn(
+        'absolute inset-0 bg-gradient-to-br opacity-60 transition-opacity group-hover:opacity-100',
+        meta.gradient,
+      )} />
+
+      {/* Content */}
+      <div className="relative z-10 flex flex-col items-center gap-2">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-accent/20 to-accent/8 text-accent shadow-glow-sm ring-1 ring-accent/15">
+          <Icon className="h-5 w-5" />
+        </span>
+        <span className="text-sm font-semibold text-ink">{widget.title}</span>
+        <span className="text-[11px] text-muted/80">{meta.desc}</span>
+      </div>
+
+      {/* Bottom accent line */}
+      <div className="absolute bottom-0 left-1/2 h-[2px] w-0 -translate-x-1/2 bg-gradient-to-r from-transparent via-accent to-transparent transition-all duration-300 group-hover:w-3/4" />
+    </motion.button>
+  )
+}
+
+/**
+ * The single unified board canvas.
+ *
+ * DEFAULT STATE:
+ *   Top row (~65% height): Timetable (permanent, left) + Swappable widget (right)
+ *   Bottom row (~35% height): remaining widgets as minimal aesthetic cards
+ *   Single-click a mini card → swaps it into the right slot
+ *   Double-click a mini card → opens full-screen hero mode
+ *
+ * MAXIMISED STATE (double-click):
+ *   Clicked widget → full hero pane + sidebar dock of all others.
  */
 export function BoardCanvas() {
   const maximizedWidgetId = useStore((s) => s.maximizedWidgetId)
   const maximizeWidget = useStore((s) => s.maximizeWidget)
+
+  const [rightId, setRightId] = useState(DEFAULT_RIGHT_ID)
+
   const maximized = WIDGETS.find((w) => w.id === maximizedWidgetId)
   const others = WIDGETS.filter((w) => w.id !== maximizedWidgetId)
 
-  return (
-    <LayoutGroup>
-      {maximized ? (
-        <div className="flex h-full gap-3">
-          {/* Off-screen neighbors → vertical trigger dock */}
-          <div className="flex shrink-0 flex-col gap-2">
-            <AnimatePresence>
-              {others.map((w) => (
-                <DockChip key={w.id} widget={w} onClick={() => maximizeWidget(w.id)} />
-              ))}
-            </AnimatePresence>
-          </div>
+  const leftWidget = WIDGETS.find((w) => w.id === LEFT_ID)
+  const rightWidget = WIDGETS.find((w) => w.id === rightId)
 
-          {/* Focused hero */}
+  // Bottom row: all swappable widgets EXCEPT the one currently in the right slot,
+  // maintaining a consistent natural order.
+  const bottomWidgets = ALL_SWAPPABLE
+    .filter((id) => id !== rightId)
+    .map((id) => WIDGETS.find((w) => w.id === id))
+    .filter(Boolean)
+
+  const toggleWidget = useStore((s) => s.toggleWidget)
+
+  // ── Maximised: dock + hero ────────────────────────────────────────────────
+  if (maximized) {
+    return (
+      <LayoutGroup>
+        <div className="flex h-full gap-3 p-1">
+          <div className="flex shrink-0 flex-col gap-2">
+            {WIDGETS.map((w) => (
+              <DockChip
+                key={w.id}
+                widget={w}
+                isActive={w.id === maximizedWidgetId}
+                onClick={() => toggleWidget(w.id)}
+              />
+            ))}
+          </div>
           <motion.div layout className="min-h-0 flex-1">
             <Widget widget={maximized} variant="hero" />
           </motion.div>
         </div>
-      ) : (
-        <div className="grid min-h-full grid-cols-1 gap-4 [grid-auto-rows:minmax(180px,1fr)] sm:grid-cols-2 lg:grid-cols-3">
-          {WIDGETS.map((w) => (
-            <Widget key={w.id} widget={w} variant="grid" />
-          ))}
-        </div>
-      )}
-    </LayoutGroup>
+      </LayoutGroup>
+    )
+  }
+
+  // ── Default: primary grid + secondary mini cards ──────────────────────────
+  return (
+    <div className="flex h-full flex-col gap-3 p-1">
+      {/* Top row: Timetable (permanent, wider) + Swappable right widget */}
+      <div className="flex min-h-0 flex-[1.8] gap-3">
+        {leftWidget && (
+          <div className="min-h-0 min-w-0 flex-[1.6]">
+            <div className="h-full">
+              <Widget widget={leftWidget} variant="grid" />
+            </div>
+          </div>
+        )}
+        {rightWidget && (
+          <motion.div
+            key={rightId}
+            className="min-h-0 min-w-0 flex-1"
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <div className="h-full">
+              <Widget widget={rightWidget} variant="grid" />
+            </div>
+          </motion.div>
+        )}
+      </div>
+
+      {/* Bottom row: mini-cards for all remaining swappable widgets */}
+      <div className="flex min-h-0 flex-1 gap-3">
+        {bottomWidgets.map((w) => (
+          <MiniCard
+            key={w.id}
+            widget={w}
+            onSingleClick={() => setRightId(w.id)}
+            onDoubleClick={() => maximizeWidget(w.id)}
+          />
+        ))}
+      </div>
+    </div>
   )
 }

@@ -33,7 +33,8 @@ export function FirestoreSyncProvider({ children }) {
         setModes(modes)
         const currentActive = useStore.getState().activeModeId
         if (modes.length > 0) {
-          const exists = modes.some((m) => m.id === currentActive)
+          // 'all' is the special merged-scope pseudo-mode — always valid.
+          const exists = currentActive === 'all' || modes.some((m) => m.id === currentActive)
           if (!currentActive || !exists) {
             const fallbackId = modes[0].id
             setActiveModeId(fallbackId)
@@ -53,7 +54,10 @@ export function FirestoreSyncProvider({ children }) {
         const saved = data?.settings?.activeModeId
         if (saved) {
           const currentModes = useStore.getState().modes
-          if (currentModes.length > 0) {
+          // 'all' is the merged-scope pseudo-mode — accept it verbatim.
+          if (saved === 'all') {
+            setActiveModeId('all')
+          } else if (currentModes.length > 0) {
             if (currentModes.some((m) => m.id === saved)) {
               setActiveModeId(saved)
             } else {

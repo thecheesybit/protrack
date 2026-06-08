@@ -1,17 +1,181 @@
 [
-  { "text": "The secret of getting ahead is getting started.", "author": "Mark Twain" },
-  { "text": "It does not matter how slowly you go as long as you do not stop.", "author": "Confucius" },
-  { "text": "Amateurs sit and wait for inspiration, the rest of us just get up and go to work.", "author": "Stephen King" },
-  { "text": "You don't have to see the whole staircase, just take the first step.", "author": "Martin Luther King Jr." },
-  { "text": "Focus on being productive instead of busy.", "author: "Tim Ferriss" },
-  { "text": "Lost time is never found again.", "author": "Benjamin Franklin" },
-  { "text": "Action is the foundational key to all success.", "author": "Pablo Picasso" },
-  { "text": "Doubt kills more dreams than failure ever will.", "author": "Suzy Kassem" },
-  { "text": "Don't count the days, make the days count.", "author": "Muhammad Ali" },
-  { "text": "The only way to do great work is to love what you do.", "author": "Steve Jobs" },
-  { "text": "The mind is everything. What you think you become.", "author": "Buddha" },
-  { "text": "Start where you are. Use what you have. Do what you can.", "author": "Arthur Ashe" },
-  { "text": "Discipline is the bridge between goals and accomplishment.", "author": "Jim Rohn" },
-  { "text": "Success is not final, failure is not fatal: it is the courage to continue that counts.", "author": "Winston Churchill" },
-  { "text": "We are what we repeatedly do. Excellence, then, is not an act, but a habit.", "author": "Aristotle" }
+  {
+    "text": "You have power over your mind -\nnot outside events.\nRealize this, and you will find strength.",
+    "author": "Marcus Aurelius",
+    "category": "stoic",
+    "language": "en",
+    "mood": "calm"
+  },
+  {
+    "text": "We suffer more often in imagination\nthan in reality.",
+    "author": "Seneca",
+    "category": "stoic",
+    "language": "en",
+    "mood": "reflective"
+  },
+  {
+    "text": "Wealth consists not in having great possessions,\nbut in having few wants.",
+    "author": "Epictetus",
+    "category": "stoic",
+    "language": "en",
+    "mood": "calm"
+  },
+  {
+    "text": "Difficulties strengthen the mind,\nas labor does the body.",
+    "author": "Seneca",
+    "category": "stoic",
+    "language": "en",
+    "mood": "motivating"
+  },
+  {
+    "text": "He who has a why to live for\ncan bear almost any how.",
+    "author": "Friedrich Nietzsche",
+    "category": "philosophy",
+    "language": "en",
+    "mood": "reflective"
+  },
+  {
+    "text": "In the depth of winter,\nI finally learned that within me\nthere lay an invincible summer.",
+    "author": "Albert Camus",
+    "category": "philosophy",
+    "language": "en",
+    "mood": "calm"
+  },
+  {
+    "text": "The ability to observe without evaluating\nis the highest form of intelligence.",
+    "author": "Jiddu Krishnamurti",
+    "category": "philosophy",
+    "language": "en",
+    "mood": "reflective"
+  },
+  {
+    "text": "The only way to make sense out of change\nis to plunge into it, move with it,\nand join the dance.",
+    "author": "Alan Watts",
+    "category": "philosophy",
+    "language": "en",
+    "mood": "calm"
+  },
+  {
+    "text": "Deep work is the superpower\nof the 21st century.",
+    "author": "Cal Newport",
+    "category": "productivity",
+    "language": "en",
+    "mood": "sharp"
+  },
+  {
+    "text": "If you can't decide,\nthe answer is no.",
+    "author": "Naval Ravikant",
+    "category": "productivity",
+    "language": "en",
+    "mood": "sharp"
+  },
+  {
+    "text": "The best way to do great work\nis to find something you like doing,\nand then do it.",
+    "author": "Paul Graham",
+    "category": "productivity",
+    "language": "en",
+    "mood": "motivating"
+  },
+  {
+    "text": "Impatience with actions,\npatience with results.",
+    "author": "Naval Ravikant",
+    "category": "productivity",
+    "language": "en",
+    "mood": "sharp"
+  },
+  {
+    "text": "Audentes fortuna iuvat.",
+    "author": "Classical Latin Proverb",
+    "category": "proverbs",
+    "language": "la",
+    "mood": "motivating",
+    "translation": "Fortune favors the bold"
+  },
+  {
+    "text": "उद्यमेन हि सिध्यन्ति कार्याणि न मनोरथैः।",
+    "author": "Sanskrit Proverb",
+    "category": "proverbs",
+    "language": "sa",
+    "mood": "motivating",
+    "transliteration": "Udyamena hi sidhyanti kaaryaani na manorathaih.",
+    "translation": "Work is completed by effort, not by mere wishing."
+  },
+  {
+    "text": "The obstacle is the path.",
+    "author": "Zen Buddhist Koan",
+    "category": "proverbs",
+    "language": "en",
+    "mood": "calm"
+  },
+  {
+    "text": "Sitting quietly, doing nothing,\nspring comes, and the grass grows by itself.",
+    "author": "Zen Buddhist Koan",
+    "category": "proverbs",
+    "language": "en",
+    "mood": "calm"
+  },
+  {
+    "text": "काल करे सो आज कर, आज करे सो अब।\nपल में प्रलय होएगी, बहुरी करेगा कब॥",
+    "author": "Kabir",
+    "category": "hindi_urdu",
+    "language": "hi",
+    "mood": "reflective",
+    "transliteration": "Kaal kare so aaj kar, aaj kare so ab. Pal mein pralay hoegi, bahuri karega kab.",
+    "translation": "Do tomorrow's work today, and today's work now. If the moment is lost, when will you do it?"
+  },
+  {
+    "text": "हज़ारों ख़्वाहिशें ऐसी कि हर ख़्वाहिश पे दम निकले।\nबहुत निकले मिरे अरमान लेकिन फिर भी कम निकले॥",
+    "author": "Mirza Ghalib",
+    "category": "hindi_urdu",
+    "language": "ur",
+    "mood": "reflective",
+    "transliteration": "Hazaaron khwaahishein aisi ki har khwaahish pe dam nikle. Bahut nikle mere armaan lekin phir bhi kam निकले.",
+    "translation": "Thousands of desires, each worth dying for. Many of my dreams were realized, yet they feel so few."
+  },
+  {
+    "text": "रहिमन धागा प्रेम का, मत तोड़ो चटकाय।\nटूटे से फिर ना मिले, मिले गाँठ परि जाय॥",
+    "author": "Rahim",
+    "category": "hindi_urdu",
+    "language": "hi",
+    "mood": "calm",
+    "transliteration": "Rahiman dhaaga prem ka, mat todo chatkaay. Toote se phir na mile, mile gaanth pari jaay.",
+    "translation": "Do not snap the delicate thread of love. Once broken it cannot be joined; if joined, a knot remains."
+  },
+  {
+    "text": "पोथी पढ़ि पढ़ि जग मुआ, पंडित भया न कोय।\nढाई आखर प्रेम का, पढ़े सो पंडित होय॥",
+    "author": "Kabir",
+    "category": "hindi_urdu",
+    "language": "hi",
+    "mood": "reflective",
+    "transliteration": "Pothi padhi padhi jag mua, pandit bhaya na koy. Dhaai aakhar prem ka, padhe so pandit hoy.",
+    "translation": "Reading books, the world died, yet none became wise. The one who reads two and a half letters of love becomes wise."
+  },
+  {
+    "text": "The first principle is that you must not fool yourself,\nand you are the easiest person to fool.",
+    "author": "Richard Feynman",
+    "category": "modern",
+    "language": "en",
+    "mood": "reflective"
+  },
+  {
+    "text": "Your time is limited,\nso don't waste it living someone else's life.",
+    "author": "Steve Jobs",
+    "category": "modern",
+    "language": "en",
+    "mood": "motivating"
+  },
+  {
+    "text": "Nothing in life is to be feared,\nit is only to be understood.\nNow is the time to understand more.",
+    "author": "Marie Curie",
+    "category": "modern",
+    "language": "en",
+    "mood": "calm"
+  },
+  {
+    "text": "If something is important enough,\nyou should do it even if the odds\nare not in your favor.",
+    "author": "Elon Musk",
+    "category": "modern",
+    "language": "en",
+    "mood": "motivating"
+  }
 ]

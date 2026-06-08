@@ -41,7 +41,8 @@ function readInitialPos() {
       if (typeof parsed.x === 'number' && typeof parsed.y === 'number') return parsed
     }
   } catch { /* fallback */ }
-  return { x: 12, y: 12 }
+  const defaultY = typeof window !== 'undefined' ? window.innerHeight - 120 : 690
+  return { x: 12, y: defaultY }
 }
 
 function readInitialScale() {
@@ -79,14 +80,17 @@ function formatNow() {
 
 function Digit({ value }) {
   return (
-    <div className="relative h-10 w-7 overflow-hidden rounded-md border border-line/60 bg-surface-2/80 shadow-sm">
+    <div
+      className="relative h-10 w-7 overflow-hidden rounded-md border border-line/60 bg-surface-2/80 shadow-sm"
+      style={{ perspective: '180px' }}
+    >
       <AnimatePresence mode="popLayout" initial={false}>
         <motion.span
           key={value}
-          initial={{ rotateX: -90, opacity: 0 }}
-          animate={{ rotateX: 0, opacity: 1 }}
-          exit={{ rotateX: 90, opacity: 0 }}
-          transition={{ duration: 0.32, ease: [0.2, 0, 0, 1] }}
+          initial={{ rotateX: -90 }}
+          animate={{ rotateX: 0 }}
+          exit={{ rotateX: 90 }}
+          transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
           className="absolute inset-0 flex items-center justify-center font-mono text-xl font-semibold tabular-nums text-ink"
           style={{
             transformOrigin: 'center',

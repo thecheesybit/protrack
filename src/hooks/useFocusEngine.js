@@ -5,6 +5,7 @@ import { playChime, playEventSound, MultiTrackMixer } from '@/lib/audioEngine'
 import { notify, ensureNotificationPermission } from '@/lib/notify'
 import { logFocusSession } from '@/services/focusService'
 import { addLedgerEntry } from '@/services/ledgerService'
+import { updateTodo } from '@/services/todoService'
 
 /**
  * Mounted once (in Dashboard). Owns the 1s tick interval, the ambient sound
@@ -92,6 +93,11 @@ export function useFocusEngine() {
           detail: st.session?.label || 'Deep focus',
           modeId: resolvedModeId,
         })
+        if (st.session?.todoId) {
+          updateTodo(uid, st.session.todoId, { done: true }).catch((err) =>
+            console.error('[focus] todo mark-done failed', err),
+          )
+        }
       } catch (err) {
         console.error('[focus] failed to log session', err)
       }

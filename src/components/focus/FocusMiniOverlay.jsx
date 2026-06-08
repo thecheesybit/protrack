@@ -39,8 +39,7 @@ export function FocusMiniOverlay() {
   const status = useStore((s) => s.status)
   const phase = useStore((s) => s.phase)
   const secondsLeft = useStore((s) => s.secondsLeft)
-  const focusMin = useStore((s) => s.focusMin)
-  const breakMin = useStore((s) => s.breakMin)
+  const phaseTotalSec = useStore((s) => s.phaseTotalSec)
   const session = useStore((s) => s.session)
   const maximizedWidgetId = useStore((s) => s.maximizedWidgetId)
   const focusContext = useStore((s) => s.focusContext)
@@ -51,8 +50,10 @@ export function FocusMiniOverlay() {
   const active = status !== 'idle'
   const show = active && Boolean(maximizedWidgetId) && maximizedWidgetId !== 'focus' && !focusContext
 
-  const phaseTotal = (phase === 'focus' ? focusMin : breakMin) * 60
-  const progress = phaseTotal ? 1 - secondsLeft / phaseTotal : 0
+  // Mirror the same total used by the Focus widget + lock screen so the mini
+  // ring stays in lockstep (tracks custom timers and mid-session adjustments).
+  const phaseTotal = phaseTotalSec || secondsLeft || 1
+  const progress = 1 - secondsLeft / phaseTotal
   const color = phase === 'break' ? '#10b981' : 'rgb(var(--accent))'
 
   return (

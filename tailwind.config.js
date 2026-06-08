@@ -29,6 +29,10 @@ export default {
           'inset 0 1px 0 0 rgba(255, 255, 255, 0.06), 0 28px 70px -24px rgba(0, 0, 0, 0.7)',
         glow: '0 0 0 1px rgb(var(--accent) / 0.35), 0 12px 44px -12px rgb(var(--accent) / 0.5)',
         'glow-sm': '0 0 22px -6px rgb(var(--accent) / 0.55)',
+        // Premium design system elevation
+        'premium-sm': '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
+        'premium-md': '0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04)',
+        'premium-lg': '0 8px 40px rgba(0,0,0,0.12)',
       },
       borderRadius: {
         '2xl': '1.125rem',

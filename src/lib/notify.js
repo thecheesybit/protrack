@@ -10,7 +10,6 @@ export async function ensureNotificationPermission() {
 export function notify(title, body) {
   try {
     if ('Notification' in window && Notification.permission === 'granted') {
-      // eslint-disable-next-line no-new
       new Notification(title, { body, icon: '/logo.png', silent: false })
     }
   } catch (err) {

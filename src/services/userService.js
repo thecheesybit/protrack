@@ -32,15 +32,26 @@ export async function ensureUserDocument(firebaseUser) {
   }))
   const firstModeId = modeDocs[0]?.ref.id ?? null
 
+  const hash = Array.from(firebaseUser.uid).reduce((acc, char) => (acc << 5) - acc + char.charCodeAt(0), 0)
+  const uniqueCode = String(Math.abs(hash) % 9000000 + 1000000)
+
+  const rawDisplayName = firebaseUser.displayName || 'Explorer'
+  const nameParts = rawDisplayName.trim().split(/\s+/)
+  const firstName = nameParts[0] || 'Explorer'
+  const lastName = nameParts.slice(1).join(' ') || ''
+
   await runTransaction(db, async (tx) => {
     const txSnap = await tx.get(userRef)
     if (txSnap.exists()) return
 
     tx.set(userRef, {
       profile: {
-        displayName: firebaseUser.displayName || 'Explorer',
+        firstName,
+        lastName,
+        displayName: rawDisplayName,
         email: firebaseUser.email || '',
         photoURL: firebaseUser.photoURL || '',
+        uniqueCode,
         createdAt: serverTimestamp(),
       },
       settings: {
@@ -93,4 +104,9 @@ export async function updateActiveMode(uid, modeId) {
 /** Merge a partial settings patch onto the user doc. */
 export async function updateSettings(uid, patch) {
   await setDoc(doc(db, 'users', uid), { settings: patch }, { merge: true })
+}
+
+/** Merge a partial profile patch onto the user doc. */
+export async function updateProfile(uid, patch) {
+  await setDoc(doc(db, 'users', uid), { profile: patch }, { merge: true })
 }

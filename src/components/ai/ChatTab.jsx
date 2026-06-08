@@ -56,7 +56,7 @@ const SUGGESTIONS = [
   'Remind me to drink water',
 ]
 
-export function ChatTab({ onOpenSettings }) {
+export function ChatTab({ onOpenSettings, onToggleVoiceNote }) {
   const { user } = useAuth()
   const modes = useStore((s) => s.modes)
   const activeModeId = useStore((s) => s.activeModeId)
@@ -303,6 +303,16 @@ export function ChatTab({ onOpenSettings }) {
             placeholder={listening ? 'Listening…' : 'Ask your companion…'}
             className="max-h-28 flex-1 resize-none rounded-xl border border-line bg-surface-2/60 px-3.5 py-2.5 text-sm outline-none focus:border-accent"
           />
+          {onToggleVoiceNote && (
+            <button
+              type="button"
+              onClick={onToggleVoiceNote}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-line text-muted hover:text-accent hover:border-accent/40 transition-colors"
+              title="Record and Save Voice Note"
+            >
+              <Mic className="h-4 w-4 text-accent" />
+            </button>
+          )}
           <button
             onClick={() => send()}
             disabled={loading || !input.trim()}
@@ -316,3 +326,4 @@ export function ChatTab({ onOpenSettings }) {
     </div>
   )
 }
+

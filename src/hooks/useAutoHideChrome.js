@@ -25,57 +25,8 @@ export function useAutoHideChrome() {
 
   // Any open overlay (or reduced motion) keeps chrome pinned visible.
   useEffect(() => {
-    if (forceShow || reduceMotion) setChromeHidden(false)
-  }, [forceShow, reduceMotion, setChromeHidden])
-
-  useEffect(() => {
-    if (reduceMotion) {
+    if (forceShow || reduceMotion) {
       setChromeHidden(false)
-      return undefined
     }
-
-    let raf = 0
-    let hideTimer = 0
-    let lastY = 999
-
-    const evaluate = () => {
-      const st = useStore.getState()
-      if (st.aiOpen || st.settingsOpen || st.focusContext) {
-        setChromeHidden(false)
-        clearTimeout(hideTimer)
-        hideTimer = 0
-        return
-      }
-      const delay = 7500 // 7.5 seconds of inactivity before auto-hiding
-
-      if (lastY <= REVEAL_Y) {
-        setChromeHidden(false)
-        clearTimeout(hideTimer)
-        hideTimer = 0
-      } else if (lastY > HIDE_Y) {
-        clearTimeout(hideTimer)
-        hideTimer = setTimeout(() => {
-          setChromeHidden(true)
-          hideTimer = 0
-        }, delay)
-      }
-    }
-
-    const onMove = (e) => {
-      lastY = e.clientY
-      if (!raf) {
-        raf = requestAnimationFrame(() => {
-          raf = 0
-          evaluate()
-        })
-      }
-    }
-
-    window.addEventListener('pointermove', onMove)
-    return () => {
-      window.removeEventListener('pointermove', onMove)
-      cancelAnimationFrame(raf)
-      clearTimeout(hideTimer)
-    }
-  }, [reduceMotion, setChromeHidden])
+  }, [forceShow, reduceMotion, setChromeHidden])
 }

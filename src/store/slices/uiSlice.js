@@ -6,7 +6,10 @@
  * without paying for a Firestore round-trip on cold start.
  */
 const FONT_SCALE_KEY = 'protrack:fontScale'
-const VALID_FONT_SCALES = ['compact', 'standard', 'large']
+const VALID_FONT_SCALES = ['tiny', 'compact', 'standard', 'large', 'huge']
+
+const FONT_FAMILY_KEY = 'protrack:fontFamily'
+const VALID_FONT_FAMILIES = ['inter', 'outfit', 'lora', 'playfair', 'mono']
 
 function readInitialFontScale() {
   try {
@@ -14,6 +17,15 @@ function readInitialFontScale() {
     return VALID_FONT_SCALES.includes(v) ? v : 'standard'
   } catch {
     return 'standard'
+  }
+}
+
+function readInitialFontFamily() {
+  try {
+    const v = typeof localStorage !== 'undefined' && localStorage.getItem(FONT_FAMILY_KEY)
+    return VALID_FONT_FAMILIES.includes(v) ? v : 'inter'
+  } catch {
+    return 'inter'
   }
 }
 
@@ -25,6 +37,7 @@ export const createUiSlice = (set) => ({
   fullscreen: false,
   focusContext: null, // { title, color, subjectId?, slotId? } | null
   fontScale: readInitialFontScale(),
+  fontFamily: readInitialFontFamily(),
 
   maximizeWidget: (id) => set({ maximizedWidgetId: id }),
   restoreWidgets: () => set({ maximizedWidgetId: null }),
@@ -48,6 +61,25 @@ export const createUiSlice = (set) => ({
     set({ fontScale })
   },
 
+  setFontFamily: (fontFamily) => {
+    if (!VALID_FONT_FAMILIES.includes(fontFamily)) return
+    try {
+      localStorage.setItem(FONT_FAMILY_KEY, fontFamily)
+    } catch {
+      /* private mode */
+    }
+    set({ fontFamily })
+  },
+
   openFocus: (focusContext) => set({ focusContext }),
   closeFocus: () => set({ focusContext: null }),
+
+  // Hands-free Mode background loop states
+  handsFreeActive: false,
+  handsFreeStatus: 'idle', // 'idle' | 'listening' | 'thinking' | 'speaking'
+  handsFreeFeedback: null, // { query: string, reply: string } | null
+  setHandsFreeActive: (handsFreeActive) => set({ handsFreeActive }),
+  setHandsFreeStatus: (handsFreeStatus) => set({ handsFreeStatus }),
+  setHandsFreeFeedback: (handsFreeFeedback) => set({ handsFreeFeedback }),
 })
+

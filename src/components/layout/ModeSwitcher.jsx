@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { Plus, Settings2 } from 'lucide-react'
+import { Plus, Settings2, Sun, Moon, Settings, LogOut, Heart, Minimize2 } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '@/hooks/useAuth'
+import { useTheme } from '@/hooks/useTheme'
 import { useStore } from '@/store/useStore'
 import { getIcon } from '@/lib/icons'
 import { updateActiveMode } from '@/services/userService'
@@ -8,9 +10,58 @@ import { ModeEditorModal } from '@/components/modes/ModeEditorModal'
 import { cn } from '@/utils/cn'
 
 /**
- * Static, non-draggable mode pill. Navigation order is determined by
- * mode.order and can only be changed via Mode Editor in Settings —
- * eliminating accidental reordering during normal use.
+ * Vertical mode pill — compact icon button with a colored indicator and tooltip.
+ */
+function VerticalModePill({ mode, active, onSelect, onEdit }) {
+  const Icon = getIcon(mode.icon)
+  const accentColor = mode.accentColor || '#6366f1'
+
+  return (
+    <div className="group relative">
+      <button
+        onClick={onSelect}
+        className={cn(
+          'relative flex h-12 w-12 items-center justify-center rounded-2xl transition-all duration-200 border',
+          active
+            ? 'bg-surface text-ink ring-2 ring-offset-2 ring-offset-surface'
+            : 'border-line/60 bg-surface/60 text-muted backdrop-blur-xl hover:border-accent/50 hover:text-ink',
+        )}
+        style={active ? {
+          borderColor: accentColor,
+          '--tw-ring-color': accentColor,
+          boxShadow: `0 0 16px ${accentColor}60`
+        } : {}}
+        aria-label={mode.name}
+      >
+        <span
+          className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full ring-2 ring-surface"
+          style={{ backgroundColor: accentColor }}
+        />
+        <Icon 
+          className="h-5 w-5" 
+          style={active ? { color: accentColor } : {}}
+        />
+      </button>
+
+      {/* Tooltip */}
+      <span className="pointer-events-none absolute left-14 top-1/2 z-20 -translate-y-1/2 whitespace-nowrap rounded-lg border border-line/60 bg-surface px-2.5 py-1.5 text-xs font-medium opacity-0 shadow-glass transition-opacity group-hover:opacity-100">
+        {mode.name}
+        {active && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onEdit() }}
+            className="ml-2 inline-flex text-muted hover:text-ink"
+            aria-label="Edit mode"
+          >
+            <Settings2 className="h-3 w-3" />
+          </button>
+        )}
+      </span>
+    </div>
+  )
+}
+
+/**
+ * Horizontal mode pill (original layout, for fallback).
  */
 function ModePill({ mode, active, onSelect, onEdit }) {
   const Icon = getIcon(mode.icon)
@@ -51,15 +102,21 @@ function ModePill({ mode, active, onSelect, onEdit }) {
   )
 }
 
-export function ModeSwitcher() {
-  const { user } = useAuth()
+export function ModeSwitcher({ vertical = false }) {
+  const { user, signOut } = useAuth()
+  const { theme, toggleTheme } = useTheme()
   const modes = useStore((s) => s.modes)
   const activeModeId = useStore((s) => s.activeModeId)
   const setActiveModeId = useStore((s) => s.setActiveModeId)
   const restoreWidgets = useStore((s) => s.restoreWidgets)
+  const setSettingsOpen = useStore((s) => s.setSettingsOpen)
+  const setSupportOpen = useStore((s) => s.setSupportOpen)
+  const fullscreen = useStore((s) => s.fullscreen)
 
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingMode, setEditingMode] = useState(null)
+
+  const firstName = (user?.displayName || 'Explorer').split(' ')[0]
 
   // Modes are rendered in their persisted order (mode.order ascending)
   const sortedModes = [...modes].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
@@ -72,12 +129,7 @@ export function ModeSwitcher() {
     setActiveModeId(id) // optimistic
     restoreWidgets() // collapse any focused widget on context switch
     try {
-      if (id !== 'all') {
-        await updateActiveMode(user.uid, id)
-      } else {
-        // We can just persist 'all' as the active mode. It's safe since it's just a string pointer.
-        await updateActiveMode(user.uid, id)
-      }
+      await updateActiveMode(user.uid, id)
     } catch (err) {
       console.error('[mode] failed to persist active mode', err)
     }
@@ -93,6 +145,98 @@ export function ModeSwitcher() {
     setEditorOpen(true)
   }
 
+  // ── Vertical: Compact floating strip on the left ──────────────────────────
+  if (vertical) {
+    return (
+      <>
+        <div className="flex shrink-0 flex-col items-center gap-2">
+          <VerticalModePill
+            key="all"
+            mode={allMode}
+            active={activeModeId === 'all'}
+            onSelect={() => selectMode('all')}
+            onEdit={() => openEdit(allMode)}
+          />
+
+          {sortedModes.map((mode) => (
+            <VerticalModePill
+              key={mode.id}
+              mode={mode}
+              active={mode.id === activeModeId}
+              onSelect={() => selectMode(mode.id)}
+              onEdit={() => openEdit(mode)}
+            />
+          ))}
+
+          <button
+            onClick={openCreate}
+            title="New mode"
+            className="flex h-12 w-12 items-center justify-center rounded-2xl border border-line/60 bg-surface/60 text-muted backdrop-blur-xl transition-colors hover:border-accent/50 hover:text-ink"
+          >
+            <Plus className="h-5 w-5" />
+          </button>
+
+          {/* Spacer */}
+          <div className="my-1 h-[1px] w-6 bg-line/50" />
+
+          {/* Exit Full Screen */}
+          {fullscreen && (
+            <button
+              onClick={() => window.protrack?.window?.toggleFullScreen?.()}
+              title="Exit Full Screen"
+              className="flex h-12 w-12 items-center justify-center rounded-2xl border border-amber-500/25 bg-amber-500/5 text-amber-400 hover:text-amber-500 hover:bg-amber-500/10 hover:border-amber-500/40 transition-colors"
+            >
+              <Minimize2 className="h-5 w-5" />
+            </button>
+          )}
+
+          {/* Theme Toggle */}
+          <button
+            onClick={toggleTheme}
+            title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            className="flex h-12 w-12 items-center justify-center rounded-2xl border border-line/60 bg-surface/60 text-muted backdrop-blur-xl transition-colors hover:border-accent/50 hover:text-ink"
+          >
+            {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          </button>
+
+          {/* Settings */}
+          <button
+            onClick={() => setSettingsOpen(true)}
+            title="Settings"
+            className="flex h-12 w-12 items-center justify-center rounded-2xl border border-line/60 bg-surface/60 text-muted backdrop-blur-xl transition-colors hover:border-accent/50 hover:text-ink"
+          >
+            <Settings className="h-5 w-5" />
+          </button>
+
+          {/* Support Corner */}
+          <button
+            onClick={() => setSupportOpen(true)}
+            title="Support Corner"
+            className="flex h-12 w-12 items-center justify-center rounded-2xl border border-rose-500/25 bg-rose-500/5 text-rose-400 transition-colors hover:text-rose-500 hover:bg-rose-500/10 hover:border-rose-500/40"
+          >
+            <Heart className="h-5 w-5 fill-rose-400/20" />
+          </button>
+
+          {/* Sign Out */}
+          <button
+            onClick={signOut}
+            title="Sign out"
+            className="flex h-12 w-12 items-center justify-center rounded-2xl border border-line/60 bg-surface/60 text-muted backdrop-blur-xl transition-colors hover:border-red-500/40 hover:text-red-500 hover:bg-red-500/5"
+          >
+            <LogOut className="h-5 w-5" />
+          </button>
+        </div>
+
+        <ModeEditorModal
+          open={editorOpen}
+          onClose={() => setEditorOpen(false)}
+          mode={editingMode}
+        />
+      </>
+    )
+  }
+
+  // ── Horizontal: Original inline mode bar ──────────────────────────────────
   return (
     <>
       <div className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-line/70 bg-surface/50 p-1.5 backdrop-blur-xl">

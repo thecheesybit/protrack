@@ -9,10 +9,13 @@ import {
   CheckCircle2,
   Info,
   Clock,
+  Download,
+  RefreshCw,
 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { useIslandCycle } from '@/hooks/useIslandCycle'
 import { isDesktop } from '@/desktop/isDesktop'
+import { desktopBridge } from '@/desktop/isDesktop'
 
 // Semantic icon + tone per event kind — Lucide only, never emoji.
 const KIND = {
@@ -25,6 +28,8 @@ const KIND = {
   success: { Icon: CheckCircle2, tone: 'text-emerald-400' },
   info: { Icon: Info, tone: 'text-accent' },
   deadline: { Icon: Clock, tone: 'text-amber-400' },
+  'update-downloading': { Icon: Download, tone: 'text-accent animate-pulse' },
+  'update-ready': { Icon: RefreshCw, tone: 'text-emerald-400 animate-spin' },
 }
 
 const spring = { type: 'spring', stiffness: 420, damping: 34, mass: 0.7 }
@@ -54,7 +59,13 @@ export function DynamicIsland() {
             key="island"
             type="button"
             layout
-            onClick={() => dismissIsland(active.id)}
+            onClick={() => {
+              if (active.kind === 'update-ready') {
+                desktopBridge?.update?.install?.()
+              } else {
+                dismissIsland(active.id)
+              }
+            }}
             initial={{ y: -28, opacity: 0, scale: 0.85 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: -18, opacity: 0, scale: 0.92 }}

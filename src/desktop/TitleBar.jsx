@@ -37,14 +37,9 @@ export function TitleBar() {
   return (
     <div className="shrink-0">
       <div
-        className="flex h-9 items-center justify-between border-b border-line/60 bg-surface/70 backdrop-blur-xl"
+        className="flex h-9 items-center justify-end bg-transparent"
         style={{ WebkitAppRegion: 'drag' }}
       >
-        <div className="flex items-center gap-2 pl-3">
-          <Logo className="h-4 w-4" />
-          <span className="text-xs font-semibold tracking-wide text-muted">PRO TRACK</span>
-        </div>
-
         <div className="flex h-full" style={{ WebkitAppRegion: 'no-drag' }}>
           <button
             onClick={onMinimize}

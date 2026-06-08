@@ -5,6 +5,7 @@ import { AppLoader } from '@/components/common/AppLoader'
 import { LandingPage } from '@/components/marketing/LandingPage'
 import { QrLoginScreen } from '@/components/auth/QrLoginScreen'
 import { LinkDevicePage } from '@/components/auth/LinkDevicePage'
+import { LinkGcalPage } from '@/components/auth/LinkGcalPage'
 import { PatreonApprovePage } from '@/components/patreon/PatreonApprovePage'
 import { Workspace } from '@/components/layout/Workspace'
 import { FirestoreSyncProvider } from '@/providers/FirestoreSyncProvider'
@@ -23,6 +24,11 @@ function Routes() {
   if (!configured) return <SetupRequired key="setup" />
 
   const pathname = typeof window !== 'undefined' ? window.location.pathname : '/'
+
+  // Google Calendar auth gateway: /link-gcal?uid=<uid>
+  if (pathname.startsWith('/link-gcal')) {
+    return <LinkGcalPage key="link-gcal" />
+  }
 
   // Mobile auth gateway: /link?s=<sessionId> — the only authenticated surface
   // the web build exposes (used by the QR handshake).
@@ -74,7 +80,6 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col">
-      {isDesktop && <UpdateGate />}
       <Toaster
         position="top-center"
         toastOptions={{

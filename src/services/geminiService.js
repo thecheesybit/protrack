@@ -11,15 +11,65 @@ const KEY = 'protrack:gemini_key'
 // gemini-1.5-flash 404 we hit on 2026-06-07).
 const MODEL = 'gemini-flash-latest'
 
+export function getApiKey(provider) {
+  return localStorage.getItem(`protrack:${provider}_key`) || ''
+}
+export function hasApiKey(provider) {
+  return Boolean(getApiKey(provider))
+}
+export function setApiKey(provider, value) {
+  if (value) localStorage.setItem(`protrack:${provider}_key`, value.trim())
+  else localStorage.removeItem(`protrack:${provider}_key`)
+}
+
 export function getGeminiKey() {
-  return localStorage.getItem(KEY) || ''
+  return getApiKey('gemini')
 }
 export function hasGeminiKey() {
-  return Boolean(getGeminiKey())
+  return hasApiKey('gemini')
 }
 export function setGeminiKey(value) {
-  if (value) localStorage.setItem(KEY, value.trim())
-  else localStorage.removeItem(KEY)
+  setApiKey('gemini', value)
+}
+
+export function getElevenLabsKey() {
+  return getApiKey('elevenlabs')
+}
+export function hasElevenLabsKey() {
+  return hasApiKey('elevenlabs')
+}
+export function setElevenLabsKey(value) {
+  setApiKey('elevenlabs', value)
+}
+
+export function getOpenAIKey() {
+  return getApiKey('openai')
+}
+export function hasOpenAIKey() {
+  return hasApiKey('openai')
+}
+export function setOpenAIKey(value) {
+  setApiKey('openai', value)
+}
+
+export function getAnthropicKey() {
+  return getApiKey('anthropic')
+}
+export function hasAnthropicKey() {
+  return hasApiKey('anthropic')
+}
+export function setAnthropicKey(value) {
+  setApiKey('anthropic', value)
+}
+
+export function getDeepSeekKey() {
+  return getApiKey('deepseek')
+}
+export function hasDeepSeekKey() {
+  return hasApiKey('deepseek')
+}
+export function setDeepSeekKey(value) {
+  setApiKey('deepseek', value)
 }
 
 function client() {
@@ -46,41 +96,87 @@ not echo the JSON.`
  * @param {object} ctx executor context: { uid, modeId, subjects, habits, todos }
  */
 export async function chatWithGemini(history, contextText, ctx = {}) {
-  const model = client().getGenerativeModel({
-    model: MODEL,
-    systemInstruction: `${SYSTEM}\n\nCURRENT WORKSPACE CONTEXT:\n${contextText}`,
-    tools: TOOL_DECLARATIONS,
-  })
-  const chat = model.startChat({
-    history: history.slice(0, -1).map((m) => ({
-      role: m.role === 'user' ? 'user' : 'model',
-      parts: [{ text: m.text }],
-    })),
-  })
-
-  const last = history[history.length - 1]
-  let result = await chat.sendMessage(last.text)
-  const toolEvents = []
-
-  for (let hop = 0; hop < 4; hop++) {
-    const calls = result.response.functionCalls?.() || []
-    if (!calls.length) break
-
-    const responseParts = []
-    for (const call of calls) {
-      const outcome = await executeTool(call.name, call.args || {}, ctx)
-      toolEvents.push({ name: call.name, ...outcome })
-      responseParts.push({
-        functionResponse: {
-          name: call.name,
-          response: outcome,
-        },
-      })
+  const preferred = localStorage.getItem('protrack:ai_preferred_provider') || 'auto'
+  
+  // Determine primary provider to try
+  let order = []
+  if (preferred && preferred !== 'auto') {
+    order.push(preferred)
+  }
+  const allProviders = ['gemini', 'openai', 'anthropic', 'deepseek']
+  allProviders.forEach((p) => {
+    if (!order.includes(p) && hasApiKey(p)) {
+      order.push(p)
     }
-    result = await chat.sendMessage(responseParts)
+  })
+  if (order.length === 0) {
+    order.push('gemini')
   }
 
-  return { text: result.response.text(), toolEvents }
+  let lastError = null
+  for (const p of order) {
+    try {
+      if (p === 'gemini') {
+        if (!hasGeminiKey()) throw new Error('Gemini key missing')
+        
+        const model = client().getGenerativeModel({
+          model: MODEL,
+          systemInstruction: `${SYSTEM}\n\nCURRENT WORKSPACE CONTEXT:\n${contextText}`,
+          tools: TOOL_DECLARATIONS,
+        })
+        const chat = model.startChat({
+          history: history.slice(0, -1).map((m) => ({
+            role: m.role === 'user' ? 'user' : 'model',
+            parts: [{ text: m.text }],
+          })),
+        })
+
+        const last = history[history.length - 1]
+        let result = await chat.sendMessage(last.text)
+        const toolEvents = []
+
+        for (let hop = 0; hop < 4; hop++) {
+          const calls = result.response.functionCalls?.() || []
+          if (!calls.length) break
+
+          const responseParts = []
+          for (const call of calls) {
+            const outcome = await executeTool(call.name, call.args || {}, ctx)
+            toolEvents.push({ name: call.name, ...outcome })
+            responseParts.push({
+              functionResponse: {
+                name: call.name,
+                response: outcome,
+              },
+            })
+          }
+          result = await chat.sendMessage(responseParts)
+        }
+
+        return { text: result.response.text(), toolEvents }
+      } else {
+        // Fallback for OpenAI, Anthropic, DeepSeek (text-only response)
+        const last = history[history.length - 1]
+        const systemInst = `${SYSTEM}\n\nCURRENT WORKSPACE CONTEXT:\n${contextText}`
+        let textResponse = ''
+        
+        if (p === 'openai') {
+          textResponse = await callOpenAI(last.text, systemInst)
+        } else if (p === 'anthropic') {
+          textResponse = await callAnthropic(last.text, systemInst)
+        } else if (p === 'deepseek') {
+          textResponse = await callDeepSeek(last.text, systemInst)
+        }
+        
+        return { text: textResponse, toolEvents: [] }
+      }
+    } catch (err) {
+      console.warn(`[chat-fallback] Chat provider ${p} failed, trying next...`, err)
+      lastError = err
+    }
+  }
+
+  throw lastError || new Error('No working AI provider configured')
 }
 
 /**
@@ -97,7 +193,10 @@ export async function transcribeAudio(blob) {
     binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK))
   }
   const base64 = btoa(binary)
-  const mimeType = blob.type || 'audio/webm'
+  let mimeType = blob.type || 'audio/webm'
+  if (mimeType.includes(';')) {
+    mimeType = mimeType.split(';')[0]
+  }
   const result = await model.generateContent([
     { text: 'Transcribe this audio recording verbatim. Return only the transcript text, no other commentary.' },
     { inlineData: { mimeType, data: base64 } },
@@ -107,41 +206,30 @@ export async function transcribeAudio(blob) {
 
 /** Turn a raw voice transcript into a structured note. */
 export async function summarizeTranscript(transcript) {
-  const model = client().getGenerativeModel({
-    model: MODEL,
-    generationConfig: { responseMimeType: 'application/json' },
-  })
-  const prompt = `From this study note transcript, return JSON with keys:
+  const preferred = localStorage.getItem('protrack:ai_preferred_provider') || 'auto'
+  const systemInstruction = `From this study note transcript, return JSON with keys:
 "title" (<= 6 words), "summary" (2-3 sentences), "actionItems" (array of short
-strings), "flashcards" (array of {"front","back"} Q&A pairs, max 6).
-Transcript:
-"""${transcript}"""`
-  const res = await model.generateContent(prompt)
-  const text = res.response.text()
+strings), "flashcards" (array of {"front","back"} Q&A pairs, max 6).`
+  const prompt = `Transcript:\n"""${transcript}"""`
+  
   try {
-    return JSON.parse(text)
-  } catch {
+    const res = await callAIProvider(prompt, systemInstruction, preferred)
+    const text = res.text
     const match = text.match(/\{[\s\S]*\}/)
     if (match) return JSON.parse(match[0])
-    throw new Error('Could not parse AI response')
+    return JSON.parse(text)
+  } catch (err) {
+    console.error('[summarize-fallback] failed:', err)
+    throw err
   }
 }
 
 /**
- * Fetch a motivational quote using Gemini.
+ * Fetch a motivational quote using the active AI Provider.
  * When `context` is provided (subjects + todos), the quote is personalized.
- *
- * @param {Array} recentQuotes - recent quotes to avoid repeating
- * @param {{ subjects?: Array, todos?: Array }} context - optional workspace context
  */
 export async function fetchZenQuote(recentQuotes = [], context = {}) {
-  if (!hasGeminiKey()) return null
-
-  const model = client().getGenerativeModel({
-    model: MODEL,
-    generationConfig: { responseMimeType: 'application/json' },
-  })
-
+  const preferred = localStorage.getItem('protrack:ai_preferred_provider') || 'auto'
   const avoid = recentQuotes.map(q => `"${q.text}"`).join(', ')
 
   let contextBlock = ''
@@ -159,19 +247,138 @@ export async function fetchZenQuote(recentQuotes = [], context = {}) {
     }
   }
 
-  const prompt = `Generate a highly profound, calming, and motivational quote for deep focus and productivity.${contextBlock}
-It must NOT be any of these recent quotes: [${avoid}].
+  const systemInstruction = `Generate a highly profound, calming, and motivational quote for deep focus and productivity.${contextBlock}
 Return a JSON object with strictly two keys: "text" (the quote text) and "author" (the person who said it, or "Unknown").
 Do not include any other text.`
 
+  const prompt = `Generate a quote. It must NOT be any of these recent quotes: [${avoid}].`
+
   try {
-    const res = await model.generateContent(prompt)
-    const text = res.response.text()
+    const res = await callAIProvider(prompt, systemInstruction, preferred)
+    const text = res.text
     const match = text.match(/\{[\s\S]*\}/)
     if (match) return JSON.parse(match[0])
     return JSON.parse(text)
   } catch (err) {
-    console.warn('[gemini] fetchZenQuote failed:', err)
+    console.warn('[zen-quote-fallback] failed:', err)
     return null
   }
+}
+
+async function callOpenAI(prompt, systemInstruction) {
+  const apiKey = getOpenAIKey()
+  if (!apiKey) throw new Error('OpenAI key missing')
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemInstruction },
+        { role: 'user', content: prompt }
+      ]
+    })
+  })
+  if (!response.ok) throw new Error(`OpenAI API error: ${response.status}`)
+  const data = await response.json()
+  return data.choices[0].message.content
+}
+
+async function callAnthropic(prompt, systemInstruction) {
+  const apiKey = getAnthropicKey()
+  if (!apiKey) throw new Error('Anthropic key missing')
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'dangerouslyAllowBrowser': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-3-haiku-20240307',
+      max_tokens: 1024,
+      system: systemInstruction,
+      messages: [
+        { role: 'user', content: prompt }
+      ]
+    })
+  })
+  if (!response.ok) throw new Error(`Anthropic API error: ${response.status}`)
+  const data = await response.json()
+  return data.content[0].text
+}
+
+async function callDeepSeek(prompt, systemInstruction) {
+  const apiKey = getDeepSeekKey()
+  if (!apiKey) throw new Error('DeepSeek key missing')
+  const response = await fetch('https://api.deepseek.com/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [
+        { role: 'system', content: systemInstruction },
+        { role: 'user', content: prompt }
+      ]
+    })
+  })
+  if (!response.ok) throw new Error(`DeepSeek API error: ${response.status}`)
+  const data = await response.json()
+  return data.choices[0].message.content
+}
+
+export async function callAIProvider(prompt, systemInstruction, provider = 'auto') {
+  const allProviders = ['gemini', 'openai', 'anthropic', 'deepseek']
+  
+  let order = []
+  if (provider && provider !== 'auto' && provider !== 'automatic') {
+    order.push(provider)
+  }
+  
+  // Append other configured providers
+  allProviders.forEach((p) => {
+    if (!order.includes(p) && hasApiKey(p)) {
+      order.push(p)
+    }
+  })
+  
+  if (order.length === 0) {
+    order.push('gemini')
+  }
+
+  let lastError = null
+  for (const p of order) {
+    try {
+      if (p === 'gemini') {
+        if (!hasGeminiKey()) throw new Error('Gemini key missing')
+        const model = client().getGenerativeModel({ model: MODEL, systemInstruction })
+        const res = await model.generateContent(prompt)
+        return { text: res.response.text(), provider: 'gemini' }
+      } else if (p === 'openai') {
+        if (!hasOpenAIKey()) throw new Error('OpenAI key missing')
+        const text = await callOpenAI(prompt, systemInstruction)
+        return { text, provider: 'openai' }
+      } else if (p === 'anthropic') {
+        if (!hasAnthropicKey()) throw new Error('Anthropic key missing')
+        const text = await callAnthropic(prompt, systemInstruction)
+        return { text, provider: 'anthropic' }
+      } else if (p === 'deepseek') {
+        if (!hasDeepSeekKey()) throw new Error('DeepSeek key missing')
+        const text = await callDeepSeek(prompt, systemInstruction)
+        return { text, provider: 'deepseek' }
+      }
+    } catch (err) {
+      console.warn(`[ai-fallback] Provider ${p} failed, trying next...`, err)
+      lastError = err
+    }
+  }
+  
+  throw lastError || new Error('No working AI provider configured')
 }

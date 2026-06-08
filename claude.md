@@ -158,6 +158,16 @@ Rules (`firestore.rules`): everything under `users/{uid}/**` is owner-only. Hand
 
 ## 6. Maintenance guidelines
 
+- **Design system (v2 "premium"):** the UI is mid-migration to a refined design language —
+  Fraunces/DM Sans/DM Mono type, warm parchment canvas, dark "island" cards, token-driven
+  palette, a 7-slot time-of-day theme, and an icon-only sidebar shell. The living spec, locked
+  decisions, reuse map, and phased roadmap live in [`docs/DESIGN_SYSTEM.md`](./docs/DESIGN_SYSTEM.md).
+  Foundation (fonts, tokens, `WidgetFrame`, Kanban) has landed; the shell rebuild + time theme +
+  data-viz upgrades are the next phases. Read that doc before doing UI work.
+- **Focus ring total:** `phaseTotalSec` (focusSlice) is the single source of truth for the current
+  phase length — every ring (`FocusWidget`, `FocusMiniOverlay`, `FocusLockScreen`) computes
+  progress from it so mid-session +/- adjustments and custom timers stay proportional. Do not
+  reintroduce `focusMin`/`customTimerSetting` into ring math.
 - **Brand:** zero emojis anywhere in UI/strings — Lucide icons only. There is a CI-friendly grep for emoji ranges; keep it clean.
 - **Immutability:** slices return new objects; never mutate state in place.
 - **Files:** small and feature-scoped (~200–400 lines). One service module per domain.

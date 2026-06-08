@@ -34,7 +34,7 @@ export function subscribeToTodos(uid, callback) {
 
 export async function addTodo(
   uid,
-  { text, modeId, dueAt = null, subjectId = null, priority = 'medium', notes = '' },
+  { text, modeId, dueAt = null, subjectId = null, priority = 'medium', notes = '', ...rest },
 ) {
   return addDoc(todosCol(uid), {
     text,
@@ -46,6 +46,7 @@ export async function addTodo(
     notes,
     order: Date.now(),
     createdAt: serverTimestamp(),
+    ...rest,
   })
 }
 

@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.6.0 — 2026-06-08
+
+### Added
+- **Smart Kanban Columns Height:** Backlog and In Progress (doing) lists in the Todos widget now dynamically scale their heights when stacked vertically. If one column is empty, it collapses to fit its header and empty hint (76px), letting the other occupy all remaining height. If both have tasks, height is distributed proportionally (clamped between 0.3 and 0.7).
+- **Voice Activity Detection (VAD):** Integrated live microphone volume levels to power real-time speech activity tracking. Exposed `speechActive` state to keep the inactivity timer refreshed, preventing premature pauses during active fallback recording.
+- **Silent Auto-Updates:** Replaced the blocking UpdateGate fullscreen screen with interactive, non-blocking Dynamic Island notifications (`update-downloading` and `update-ready`) and a quick-trigger install button inside the Settings Panel.
+
+### Changed
+- **Sidebar Menu Stabilization:** Sidebar rail now displays all 7 widgets permanently in a fixed, logical order with a custom active indicator bar and ambient background glow, ensuring spatial muscle memory is preserved.
+- **Focus Widget Decluttering:** Simplified the controls in the Deep Focus panel by grouping them into a sleek glassmorphic tabbed switcher (Time, Audio, Scene) with smooth fade/slide transitions.
+- **Hands-Free Loop Stabilization:** Wrapped the context builder and state object in `useCallback` and `useMemo` hooks, resolving a major stale closure bug that was feeding outdated workspace information to the voice engine.
+
+### Fixed
+- **Gemini MIME Type Error:** Stripped parameters and codec information (e.g., `;codecs=opus`) from recording audio blobs before sending them to the Gemini API, eliminating the `400 Bad Request` transcription failures.
+- **Voice Restart Failures:** Removed the defensive same-transcript comparison check to prevent silent speech recognition locks and ensure voice restarts are 100% reliable.
+
 ## v1.2.0 — 2026-06-07
 
 ### Added

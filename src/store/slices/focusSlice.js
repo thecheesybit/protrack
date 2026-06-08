@@ -12,6 +12,10 @@ export const createFocusSlice = (set, get) => ({
   focusMin: DEFAULT_FOCUS,
   breakMin: DEFAULT_BREAK,
   secondsLeft: DEFAULT_FOCUS * 60,
+  // Total seconds for the CURRENT phase — drives the progress ring. Tracked
+  // separately from customTimerSetting so mid-session +/- adjustments keep the
+  // ring proportional without mutating the user's default timer.
+  phaseTotalSec: DEFAULT_FOCUS * 60,
   session: null, // { label, color, subjectId, modeId } | null
   startedAt: null,
   
@@ -24,15 +28,38 @@ export const createFocusSlice = (set, get) => ({
   justCompleted: 0,
 
   setDurations: (focusMin, breakMin) =>
-    set((s) => ({
-      focusMin,
-      breakMin,
-      secondsLeft: s.status === 'idle' && s.phase === 'focus' ? focusMin * 60 : s.secondsLeft,
-    })),
+    set((s) => {
+      const idleFocus = s.status === 'idle' && s.phase === 'focus'
+      return {
+        focusMin,
+        breakMin,
+        secondsLeft: idleFocus ? focusMin * 60 : s.secondsLeft,
+        phaseTotalSec: idleFocus ? focusMin * 60 : s.phaseTotalSec,
+      }
+    }),
 
   // Phase 1.1 Actions
-  setCustomTimer: (workSec, breakSec) => 
-    set({ customTimerSetting: { work: workSec, break: breakSec } }),
+  setCustomTimer: (workSec, breakSec) =>
+    set((s) => ({
+      customTimerSetting: { work: workSec, break: breakSec },
+      // Reflect the new work length immediately when idle on the focus phase.
+      secondsLeft: s.status === 'idle' && s.phase === 'focus' ? workSec : s.secondsLeft,
+      phaseTotalSec: s.status === 'idle' && s.phase === 'focus' ? workSec : s.phaseTotalSec,
+    })),
+
+  /**
+   * Add or remove time from the current phase mid-session. Positive grows both
+   * the remaining time and the phase total (ring stays proportional); negative
+   * only trims remaining time (ring advances). Clamped to a 1-minute floor.
+   */
+  adjustSeconds: (deltaSec) =>
+    set((s) => {
+      const next = Math.max(60, s.secondsLeft + deltaSec)
+      return {
+        secondsLeft: next,
+        phaseTotalSec: Math.max(s.phaseTotalSec, next),
+      }
+    }),
   
   adjustTrackVolume: (volume) => set({ volume: Math.max(0, Math.min(1, volume)) }),
   
@@ -56,6 +83,7 @@ export const createFocusSlice = (set, get) => ({
         phase: 'focus',
         session: session || s.session,
         secondsLeft: startingSeconds,
+        phaseTotalSec: startingSeconds,
         startedAt: Date.now(),
         focusLocked: true,
       };
@@ -69,6 +97,7 @@ export const createFocusSlice = (set, get) => ({
       status: 'idle',
       phase: 'focus',
       secondsLeft: s.customTimerSetting.work,
+      phaseTotalSec: s.customTimerSetting.work,
       startedAt: null,
       focusLocked: false,
     })),
@@ -81,17 +110,19 @@ export const createFocusSlice = (set, get) => ({
       status: 'running',
       phase: 'break',
       secondsLeft: s.customTimerSetting.break,
+      phaseTotalSec: s.customTimerSetting.break,
       startedAt: Date.now(),
     })),
 
   bumpCompleted: () => set((s) => ({ justCompleted: s.justCompleted + 1 })),
 
   endToIdle: () =>
-    set((s) => ({ 
-      status: 'idle', 
-      phase: 'focus', 
-      secondsLeft: s.customTimerSetting.work, 
-      startedAt: null, 
-      focusLocked: false 
+    set((s) => ({
+      status: 'idle',
+      phase: 'focus',
+      secondsLeft: s.customTimerSetting.work,
+      phaseTotalSec: s.customTimerSetting.work,
+      startedAt: null,
+      focusLocked: false
     })),
 })

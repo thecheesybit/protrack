@@ -71,21 +71,23 @@ export function ContributionCard() {
     <motion.div
       layout
       transition={spring}
-      className="edge-light w-full overflow-hidden rounded-3xl border border-line/70 bg-surface/60 p-5 backdrop-blur-xl"
+      className="w-full overflow-hidden rounded-2xl border border-line bg-surface-2/20 p-5 shadow-sm"
     >
       <AnimatePresence mode="wait">
         {phase === 'amount' && (
           <motion.div key="amount" {...panelMotion}>
-            <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-              <Heart className="h-4 w-4 text-rose-400" /> Choose your contribution
+            <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-ink">
+              <Heart className="h-4 w-4 text-rose-400 fill-rose-400/20" /> Choose Contribution
             </div>
             <div className="mb-3 flex gap-2">
               {['INR', 'USD'].map((c) => (
                 <button
                   key={c}
                   onClick={() => setCurrency(c)}
-                  className={`flex-1 rounded-xl border py-2 text-sm font-medium transition-colors ${
-                    currency === c ? 'border-accent/60 bg-accent/10 text-accent' : 'border-line text-muted hover:text-ink'
+                  className={`flex-1 rounded-xl border py-2 text-xs font-semibold uppercase tracking-wider transition-all duration-200 ${
+                    currency === c
+                      ? 'border-accent/30 bg-accent/10 text-accent'
+                      : 'border-line/60 bg-surface/40 text-muted hover:bg-surface-2 hover:text-ink'
                   }`}
                 >
                   {c}
@@ -99,49 +101,49 @@ export function ContributionCard() {
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder={currency === 'INR' ? 'Amount in ₹' : 'Amount in $'}
-              className="w-full rounded-2xl border border-line/70 bg-surface-2/40 px-4 py-3 text-lg font-semibold outline-none focus:border-accent/60"
+              className="w-full rounded-xl border border-line bg-surface/40 px-4 py-2.5 text-base font-semibold outline-none transition-colors focus:border-accent/40 text-ink placeholder-muted/60"
             />
             {currency === 'USD' && numericAmount > 0 && (
-              <p className="mt-1.5 text-xs text-muted">≈ ₹{inrAmount} charged via UPI (INR)</p>
+              <p className="mt-1.5 text-[10px] font-medium text-muted">≈ ₹{inrAmount} charged via UPI (INR)</p>
             )}
             <button
               disabled={numericAmount <= 0}
               onClick={() => setPhase('gateway')}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent px-5 py-3 font-semibold text-white shadow-glow transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-md hover:bg-accent/90 transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:scale-100"
             >
-              Generate Contribution Gateway <ArrowRight className="h-4 w-4" />
+              Generate Gateway <ArrowRight className="h-3.5 w-3.5" />
             </button>
           </motion.div>
         )}
 
         {phase === 'gateway' && (
           <motion.div key="gateway" {...panelMotion} className="text-center">
-            <div className="mb-3 flex items-center justify-center gap-2 text-sm font-semibold">
-              <ScanLine className="h-4 w-4 text-accent" /> Scan to contribute
+            <div className="mb-3 flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider text-accent">
+              <ScanLine className="h-4 w-4 animate-pulse" /> Scan to contribute
             </div>
-            <div className="mx-auto w-fit rounded-2xl bg-white p-4">
-              <QRCodeSVG value={upiUri} size={188} level="M" includeMargin={false} />
+            <div className="mx-auto w-fit rounded-xl bg-white p-3 border border-line/40 shadow-sm">
+              <QRCodeSVG value={upiUri} size={150} level="M" includeMargin={false} />
             </div>
-            <div className="mt-4 space-y-1 text-sm">
-              <div className="flex items-center justify-center gap-1 text-2xl font-bold">
-                <IndianRupee className="h-5 w-5" />
+            <div className="mt-4 space-y-1 text-xs">
+              <div className="flex items-center justify-center gap-1 text-xl font-black text-ink">
+                <IndianRupee className="h-4.5 w-4.5" />
                 {inrAmount}
               </div>
-              <p className="text-muted">{SUPPORT_UPI.payeeName} · {SUPPORT_UPI.vpa}</p>
-              <p className="text-xs text-muted/70">Scan with any UPI app, then confirm below.</p>
+              <p className="text-muted font-medium">{SUPPORT_UPI.payeeName} · {SUPPORT_UPI.vpa}</p>
+              <p className="text-[10px] font-semibold text-muted/70 uppercase tracking-wide">Scan with any UPI app, then confirm below.</p>
             </div>
             <div className="mt-4 flex gap-2">
               <button
                 onClick={() => setPhase('amount')}
-                className="rounded-2xl border border-line/70 px-4 py-3 text-sm font-medium text-muted hover:text-ink"
+                className="rounded-xl border border-line bg-surface/40 px-4 py-2.5 text-xs font-semibold text-muted hover:bg-surface-2 hover:text-ink transition-all"
               >
                 Back
               </button>
               <button
                 onClick={() => setPhase('testimony')}
-                className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-accent px-5 py-3 font-semibold text-white shadow-glow"
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-md hover:bg-accent/90 transition-all active:scale-[0.98]"
               >
-                <Check className="h-4 w-4" /> I Have Contributed
+                <Check className="h-3.5 w-3.5" /> I Have Contributed
               </button>
             </div>
           </motion.div>
@@ -149,46 +151,46 @@ export function ContributionCard() {
 
         {phase === 'testimony' && (
           <motion.div key="testimony" {...panelMotion}>
-            <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-              <MessageSquareHeart className="h-4 w-4 text-rose-400" /> Share your story
+            <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-ink">
+              <MessageSquareHeart className="h-4 w-4 text-rose-400 fill-rose-400/20" /> Share your story
             </div>
-            <label className="mb-1 block text-xs text-muted">What do you love about PRO TRACK?</label>
+            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted/80">What do you love about PRO TRACK?</label>
             <textarea
               autoFocus
               rows={3}
               value={love}
               onChange={(e) => setLove(e.target.value)}
               placeholder="The mode-switching changed how I study…"
-              className="mb-3 w-full resize-none rounded-2xl border border-line/70 bg-surface-2/40 px-4 py-3 text-sm outline-none focus:border-accent/60"
+              className="mb-3 w-full resize-none rounded-xl border border-line bg-surface/40 px-4 py-2.5 text-xs outline-none transition-colors focus:border-accent/40 text-ink placeholder-muted/60"
             />
-            <label className="mb-1 block text-xs text-muted">What should we engineer next?</label>
+            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted/80">What should we engineer next?</label>
             <textarea
               rows={2}
               value={featureNext}
               onChange={(e) => setFeatureNext(e.target.value)}
               placeholder="A feature you'd love to see…"
-              className="mb-4 w-full resize-none rounded-2xl border border-line/70 bg-surface-2/40 px-4 py-3 text-sm outline-none focus:border-accent/60"
+              className="mb-4 w-full resize-none rounded-xl border border-line bg-surface/40 px-4 py-2.5 text-xs outline-none transition-colors focus:border-accent/40 text-ink placeholder-muted/60"
             />
             <button
               disabled={busy}
               onClick={submit}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-accent px-5 py-3 font-semibold text-white shadow-glow disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-md hover:bg-accent/90 transition-all active:scale-[0.98] disabled:opacity-60"
             >
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Heart className="h-4 w-4" />}
-              Submit contribution
+              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Heart className="h-3.5 w-3.5" />}
+              Submit Story
             </button>
           </motion.div>
         )}
 
         {phase === 'pending' && (
           <motion.div key="pending" {...panelMotion} className="py-4 text-center">
-            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400">
-              <Check className="h-7 w-7" />
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+              <Check className="h-6 w-6 animate-pulse" />
             </div>
-            <h3 className="text-lg font-bold">Thank you</h3>
-            <p className="mx-auto mt-1.5 max-w-xs text-sm text-muted">
+            <h3 className="text-sm font-bold text-ink">Thank you</h3>
+            <p className="mx-auto mt-1.5 max-w-[15rem] text-xs leading-relaxed text-muted font-medium">
               Your contribution is being verified by Ayush. Once confirmed, you will appear on the Wall of
-              Honor for everyone to see.
+              Honor.
             </p>
           </motion.div>
         )}

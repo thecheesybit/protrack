@@ -4,10 +4,11 @@ import { STORAGE_KEYS } from '@/lib/constants'
 export const ThemeContext = createContext(null)
 
 function getInitialTheme() {
-  if (typeof window === 'undefined') return 'dark'
+  if (typeof window === 'undefined') return 'auto'
   const saved = localStorage.getItem(STORAGE_KEYS.theme)
   if (saved === 'light' || saved === 'dark' || saved === 'auto') return saved
-  return 'dark'
+  // New default: follow the local clock (light by day, dark by night).
+  return 'auto'
 }
 
 export function ThemeProvider({ children }) {

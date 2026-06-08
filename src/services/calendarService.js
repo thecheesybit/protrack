@@ -1,6 +1,8 @@
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth'
-import { auth } from '@/lib/firebase'
-import { nextOccurrence, todayDow, DAYS } from '@/lib/time'
+import { doc, setDoc, onSnapshot, deleteDoc } from 'firebase/firestore'
+import { auth, db } from '@/lib/firebase'
+import { isDesktop } from '@/desktop/isDesktop'
+import { nextOccurrence } from '@/lib/time'
 import { addSlot, updateSlot } from '@/services/timetableService'
 
 /**
@@ -19,7 +21,7 @@ const AUTH_CORE_KEY = 'protrack:auth_core'
 function encrypt(data) {
   try {
     return btoa(JSON.stringify(data))
-  } catch (err) {
+  } catch {
     return ''
   }
 }
@@ -28,7 +30,7 @@ function decrypt(cipher) {
   try {
     if (!cipher) return null
     return JSON.parse(atob(cipher))
-  } catch (err) {
+  } catch {
     return null
   }
 }
@@ -61,6 +63,66 @@ export function clearCalToken() {
 
 export async function connectCalendar() {
   if (!auth) throw new Error('Firebase is not configured for this build.')
+
+  if (isDesktop) {
+    const uid = auth.currentUser?.uid
+    if (!uid) {
+      throw new Error('You must be signed in to connect Google Calendar.')
+    }
+
+    const handshakeRef = doc(db, 'users', uid, 'gcal', 'handshake')
+    await setDoc(handshakeRef, {
+      status: 'pending',
+      createdAt: Date.now()
+    })
+
+    return new Promise((resolve, reject) => {
+      let unsubscribe = () => {}
+      
+      const timeoutId = setTimeout(async () => {
+        unsubscribe()
+        await deleteDoc(handshakeRef).catch(() => {})
+        reject(new Error('Google Calendar connection timed out. Please try again.'))
+      }, 5 * 60 * 1000)
+
+      unsubscribe = onSnapshot(
+        handshakeRef,
+        async (snapshot) => {
+          if (!snapshot.exists()) return
+          const data = snapshot.data()
+          if (data && data.status === 'success' && data.accessToken) {
+            clearTimeout(timeoutId)
+            unsubscribe()
+            // Clean up from Firestore immediately
+            await deleteDoc(handshakeRef).catch((e) => console.error('Error deleting handshake:', e))
+            
+            const creds = {
+              access_token: data.accessToken,
+              expires_at: data.expiresAt || (Date.now() + 3599 * 1000),
+              refresh_token: 'mock_gcal_refresh_token'
+            }
+            saveCalCredentials(creds)
+            resolve(data.accessToken)
+          } else if (data && data.status === 'error') {
+            clearTimeout(timeoutId)
+            unsubscribe()
+            await deleteDoc(handshakeRef).catch(() => {})
+            reject(new Error(data.error || 'Failed to authenticate Google Calendar in browser'))
+          }
+        },
+        (err) => {
+          clearTimeout(timeoutId)
+          unsubscribe()
+          reject(err)
+        }
+      )
+
+      // Open in default browser
+      const webUrl = import.meta.env.VITE_WEB_URL || 'https://pro-track-app.netlify.app'
+      window.open(`${webUrl}/link-gcal?uid=${uid}`, '_blank')
+    })
+  }
+
   const provider = new GoogleAuthProvider()
   provider.addScope(CAL_SCOPE)
   provider.setCustomParameters({ prompt: 'consent' })

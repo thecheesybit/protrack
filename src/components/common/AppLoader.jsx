@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import { useAuth } from '@/hooks/useAuth'
 import { AuroraBackground } from './AuroraBackground'
 import { LogOut, AlertTriangle, RefreshCw } from 'lucide-react'
+import loadingMain from '@/assets/loading-main.gif'
 
 /** Full-screen boot loader shown while auth state resolves or syncs. */
 export function AppLoader({ error: customError }) {
@@ -46,11 +47,9 @@ export function AppLoader({ error: customError }) {
         </div>
       ) : (
         <>
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1.4, repeat: Infinity, ease: 'linear' }}
-            className="h-12 w-12 rounded-full border-2 border-line border-t-accent"
-          />
+          <div className="relative h-32 w-32 rounded-full overflow-hidden border border-line bg-surface-2/40 backdrop-blur-sm flex items-center justify-center shadow-lg">
+            <img src={loadingMain} alt="Loading..." className="h-full w-full object-cover select-none pointer-events-none" />
+          </div>
           <motion.p
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
