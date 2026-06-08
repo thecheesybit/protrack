@@ -284,14 +284,19 @@ function BackgroundAudioPlayer() {
     const videoId = youtubeMatch[1]
     // mute=1: cross-origin iframes block unmuted autoplay independently of the
     // main window's autoplayPolicy. Starting muted guarantees playback; YTVolumeSync
-    // sends unMute via the IFrame API once onReady fires. No &origin= — file://
-    // is an opaque origin YouTube rejects.
-    const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&enablejsapi=1`
+    // sends unMute via the IFrame API once onReady fires.
+    // For production (HTTPS), add origin; for Electron (file://), omit to avoid rejection.
+    const isElectron = __IS_ELECTRON__
+    const originParam = !isElectron && typeof window !== 'undefined'
+      ? `&origin=${encodeURIComponent(window.location.origin)}`
+      : ''
+    const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&enablejsapi=1${originParam}`
     return (
       <YTVolumeSync iframeRef={iframeRef} volume={volume}>
         <iframe
           ref={iframeRef}
           src={embedUrl}
+          sandbox="allow-scripts allow-same-origin allow-presentation"
           className="sr-only pointer-events-none"
           allow="autoplay"
           title="Background Audio Stream"
