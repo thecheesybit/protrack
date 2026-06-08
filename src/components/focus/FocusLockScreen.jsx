@@ -130,6 +130,15 @@ export function FocusLockScreen() {
   const videoId = ytMatch?.[1]
   const showVideo = Boolean(focusVideoEnabled && videoId)
 
+  // Debug logging
+  if (focusLocked) {
+    console.log('[FocusLockScreen] focusAudioUrl:', focusAudioUrl)
+    console.log('[FocusLockScreen] ytMatch:', ytMatch)
+    console.log('[FocusLockScreen] videoId:', videoId)
+    console.log('[FocusLockScreen] showVideo:', showVideo)
+    console.log('[FocusLockScreen] volume:', volume, 'muted:', muted)
+  }
+
   const band = bandForHour(new Date().getHours())
   const { Icon: BandIcon, label: bandLabel } = BAND_META[band] || BAND_META.night
 
@@ -164,11 +173,13 @@ export function FocusLockScreen() {
 
   const applyScene = async (url) => {
     if (!user?.uid) return
+    console.log('[FocusLockScreen] Applying scene:', url)
     try {
       await updateSettings(
         user.uid,
         url ? { focusAudioUrl: url, focusVideoEnabled: true } : { focusAudioUrl: '' },
       )
+      console.log('[FocusLockScreen] Scene applied successfully')
     } catch (err) {
       console.error('[focus] scene change failed', err)
     }
