@@ -34,6 +34,9 @@ concurrency:
   group: release
   cancel-in-progress: false
 
+env:
+  ELECTRON_MIRROR: "https://npmmirror.com/mirrors/electron/"
+
 jobs:
   prepare:
     name: Bump version

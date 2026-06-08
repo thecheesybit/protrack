@@ -20,6 +20,9 @@ concurrency:
   group: auto-merge
   cancel-in-progress: false
 
+env:
+  ELECTRON_MIRROR: "https://npmmirror.com/mirrors/electron/"
+
 permissions:
   contents: write
   pull-requests: write

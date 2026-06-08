@@ -21,6 +21,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  ELECTRON_MIRROR: "https://npmmirror.com/mirrors/electron/"
+
 jobs:
   verify:
     name: Lint & build
