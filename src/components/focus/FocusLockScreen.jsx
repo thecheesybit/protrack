@@ -154,10 +154,15 @@ export function FocusLockScreen() {
   // the video begins; useYouTubeVolume sends unMute + setVolume via the IFrame
   // API once onReady fires so audio plays normally.
   //
-  // Do NOT add `&origin=` — the packaged app loads over file://, which is an
-  // opaque origin that YouTube's enablejsapi check rejects (black screen).
+  // For Electron (file://), DO NOT add `&origin=` — it causes YouTube to reject
+  // the request. For production (HTTPS), origin helps YouTube validate the request.
+  const isElectron = __IS_ELECTRON__
+  const originParam = !isElectron && typeof window !== 'undefined'
+    ? `&origin=${encodeURIComponent(window.location.origin)}`
+    : ''
+
   const embedUrl = videoId
-    ? `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=0&rel=0&showinfo=0&modestbranding=1&enablejsapi=1`
+    ? `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=0&rel=0&showinfo=0&modestbranding=1&enablejsapi=1${originParam}`
     : ''
 
   const onMain = () => (status === 'running' ? pause() : resume())
@@ -234,6 +239,7 @@ export function FocusLockScreen() {
                   src={embedUrl}
                   onLoad={onIframeLoad}
                   allow="autoplay; fullscreen"
+                  sandbox="allow-scripts allow-same-origin allow-presentation"
                   title="Focus Background"
                   style={{
                     border: 0,
