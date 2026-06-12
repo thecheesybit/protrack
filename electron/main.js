@@ -280,6 +280,37 @@ function createWindow() {
   )
   ses.setPermissionCheckHandler((_wc, permission) => GRANTED_PERMISSIONS.has(permission))
 
+  // YouTube refuses to start its embed when the host page has a null/opaque
+  // origin and no Referer — exactly the case under file:// in the packaged app,
+  // which is why the Deep Focus scene played in a real browser but not in
+  // Electron. Spoof a valid YouTube Referer/Origin for requests to YouTube's own
+  // media hosts so the scene plays in EVERY mode (dev and packaged). Scoped
+  // narrowly to YouTube hosts via an exact suffix match so it can never touch
+  // Firebase/Google auth (googleapis, identitytoolkit, securetoken,
+  // accounts.google.com, firebaseapp.com).
+  const YT_MEDIA_HOSTS =
+    /(^|\.)(youtube\.com|youtube-nocookie\.com|googlevideo\.com|ytimg\.com)$/i
+  ses.webRequest.onBeforeSendHeaders((details, callback) => {
+    let hostname
+    try {
+      hostname = new URL(details.url).hostname
+    } catch {
+      callback({ requestHeaders: details.requestHeaders })
+      return
+    }
+    if (YT_MEDIA_HOSTS.test(hostname)) {
+      callback({
+        requestHeaders: {
+          ...details.requestHeaders,
+          Referer: 'https://www.youtube.com/',
+          Origin: 'https://www.youtube.com',
+        },
+      })
+      return
+    }
+    callback({ requestHeaders: details.requestHeaders })
+  })
+
   if (!isDev) {
     const CSP = [
       "default-src 'self'",

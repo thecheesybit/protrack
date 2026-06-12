@@ -151,21 +151,24 @@ export function FocusLockScreen() {
   const total = phaseTotalSec || secondsLeft || 1
   const progress = Math.min(1, Math.max(0, 1 - secondsLeft / total))
 
-  // mute=1: cross-origin iframes are subject to Chromium's autoplay policy
-  // independently of the main window's autoplayPolicy. Unmuted autoplay in a
-  // cross-origin iframe gets blocked even in Electron. Starting muted guarantees
-  // the video begins; useYouTubeVolume sends unMute + setVolume via the IFrame
-  // API once onReady fires so audio plays normally.
+  // Autoplay strategy: the Electron main process pins a global
+  // `autoplay-policy: no-user-gesture-required` switch (electron/main.js), so
+  // cross-origin YouTube iframes can autoplay WITH sound. We therefore use
+  // mute=0 to play video + audio directly, instead of starting muted and relying
+  // on an IFrame-API unMute handshake — that handshake is unreliable over file://
+  // because YouTube can't validate the opaque origin, leaving the scene silent.
   //
-  // For Electron (file://), DO NOT add `&origin=` — it causes YouTube to reject
-  // the request. For production (HTTPS), origin helps YouTube validate the request.
+  // For Electron (file://) we omit `&origin=` — the opaque file:// origin would
+  // be rejected by YouTube's enablejsapi check. The main process instead injects
+  // a valid Referer/Origin header for youtube.com requests so the embed loads.
+  // For the web build (real HTTPS origin), `&origin=` is passed for API validation.
   const isElectron = __IS_ELECTRON__
   const originParam = !isElectron && typeof window !== 'undefined'
     ? `&origin=${encodeURIComponent(window.location.origin)}`
     : ''
 
   const embedUrl = videoId
-    ? `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=0&rel=0&showinfo=0&modestbranding=1&enablejsapi=1${originParam}`
+    ? `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&loop=1&playlist=${videoId}&controls=0&rel=0&showinfo=0&modestbranding=1&enablejsapi=1${originParam}`
     : ''
 
   const onMain = () => (status === 'running' ? pause() : resume())

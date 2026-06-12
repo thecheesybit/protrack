@@ -286,15 +286,17 @@ function BackgroundAudioPlayer() {
 
   if (youtubeMatch) {
     const videoId = youtubeMatch[1]
-    // mute=1: cross-origin iframes block unmuted autoplay independently of the
-    // main window's autoplayPolicy. Starting muted guarantees playback; YTVolumeSync
-    // sends unMute via the IFrame API once onReady fires.
-    // For production (HTTPS), add origin; for Electron (file://), omit to avoid rejection.
+    // mute=0: the Electron main process pins a global autoplay-policy switch, so
+    // cross-origin iframes autoplay WITH sound. Playing unmuted avoids depending on
+    // the IFrame-API unMute handshake, which is unreliable over file:// (opaque
+    // origin can't be validated). For the web build (real HTTPS origin) we pass
+    // origin; for Electron (file://) we omit it — the main process injects a valid
+    // Referer/Origin header for youtube.com requests so the embed loads.
     const isElectron = __IS_ELECTRON__
     const originParam = !isElectron && typeof window !== 'undefined'
       ? `&origin=${encodeURIComponent(window.location.origin)}`
       : ''
-    const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&enablejsapi=1${originParam}`
+    const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&loop=1&playlist=${videoId}&enablejsapi=1${originParam}`
     return (
       <YTVolumeSync iframeRef={iframeRef} volume={volume}>
         <iframe
