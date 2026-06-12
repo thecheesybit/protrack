@@ -61,6 +61,7 @@ Single store (`store/useStore.js`) composed from pure slices. Components read vi
 | `islandSlice` | active event + FIFO queue | **local only** — pure UI notifier |
 | `chronoSlice` | time-of-day band | local (driven by `useChronoTheme`) |
 | `updateSlice` | auto-update status/version/progress | fed by Electron IPC |
+| `checkinSlice` | recent check-ins + active prompt | Firestore listener (checkins, limit 14); prompt is **local only** |
 
 Orchestration that owns timers/side-effects lives in hooks, never slices: `useFocusEngine` (tick, chime, notify, persist, ledger), `useIslandCycle` (auto-dismiss), `useChronoTheme` (writes `data-chrono` on `<html>`), `useNowMinutes` (timeline flag), `useAutoUpdate`, `useDesktopIntegration` (fingerprint + hotkeys + window state listeners).
 
@@ -78,6 +79,7 @@ users/{uid}
   todos/{todoId}                      { text, done, modeId, dueAt, subjectId }
   focusSessions/{id}                  { modeId, subjectId, durationMin, startedAt, hourOfDay }
   ledger/{id}                         { kind, title, detail, modeId, at }   ← bounded read (50)
+  checkins/{ymd}                      { date, answers: { morning|midday|evening: { qid, type, value, note?, at } } }  ← bounded read (14)
 ```
 
 **Updated field shapes (v1.2):**
@@ -114,6 +116,7 @@ Rules (`firestore.rules`): everything under `users/{uid}/**` is owner-only. Hand
 - **Slash commands** in `ChatTab` — `SLASH_PATTERNS` + `parseSlashCommand()` intercept `/done`, `/todo`, `/progress`, `/habit`, `/task` before the Gemini key gate; they call `executeTool` directly, making the AI useful offline and without an API key for common mutations.
 - **Lazy analytics** — `AnalyticsCharts.jsx` (all Recharts imports) is a separate file loaded via `React.lazy`. Non-hero mode shows stat cards with zero chart bundle; `vendor-charts` (364 KB) is only fetched when the widget is maximized.
 - **Zen overlay settings** — `settings.zenEnabled` (bool, default true) and `settings.zenDuration` (ms) control the idle quote overlay. Both are configurable in **Settings → Zen & Motivation**.
+- **Daily check-ins** — `lib/checkin.js` (pure, tested) defines three slots (morning 5–12 / midday 12–17 / evening 17–23), a rotating question bank, `shouldPrompt` gating (enabled, slot unanswered, snooze, 90 s settle), and trend/insight derivation. `useCheckIns` (mounted in `Dashboard`) evaluates once a minute — never during a running/locked focus session — and hydrates the bounded `checkins` listener into `checkinSlice`; `CheckInCard` is the bottom-left glass card. Each answer is one merge-write (≤3/day). The evening question references the morning intent when one was set (rule-based, zero tokens); the morning wording may be AI-personalized at most once per day via `fetchCheckinQuestion` (localStorage-cached, silent fallback to the bank when no key/network). Quiet adaptation: a ≤2 rating queues one gentle Island suggestion; a morning intent can become a to-do in one tap. Toggle: `settings.checkinsEnabled` (Settings → Sounds & Notifications → Wellness Controls). Dismissing snoozes all slots 90 min (`protrack:checkin:snoozedUntil`).
 
 ## 5. Free-tier discipline (hard rules for new features)
 
@@ -155,6 +158,11 @@ Rules (`firestore.rules`): everything under `users/{uid}/**` is owner-only. Hand
 - `.github/workflows/ci.yml` runs lint (if present) + multi-target build on every non-master push and PR.
 - `.github/workflows/release.yml` runs on push to `master` (or `workflow_dispatch` with a bump choice): auto-detects version bump from conventional commits (feat→minor, feat!/BREAKING→major, else patch) → Netlify deploy → matrix Electron build (Win/Mac/Linux) → GitHub Release with installer assets and release notes extracted from `CHANGELOG.md`. **Never overwrites `CHANGELOG.md`** — the developer curates it before merging. Heading format must be `## v<semver> — YYYY-MM-DD` so the `awk` extractor in the finalize job finds the right section.
 - Required secrets: `GITHUB_TOKEN` (auto), `NETLIFY_AUTH_TOKEN` + `NETLIFY_SITE_ID` (optional). Code signing is intentionally skipped (`CSC_IDENTITY_AUTO_DISCOVERY: false`); add certs later when the project ships paid plans.
+
+### Shipping targets (Windows)
+Two distribution channels from one codebase, split at packaging time:
+- **GitHub (default)** — `nsis` target, self-updates via `electron-updater` reading the GitHub release feed. This is what CI builds; nothing changed here.
+- **Microsoft Store** — `npm run electron:build:appx` produces an `.appx` for Partner Center submission. The `appx` block in `electron-builder.yml` carries **placeholder** `identityName`/`publisher` values — they MUST be replaced with the Partner Center product-identity values before submission. At runtime `process.windowsStore` (exposed to the renderer as `app:info → storeBuild`) disables `electron-updater` entirely (`initAutoUpdate` early-returns, `update:check` returns a calm message, Settings → Updates shows a Store notice instead of the check button): the Store owns update delivery, and self-updating would both violate Store policy and fail inside the AppX sandbox. `appx` is deliberately NOT in the default `win.target` list so CI release assets keep matching `latest.yml`.
 
 ## 6. Maintenance guidelines
 
