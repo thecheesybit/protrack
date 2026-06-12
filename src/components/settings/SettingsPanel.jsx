@@ -756,7 +756,15 @@ export function SettingsPanel() {
 
                 {activeTab === 'updates' && (
                   <div className="space-y-6">
-                    {isDesktop && (
+                    {isDesktop && appInfo?.storeBuild && (
+                      <div>
+                        <h4 className="text-xs font-bold uppercase tracking-widest text-muted mb-3">App Updates</h4>
+                        <p className="rounded-xl border border-line bg-surface-2/40 px-4 py-3 text-xs leading-relaxed text-muted">
+                          This install is managed by the <span className="font-semibold text-ink/80">Microsoft Store</span> — updates download and apply automatically through the Store.
+                        </p>
+                      </div>
+                    )}
+                    {isDesktop && !appInfo?.storeBuild && (
                       <div>
                         <h4 className="text-xs font-bold uppercase tracking-widest text-muted mb-3">App Updates</h4>
                         <button

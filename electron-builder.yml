@@ -21,10 +21,30 @@ files:
 # A 512px PNG is enough — electron-builder derives .ico/.icns per platform.
 icon: build/icon.png
 
+# Two Windows shipping targets:
+#  - nsis (default) → GitHub Releases + electron-updater self-update
+#  - appx (explicit: `npm run electron:build:appx`) → Microsoft Store submission;
+#    the Store owns updates there, so main.js disables electron-updater when
+#    process.windowsStore is true. appx is intentionally NOT in the default
+#    target list — CI release builds must keep producing only the NSIS asset
+#    set that latest.yml references.
 win:
   target:
     - nsis
   icon: build/icon.png
+
+# Microsoft Store identity. identityName + publisher MUST be replaced with the
+# values from Partner Center (Product management → Product identity) after
+# reserving the app name — Store validation rejects mismatches. The package
+# builds unsigned for local testing; Partner Center re-signs on ingestion.
+appx:
+  identityName: REPLACE.WITH.PartnerCenter.IdentityName
+  publisher: CN=REPLACE-WITH-PARTNER-CENTER-PUBLISHER-GUID
+  publisherDisplayName: AYUSH KUMAR
+  applicationId: PROTRACK
+  displayName: PRO TRACK
+  backgroundColor: '#09090e'
+  artifactName: PRO-TRACK-${version}-${arch}.${ext}
 
 nsis:
   oneClick: false

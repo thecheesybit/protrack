@@ -31,6 +31,11 @@ let win = null
 let tray = null
 let isQuitting = false
 
+// True when running from a Microsoft Store (AppX/MSIX) install. Store builds
+// must never self-update — the Store owns delivery, and electron-updater
+// cannot write into the sandboxed package directory anyway.
+const isStoreBuild = Boolean(process.windowsStore)
+
 // System-wide hotkeys (sensible defaults; surfaced read-only in Settings).
 const SHORTCUTS = {
   toggleWindow: 'CommandOrControl+Shift+P',
@@ -148,7 +153,7 @@ function isTransientUpdateError(err) {
  *  - Manual `update:check` IPC lets the user force a check from Settings.
  */
 function initAutoUpdate() {
-  if (!app.isPackaged) return
+  if (!app.isPackaged || isStoreBuild) return
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
 
@@ -559,6 +564,7 @@ ipcMain.handle('app:info', () => ({
   version: app.getVersion(),
   platform: process.platform,
   shortcuts: SHORTCUTS,
+  storeBuild: isStoreBuild,
 }))
 
 /* ── IPC: hardware fingerprint identity ─────────────────── */
@@ -579,6 +585,8 @@ ipcMain.handle('update:install', () => {
 
 /* ── IPC: manual update check (triggered from Settings) ─── */
 ipcMain.handle('update:check', async () => {
+  if (isStoreBuild)
+    return { ok: false, error: 'This install updates through the Microsoft Store.' }
   if (!app.isPackaged) return { ok: false, error: 'Dev build — auto-update disabled.' }
   try {
     const result = await autoUpdater.checkForUpdates()
