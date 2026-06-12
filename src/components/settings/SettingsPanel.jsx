@@ -180,6 +180,9 @@ export function SettingsPanel() {
   const [newPresetUrl, setNewPresetUrl] = useState('')
   const [newPresetLabel, setNewPresetLabel] = useState('')
 
+  // Daily check-ins
+  const [checkinsEnabled, setCheckinsEnabled] = useState(true)
+
   // Zen & Motivation
   const [zenEnabled, setZenEnabled] = useState(true)
   const [zenDurationSec, setZenDurationSec] = useState(60)
@@ -224,6 +227,7 @@ export function SettingsPanel() {
       setFocusUrlInput(settings?.focusAudioUrl || '')
       setFocusVideoEnabled(settings?.focusVideoEnabled !== false)
       setCustomPresets(settings?.customPresets || [])
+      setCheckinsEnabled(settings?.checkinsEnabled !== false)
       setZenEnabled(settings?.zenEnabled !== false)
       setZenDurationSec(Math.round((settings?.zenDuration || 60000) / 1000))
       
@@ -470,6 +474,16 @@ export function SettingsPanel() {
       await updateSettings(user.uid, { zenEnabled: next })
     } catch (err) {
       console.error('[settings] zen save failed', err)
+    }
+  }
+
+  const toggleCheckins = async () => {
+    const next = !checkinsEnabled
+    setCheckinsEnabled(next)
+    try {
+      await updateSettings(user.uid, { checkinsEnabled: next })
+    } catch (err) {
+      console.error('[settings] check-ins save failed', err)
     }
   }
 
@@ -977,6 +991,20 @@ export function SettingsPanel() {
                           </button>
                         ))}
                       </div>
+
+                      <label className="mb-2.5 mt-5 block text-xs font-medium text-muted/80">Daily Check-ins</label>
+                      <button
+                        onClick={toggleCheckins}
+                        className="flex w-full items-center justify-between rounded-xl border border-line bg-surface-2/40 px-4 py-3.5 text-sm transition-colors hover:border-line-2"
+                      >
+                        <span className="font-medium">Short daily questions (morning, midday, evening)</span>
+                        <span className={cn('font-bold', checkinsEnabled ? 'text-emerald-400' : 'text-muted')}>
+                          {checkinsEnabled ? 'Enabled' : 'Disabled'}
+                        </span>
+                      </button>
+                      <p className="mt-2 text-[11px] leading-relaxed text-muted">
+                        One quick question per part of the day. Answers stay in your workspace and quietly tune how PRO TRACK supports you.
+                      </p>
                     </div>
                   </div>
                 )}

@@ -8,6 +8,7 @@ import { useChronoTheme } from '@/hooks/useChronoTheme'
 import { useDesktopIntegration } from '@/hooks/useDesktopIntegration'
 import { useHabitReminders } from '@/hooks/useHabitReminders'
 import { useDeadlines } from '@/hooks/useDeadlines'
+import { useCheckIns } from '@/hooks/useCheckIns'
 import { AuroraBackground } from '@/components/common/AuroraBackground'
 import { FlipClock } from '@/components/common/FlipClock'
 import { ZenOverlay } from '@/components/common/ZenOverlay'
@@ -26,6 +27,7 @@ import { AIAssistant } from '@/components/ai/AIAssistant'
 import { BackgroundHandsFree } from '@/components/ai/BackgroundHandsFree'
 import { SettingsPanel } from '@/components/settings/SettingsPanel'
 import { HydrationReminder } from '@/components/wellness/HydrationReminder'
+import { CheckInCard } from '@/components/checkin/CheckInCard'
 import { SupportModal } from '@/components/support/SupportModal'
 import aiGif from '@/assets/ai.gif'
 import { APP_VERSION } from '@/lib/version'
@@ -83,6 +85,7 @@ export function Dashboard() {
   useDesktopIntegration() // desktop-only: hardware-fingerprint binding + global hotkeys
   useHabitReminders() // schedules per-interval reminder notifications for habits
   useDeadlines()     // fires island notifications for overdue/due-today todos
+  useCheckIns()      // offers the occasional daily check-in question (lib/checkin)
 
   // Global shortcuts: Esc unwinds overlays/maximize; ⌘/Ctrl+K opens the AI.
   // When focus is locked, suppress all shortcuts except focus-related ones.
@@ -255,6 +258,7 @@ export function Dashboard() {
       <BackgroundHandsFree />
       <SettingsPanel />
       <HydrationReminder />
+      <CheckInCard />
       <SupportModal open={supportOpen} onClose={() => setSupportOpen(false)} />
       <BackgroundAudioPlayer />
     </div>

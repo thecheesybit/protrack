@@ -264,6 +264,40 @@ Do not include any other text.`
   }
 }
 
+/**
+ * One personalized morning check-in question. Called at most once per day
+ * (the hook caches the result in localStorage) and only when an AI key is
+ * configured — on any failure the caller falls back to the rule-based bank,
+ * so the feature never depends on the network or a key.
+ *
+ * @param {{ streak?: number, yesterday?: ?number, pendingTodos?: number }} context
+ * @returns {Promise<?string>} Question text, or null to use the local bank.
+ */
+export async function fetchCheckinQuestion(context = {}) {
+  const preferred = localStorage.getItem('protrack:ai_preferred_provider') || 'auto'
+  const systemInstruction = `You write ONE short morning check-in question for a productivity app.
+It asks the user what they intend to do today, in a warm, specific, non-generic voice.
+Max 90 characters. No emojis. No preamble.
+Return a JSON object with strictly one key: "text". Do not include any other text.`
+  const parts = [
+    `Current streak: ${context.streak ?? 0} days.`,
+    context.yesterday != null
+      ? `Yesterday the user rated their day ${context.yesterday}/5.`
+      : 'No rating from yesterday.',
+    context.pendingTodos != null ? `${context.pendingTodos} to-dos pending.` : '',
+  ]
+  try {
+    const res = await callAIProvider(parts.filter(Boolean).join(' '), systemInstruction, preferred)
+    const match = res.text.match(/\{[\s\S]*\}/)
+    const parsed = match ? JSON.parse(match[0]) : JSON.parse(res.text)
+    const text = typeof parsed?.text === 'string' ? parsed.text.trim() : ''
+    return text && text.length <= 120 ? text : null
+  } catch (err) {
+    console.warn('[checkin-question] AI personalization failed:', err)
+    return null
+  }
+}
+
 async function callOpenAI(prompt, systemInstruction) {
   const apiKey = getOpenAIKey()
   if (!apiKey) throw new Error('OpenAI key missing')
