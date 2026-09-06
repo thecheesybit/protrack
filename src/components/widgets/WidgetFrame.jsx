@@ -73,12 +73,18 @@ export function WidgetFrame({
           onClick={() => !isHero && !collapsed && toggleWidget(widget.id)}
           className="flex min-w-0 flex-1 items-center gap-3 text-left"
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-accent/20 to-accent/8 text-accent shadow-glow-sm ring-1 ring-accent/15">
-            <Icon className="h-5 w-5" />
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-accent/20 to-accent/8 text-accent shadow-glow-sm ring-1 ring-accent/15">
+            <Icon className="h-6 w-6" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate font-semibold leading-tight">{widget.title}</span>
-            {subtitle && <span className="block truncate text-xs text-muted">{subtitle}</span>}
+            <span className="block truncate font-display text-xl font-semibold leading-tight tracking-tight">
+              {widget.title}
+            </span>
+            {subtitle && (
+              <span className="block truncate font-mono text-[11px] uppercase tracking-[0.08em] text-muted">
+                {subtitle}
+              </span>
+            )}
           </span>
         </button>
 

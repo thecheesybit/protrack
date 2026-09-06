@@ -90,29 +90,30 @@ function MiniCard({ widget, onSingleClick, onDoubleClick }) {
     <motion.button
       layout
       layoutId={`mini-${widget.id}`}
+      variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0 } }}
       onClick={handleClick}
       whileHover={{ scale: 1.03, y: -2 }}
       whileTap={{ scale: 0.97 }}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className="edge-light group relative flex flex-1 flex-col items-center justify-center gap-2.5 overflow-hidden rounded-2xl border border-line/70 bg-surface/60 p-4 backdrop-blur-2xl transition-colors hover:border-accent/50"
+      className="edge-light group relative flex flex-1 flex-col items-center justify-center gap-4 overflow-hidden rounded-3xl border border-line/70 bg-surface/60 p-6 backdrop-blur-2xl transition-colors hover:border-accent/50"
     >
       {/* Subtle gradient backdrop */}
       <div className={cn(
-        'absolute inset-0 bg-gradient-to-br opacity-60 transition-opacity group-hover:opacity-100',
+        'absolute inset-0 bg-gradient-to-br opacity-70 transition-opacity group-hover:opacity-100',
         meta.gradient,
       )} />
 
       {/* Content */}
-      <div className="relative z-10 flex flex-col items-center gap-2">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-accent/20 to-accent/8 text-accent shadow-glow-sm ring-1 ring-accent/15">
-          <Icon className="h-5 w-5" />
+      <div className="relative z-10 flex flex-col items-center gap-3">
+        <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-accent/25 to-accent/10 text-accent shadow-glow-sm ring-1 ring-accent/20">
+          <Icon className="h-8 w-8" />
         </span>
-        <span className="text-sm font-semibold text-ink">{widget.title}</span>
-        <span className="text-[11px] text-muted/80">{meta.desc}</span>
+        <span className="font-display text-xl font-semibold tracking-tight text-ink">{widget.title}</span>
+        <span className="text-sm text-muted/85">{meta.desc}</span>
       </div>
 
       {/* Bottom accent line */}
-      <div className="absolute bottom-0 left-1/2 h-[2px] w-0 -translate-x-1/2 bg-gradient-to-r from-transparent via-accent to-transparent transition-all duration-300 group-hover:w-3/4" />
+      <div className="absolute bottom-0 left-1/2 h-[3px] w-0 -translate-x-1/2 bg-gradient-to-r from-transparent via-accent to-transparent transition-all duration-300 group-hover:w-3/4" />
     </motion.button>
   )
 }
@@ -175,9 +176,9 @@ export function BoardCanvas() {
 
   // ── Default: primary grid + secondary mini cards ──────────────────────────
   return (
-    <div className="flex h-full flex-col gap-3 p-1">
+    <div className="flex h-full flex-col gap-4 p-1">
       {/* Top row: Timetable (permanent, wider) + Swappable right widget */}
-      <div className="flex min-h-0 flex-[1.8] gap-3">
+      <div className="flex min-h-0 flex-1 gap-4">
         {leftWidget && (
           <div className="min-h-0 min-w-0 flex-[1.6]">
             <div className="h-full">
@@ -200,8 +201,14 @@ export function BoardCanvas() {
         )}
       </div>
 
-      {/* Bottom row: mini-cards for all remaining swappable widgets */}
-      <div className="flex min-h-0 flex-1 gap-3">
+      {/* Bottom row: mini-cards — fixed squarish height (no wasted vertical
+          space), staggered in on mount for a settled entrance */}
+      <motion.div
+        className="flex h-56 shrink-0 gap-4"
+        initial="hidden"
+        animate="show"
+        variants={{ show: { transition: { staggerChildren: 0.06 } } }}
+      >
         {bottomWidgets.map((w) => (
           <MiniCard
             key={w.id}
@@ -210,7 +217,7 @@ export function BoardCanvas() {
             onDoubleClick={() => maximizeWidget(w.id)}
           />
         ))}
-      </div>
+      </motion.div>
     </div>
   )
 }

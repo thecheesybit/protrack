@@ -1,17 +1,17 @@
 /**
- * Chrono-adaptive aesthetics state. Holds the current time-of-day band; the
+ * Chrono-adaptive aesthetics state. Holds the current time-of-day slot; the
  * orchestration (reading the local clock, writing the data-chrono attribute)
  * lives in useChronoTheme so this slice stays pure.
  *
- * The band MODULATES the active theme (surface depth, shadow strength, aurora
- * intensity) — it never flips the user's explicit light/dark choice. Daytime
- * reads crisper; night deepens toward pure obsidian to reduce eye strain.
+ * The 7-slot theme (docs/DESIGN_SYSTEM.md §6) turns the whole canvas with the
+ * sky: parchment through the working day, near-black warm/rose/violet tones at
+ * dawn/dusk/evening/deep night — in both light and dark themes.
  *
- * @typedef {'dawn'|'day'|'dusk'|'night'} ChronoBand
+ * @typedef {'deep_night'|'dawn'|'morning'|'midday'|'afternoon'|'dusk'|'evening'} ChronoSlot
  */
 export const createChronoSlice = (set) => ({
-  chronoBand: 'night', // ChronoBand
+  chronoSlot: 'morning', // ChronoSlot — corrected by useChronoTheme on mount
 
-  /** @param {ChronoBand} chronoBand */
-  setChronoBand: (chronoBand) => set({ chronoBand }),
+  /** @param {ChronoSlot} chronoSlot */
+  setChronoSlot: (chronoSlot) => set({ chronoSlot }),
 })

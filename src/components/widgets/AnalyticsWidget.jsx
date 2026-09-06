@@ -4,6 +4,7 @@ import { useStore } from '@/store/useStore'
 import { useFocusSessions } from '@/hooks/useFocusSessions'
 import { WidgetFrame } from './WidgetFrame'
 import { Spinner } from '@/components/ui/Spinner'
+import { StatCard } from '@/components/ui/StatCard'
 import { ymd, lastNDays } from '@/lib/dates'
 
 const AnalyticsCharts = lazy(() => import('./AnalyticsCharts'))
@@ -59,12 +60,14 @@ export function AnalyticsWidget({ widget, variant }) {
 
   const totalHours = Math.round(((stats?.totalFocusMin || 0) / 60) * 10) / 10
 
+  // Hero mode earns the full-bleed gradient KPI cards; the grid stays compact.
+  const statVariant = isHero ? 'hero' : 'compact'
   const cards = (
     <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-      <Stat icon={<Flame className="h-4 w-4" />} label="Current streak" value={`${stats?.currentStreak || 0}d`} />
-      <Stat icon={<CalendarCheck className="h-4 w-4" />} label="Active days" value={stats?.activeDays?.length || 0} />
-      <Stat icon={<Clock className="h-4 w-4" />} label="Total focus" value={`${totalHours}h`} />
-      <Stat icon={<Trophy className="h-4 w-4" />} label="Longest session" value={`${stats?.longestSessionMin || 0}m`} />
+      <StatCard variant={statVariant} tone="rose" icon={<Flame className="h-4 w-4" />} label="Current streak" value={`${stats?.currentStreak || 0}d`} />
+      <StatCard variant={statVariant} tone="sky" icon={<CalendarCheck className="h-4 w-4" />} label="Active days" value={stats?.activeDays?.length || 0} />
+      <StatCard variant={statVariant} tone="violet" icon={<Clock className="h-4 w-4" />} label="Total focus" value={`${totalHours}h`} />
+      <StatCard variant={statVariant} tone="amber" icon={<Trophy className="h-4 w-4" />} label="Longest session" value={`${stats?.longestSessionMin || 0}m`} />
     </div>
   )
 
@@ -97,16 +100,3 @@ export function AnalyticsWidget({ widget, variant }) {
   )
 }
 
-function Stat({ icon, label, value }) {
-  return (
-    <div className="flex items-center gap-2.5 rounded-xl border border-line/50 bg-surface-2/30 px-3 py-2.5">
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/15 text-accent">
-        {icon}
-      </span>
-      <div className="min-w-0">
-        <div className="text-lg font-bold leading-none">{value}</div>
-        <div className="truncate text-[11px] text-muted">{label}</div>
-      </div>
-    </div>
-  )
-}

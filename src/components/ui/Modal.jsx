@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X } from 'lucide-react'
 import { cn } from '@/utils/cn'
@@ -5,9 +6,16 @@ import { cn } from '@/utils/cn'
 /**
  * Reusable centered glass modal with a backdrop blur and spring entry.
  * Closes on backdrop click or Escape (handled by the consumer if needed).
+ *
+ * Rendered through a portal to <body> so `position: fixed` always resolves
+ * against the viewport. Without this, opening the modal from inside any
+ * transformed ancestor (e.g. the sidebar rail, which uses -translate-y-1/2)
+ * makes the transform a containing block and crushes the modal into that
+ * element's box — the bug that squished the mode editor into a left-edge strip.
  */
 export function Modal({ open, onClose, title, children, className, footer }) {
-  return (
+  if (typeof document === 'undefined') return null
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
@@ -51,6 +59,7 @@ export function Modal({ open, onClose, title, children, className, footer }) {
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   )
 }

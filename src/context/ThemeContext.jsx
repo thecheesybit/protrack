@@ -18,9 +18,12 @@ export function ThemeProvider({ children }) {
     const root = document.documentElement
     
     if (theme === 'auto') {
-       const band = root.dataset.chrono || 'night'
-       const isDay = band === 'dawn' || band === 'day'
-       root.classList.toggle('dark', !isDay)
+       // Follow the 7-slot sky: light during the working day, dark otherwise.
+       // (useChronoTheme keeps this in sync every minute; this handles the
+       // moment the user switches back to auto.)
+       const slot = root.dataset.chrono || 'evening'
+       const isDaySlot = slot === 'morning' || slot === 'midday' || slot === 'afternoon'
+       root.classList.toggle('dark', !isDaySlot)
     } else {
        root.classList.toggle('dark', theme === 'dark')
     }

@@ -39,6 +39,12 @@ import {
   hasApiKey
 } from '@/services/geminiService'
 import { updateSettings, updateProfile } from '@/services/userService'
+import {
+  CHRONO_SLOTS,
+  CHRONO_OVERRIDE_KEY,
+  CHRONO_OVERRIDE_EVENT,
+  readChronoOverride,
+} from '@/hooks/useChronoTheme'
 import { ensureNotificationPermission } from '@/lib/notify'
 import { isDesktop, desktopBridge } from '@/desktop/isDesktop'
 import { CHANGELOG } from '@/content/changelog'
@@ -182,6 +188,19 @@ export function SettingsPanel() {
 
   // Daily check-ins
   const [checkinsEnabled, setCheckinsEnabled] = useState(true)
+
+  // DEV-only chrono slot preview (drives useChronoTheme via localStorage)
+  const [chronoOverride, setChronoOverrideState] = useState(() => readChronoOverride())
+  const setChronoOverride = (slot) => {
+    try {
+      if (slot) localStorage.setItem(CHRONO_OVERRIDE_KEY, slot)
+      else localStorage.removeItem(CHRONO_OVERRIDE_KEY)
+    } catch {
+      /* private mode — preview just won't persist */
+    }
+    setChronoOverrideState(slot)
+    window.dispatchEvent(new Event(CHRONO_OVERRIDE_EVENT))
+  }
 
   // Zen & Motivation
   const [zenEnabled, setZenEnabled] = useState(true)
@@ -891,6 +910,32 @@ export function SettingsPanel() {
                         <span className="font-medium">Active Theme Mode</span>
                         <span className="font-bold capitalize text-accent">{theme === 'auto' ? 'Auto (Time of Day)' : theme}</span>
                       </button>
+
+                      {/* DEV-only: preview any of the 7 chrono slots without waiting
+                          for the clock. Never ships — guarded by import.meta.env.DEV. */}
+                      {import.meta.env.DEV && (
+                        <div className="mt-4">
+                          <label className="mb-2.5 block text-xs font-medium text-muted/80">
+                            Chrono Slot Preview (dev only)
+                          </label>
+                          <div className="grid grid-cols-4 gap-2">
+                            {['live', ...CHRONO_SLOTS].map((slot) => (
+                              <button
+                                key={slot}
+                                onClick={() => setChronoOverride(slot === 'live' ? null : slot)}
+                                className={cn(
+                                  'rounded-xl border py-2 text-[10px] font-bold uppercase tracking-wider transition-colors',
+                                  (chronoOverride || 'live') === slot
+                                    ? 'border-accent/50 bg-accent/15 text-accent shadow-glow-sm'
+                                    : 'border-line text-muted hover:text-ink hover:bg-surface-2/30',
+                                )}
+                              >
+                                {slot.replace('_', ' ')}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div>
@@ -925,8 +970,9 @@ export function SettingsPanel() {
                     <div className="mt-6 border-t border-line/40 pt-5">
                       <h4 className="text-xs font-bold uppercase tracking-widest text-muted mb-3">Workspace Font Style</h4>
                       <label className="mb-2.5 block text-xs font-medium text-muted/80">Font Family</label>
-                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {[
+                          { key: 'dmsans', label: 'DM Sans', desc: 'Signature Sans' },
                           { key: 'inter', label: 'Inter', desc: 'Modern Sans' },
                           { key: 'outfit', label: 'Outfit', desc: 'Sleek Sans' },
                           { key: 'lora', label: 'Lora', desc: 'Scholarly Serif' },

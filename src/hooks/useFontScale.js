@@ -8,6 +8,7 @@ import { useStore } from '@/store/useStore'
  * against. Mounted once in App.jsx; cheap (no listeners, no rAF).
  */
 const FONT_MAP = {
+  dmsans: "'DM Sans', system-ui, -apple-system, sans-serif",
   inter: "'Inter', system-ui, -apple-system, sans-serif",
   outfit: "'Outfit', system-ui, -apple-system, sans-serif",
   lora: "'Lora', Georgia, serif",
@@ -28,7 +29,7 @@ export function useFontScale() {
 
   useEffect(() => {
     const el = document.documentElement
-    const val = FONT_MAP[fontFamily] || FONT_MAP.inter
+    const val = FONT_MAP[fontFamily] || FONT_MAP.dmsans
     el.style.setProperty('--font-sans', val)
   }, [fontFamily])
 }

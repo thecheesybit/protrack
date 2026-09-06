@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Play,
@@ -18,11 +18,11 @@ import {
 import { useStore } from '@/store/useStore'
 import { useAuth } from '@/hooks/useAuth'
 import { useYouTubeVolume } from '@/hooks/useYouTubeVolume'
-import { bandForHour, CHRONO_ACCENT } from '@/hooks/useChronoTheme'
+import { slotForHour, CHRONO_ACCENT } from '@/hooks/useChronoTheme'
 import { logFailedFocusSession } from '@/services/focusService'
 import { addLedgerEntry } from '@/services/ledgerService'
 import { updateSettings } from '@/services/userService'
-import { VIDEO_PRESETS, DEFAULT_FOCUS_SCENE } from '@/lib/focusScenes'
+import { VIDEO_PRESETS, DEFAULT_FOCUS_SCENE, youtubeId, buildSceneEmbedUrl } from '@/lib/focusScenes'
 import { withAlpha } from '@/lib/color'
 import { cn } from '@/utils/cn'
 
@@ -32,14 +32,14 @@ import { cn } from '@/utils/cn'
  * drive the background video via the IFrame API; time can be added/removed live.
  */
 
-const YT_PATTERN =
-  /(?:youtube\.fr\/|youtube\.com\/(?:watch\?v=|embed\/|v\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i
-
 const BAND_META = {
+  deep_night: { Icon: Moon, label: 'Deep Night' },
   dawn: { Icon: Sunrise, label: 'Dawn' },
-  day: { Icon: Sun, label: 'Daytime' },
-  dusk: { Icon: Sunset, label: 'Evening' },
-  night: { Icon: Moon, label: 'Night' },
+  morning: { Icon: Sunrise, label: 'Morning' },
+  midday: { Icon: Sun, label: 'Midday' },
+  afternoon: { Icon: Sun, label: 'Afternoon' },
+  dusk: { Icon: Sunset, label: 'Dusk' },
+  evening: { Icon: Moon, label: 'Evening' },
 }
 
 function mmss(sec) {
@@ -125,25 +125,40 @@ export function FocusLockScreen() {
 
   const [confirmQuit, setConfirmQuit] = useState(false)
   const [showScenes, setShowScenes] = useState(false)
+  // Set when YouTube reports the scene can't be embedded/played (removed,
+  // embedding disabled, region-locked). We then hide the iframe and fall back
+  // to the gradient rather than leaving YouTube's branded error on screen.
+  const [videoError, setVideoError] = useState(false)
 
   const iframeRef = useRef(null)
   const onIframeLoad = useYouTubeVolume(iframeRef, volume, muted)
 
-  const ytMatch = focusAudioUrl.match(YT_PATTERN)
-  const videoId = ytMatch?.[1]
-  const showVideo = Boolean(focusVideoEnabled && videoId)
+  const videoId = youtubeId(focusAudioUrl)
+  const showVideo = Boolean(focusVideoEnabled && videoId && !videoError)
 
-  // Debug logging
-  if (focusLocked) {
-    console.log('[FocusLockScreen] focusAudioUrl:', focusAudioUrl)
-    console.log('[FocusLockScreen] ytMatch:', ytMatch)
-    console.log('[FocusLockScreen] videoId:', videoId)
-    console.log('[FocusLockScreen] showVideo:', showVideo)
-    console.log('[FocusLockScreen] volume:', volume, 'muted:', muted)
-  }
+  // Reset the error gate whenever the chosen scene changes, so switching to a
+  // different (working) scene re-shows the video.
+  useEffect(() => {
+    setVideoError(false)
+  }, [videoId])
 
-  const band = bandForHour(new Date().getHours())
-  const { Icon: BandIcon, label: bandLabel } = BAND_META[band] || BAND_META.night
+  // Listen for the IFrame API's onError (video unavailable / embedding disabled).
+  useEffect(() => {
+    const onMessage = (e) => {
+      if (e.origin !== 'https://www.youtube.com') return
+      try {
+        const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
+        if (data?.event === 'onError') setVideoError(true)
+      } catch {
+        /* not a JSON control message */
+      }
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [])
+
+  const band = slotForHour(new Date().getHours())
+  const { Icon: BandIcon, label: bandLabel } = BAND_META[band] || BAND_META.evening
 
   const isBreak = phase === 'break'
   const accentHex = isBreak ? '#10b981' : session?.color || CHRONO_ACCENT[band]?.hex || '#6366f1'
@@ -151,25 +166,9 @@ export function FocusLockScreen() {
   const total = phaseTotalSec || secondsLeft || 1
   const progress = Math.min(1, Math.max(0, 1 - secondsLeft / total))
 
-  // Autoplay strategy: the Electron main process pins a global
-  // `autoplay-policy: no-user-gesture-required` switch (electron/main.js), so
-  // cross-origin YouTube iframes can autoplay WITH sound. We therefore use
-  // mute=0 to play video + audio directly, instead of starting muted and relying
-  // on an IFrame-API unMute handshake — that handshake is unreliable over file://
-  // because YouTube can't validate the opaque origin, leaving the scene silent.
-  //
-  // For Electron (file://) we omit `&origin=` — the opaque file:// origin would
-  // be rejected by YouTube's enablejsapi check. The main process instead injects
-  // a valid Referer/Origin header for youtube.com requests so the embed loads.
-  // For the web build (real HTTPS origin), `&origin=` is passed for API validation.
-  const isElectron = __IS_ELECTRON__
-  const originParam = !isElectron && typeof window !== 'undefined'
-    ? `&origin=${encodeURIComponent(window.location.origin)}`
-    : ''
-
-  const embedUrl = videoId
-    ? `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&loop=1&playlist=${videoId}&controls=0&rel=0&showinfo=0&modestbranding=1&enablejsapi=1${originParam}`
-    : ''
+  // Embed URL (origin handling, autoplay, mute) lives in buildSceneEmbedUrl so
+  // the lock screen and the hidden background player never drift.
+  const embedUrl = buildSceneEmbedUrl(videoId)
 
   const onMain = () => (status === 'running' ? pause() : resume())
 
@@ -184,13 +183,11 @@ export function FocusLockScreen() {
 
   const applyScene = async (url) => {
     if (!user?.uid) return
-    console.log('[FocusLockScreen] Applying scene:', url)
     try {
       await updateSettings(
         user.uid,
         url ? { focusAudioUrl: url, focusVideoEnabled: true } : { focusAudioUrl: '' },
       )
-      console.log('[FocusLockScreen] Scene applied successfully')
     } catch (err) {
       console.error('[focus] scene change failed', err)
     }
@@ -256,7 +253,12 @@ export function FocusLockScreen() {
                     minHeight: '100%',
                     top: '50%',
                     left: '50%',
-                    transform: 'translate(-50%, -50%)',
+                    // scale(1.35) overfills the viewport so YouTube's edge chrome
+                    // — the logo + "More videos" grid (bottom corners) and the
+                    // caption band (bottom-center) — is cropped off-screen. The
+                    // captions module is also unloaded via the IFrame API; this is
+                    // belt-and-braces for a perfectly clean background scene.
+                    transform: 'translate(-50%, -50%) scale(1.35)',
                   }}
                 />
               </div>

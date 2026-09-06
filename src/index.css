@@ -1,4 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Rozha+One&family=Yatra+One&family=Cinzel:wght@400..700&family=Outfit:wght@300..900&family=Lora:ital,wght@0,400..700;1,400..700&family=JetBrains+Mono:wght@400..700&display=swap');
+/* Design-system stack (docs/DESIGN_SYSTEM.md §3): Fraunces display serif,
+   DM Sans body, DM Mono counters/labels. Loaded separately so a failure here
+   can never take the legacy faces down with it. */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=DM+Sans:opsz,wght@9..40,400..700&family=DM+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -15,23 +19,25 @@ html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
+/* Base type scale bumped +2px at every preset (standard is now 18px, up from
+   16px) for a larger, more legible app. Every `rem` scales from this. */
 :root {
-  --root-font-size: 16px;
-}
-:root[data-font-scale='tiny'] {
-  --root-font-size: 12px;
-}
-:root[data-font-scale='compact'] {
-  --root-font-size: 14px;
-}
-:root[data-font-scale='standard'] {
-  --root-font-size: 16px;
-}
-:root[data-font-scale='large'] {
   --root-font-size: 18px;
 }
-:root[data-font-scale='huge'] {
+:root[data-font-scale='tiny'] {
+  --root-font-size: 14px;
+}
+:root[data-font-scale='compact'] {
+  --root-font-size: 16px;
+}
+:root[data-font-scale='standard'] {
+  --root-font-size: 18px;
+}
+:root[data-font-scale='large'] {
   --root-font-size: 20px;
+}
+:root[data-font-scale='huge'] {
+  --root-font-size: 22px;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -40,6 +46,9 @@ html {
    useModeAccent so the whole UI glows in the active mode's color.
    ───────────────────────────────────────────────────────────── */
 :root {
+  /* Body family default — useFontScale overrides per user preference. */
+  --font-sans: 'DM Sans', system-ui, -apple-system, sans-serif;
+
   /* Warm parchment canvas — #f0ece4 ≈ rgb(240 236 228) */
   --bg: 240 236 228;
   --surface: 255 255 255;
@@ -93,47 +102,123 @@ html {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Chrono-adaptive bands — a subtle time-of-day layer driven by
-   useChronoTheme writing `data-chrono` on <html>. It MODULATES the
-   active theme (surface depth + ambient aurora intensity); it never
-   flips the user's explicit light/dark choice. The 0.45s body color
-   transition makes band changes glide rather than snap.
+   Chrono theme — the 7-slot time-of-day system (DESIGN_SYSTEM.md §6).
+   useChronoTheme writes `data-chrono` on <html> and rotates the accent.
+
+   The DRAMATIC per-slot canvas (near-black warm/rose/violet at dawn/dusk/
+   evening/deep-night, plus the starfield) lives under `.dark` ONLY. That way:
+     • explicit Light mode always stays on the parchment canvas — the
+       light/dark toggle is ALWAYS visibly effective, at any hour;
+     • explicit Dark mode gets the full cinematic time theme;
+     • Auto mode follows the sky: useChronoTheme adds `.dark` for the dark
+       slots and removes it for morning/midday/afternoon.
+   Light mode still gets a subtle per-slot warm wash so time is felt, never a
+   black screen. The 0.45s body transition makes slot changes glide.
    ───────────────────────────────────────────────────────────── */
 :root {
   --aurora-opacity: 1;
-}
-:root[data-chrono='day'] {
-  --aurora-opacity: 0.8;
-}
-:root[data-chrono='dusk'] {
-  --aurora-opacity: 1;
-}
-:root[data-chrono='night'] {
-  --aurora-opacity: 0.62;
+  --stars-opacity: 0;
+  --sky-wash: transparent;
 }
 
-/* Dark theme: lift midday for crisp readability, sink to pure obsidian
-   at night to reduce eye strain. */
-.dark[data-chrono='day'] {
+/* Light mode: canvas stays parchment; only a faint slot wash + gentle warmth. */
+:root:not(.dark)[data-chrono='morning'] {
+  --sky-wash: linear-gradient(180deg, rgb(14 165 233 / 0.06), transparent 55%);
+}
+:root:not(.dark)[data-chrono='midday'] {
+  --bg: 245 242 235;
+  --sky-wash: linear-gradient(180deg, rgb(74 222 128 / 0.05), transparent 50%);
+}
+:root:not(.dark)[data-chrono='afternoon'] {
+  --bg: 242 237 227;
+  --sky-wash: linear-gradient(200deg, rgb(245 158 11 / 0.07), transparent 60%);
+}
+:root:not(.dark)[data-chrono='dawn'] {
+  --sky-wash: linear-gradient(180deg, rgb(251 113 133 / 0.07), transparent 60%);
+}
+:root:not(.dark)[data-chrono='dusk'] {
+  --sky-wash: linear-gradient(180deg, rgb(244 63 94 / 0.07), transparent 60%);
+}
+:root:not(.dark)[data-chrono='evening'] {
+  --sky-wash: linear-gradient(180deg, rgb(124 58 237 / 0.06), transparent 60%);
+}
+
+/* Dark mode — the cinematic 7-slot canvas. Surfaces, ink and hairlines all
+   follow the canvas so contrast holds (≥4.5:1 on body text). */
+.dark[data-chrono='deep_night'] {
+  --aurora-opacity: 0.55;
+  --stars-opacity: 0.9;
+  --sky-wash: linear-gradient(180deg, rgb(139 92 246 / 0.1), transparent 65%);
+  --bg: 8 8 15;
+  --surface: 16 16 28;
+  --surface-2: 22 22 38;
+  --text: 236 237 245;
+  --muted: 150 152 172;
+  --border: 36 37 54;
+  --color-canvas: #08080f;
+  --color-island: #0d0d1a;
+}
+.dark[data-chrono='dawn'] {
+  --aurora-opacity: 1;
+  --stars-opacity: 0.25;
+  --sky-wash: linear-gradient(180deg, rgb(251 113 133 / 0.12), rgb(245 158 11 / 0.06) 45%, transparent 70%);
+  --bg: 26 16 10;
+  --surface: 38 25 17;
+  --surface-2: 48 32 22;
+  --text: 246 238 230;
+  --muted: 178 160 146;
+  --border: 62 44 32;
+  --color-canvas: #1a100a;
+  --color-island: #1c120c;
+}
+.dark[data-chrono='morning'] {
+  --aurora-opacity: 0.85;
+  --sky-wash: linear-gradient(180deg, rgb(14 165 233 / 0.08), transparent 55%);
   --bg: 11 13 18;
   --surface: 19 21 28;
   --surface-2: 27 30 39;
 }
+.dark[data-chrono='midday'] {
+  --aurora-opacity: 0.8;
+  --sky-wash: linear-gradient(180deg, rgb(74 222 128 / 0.06), transparent 50%);
+  --bg: 12 15 20;
+  --surface: 20 24 31;
+  --surface-2: 28 32 42;
+  --color-island: #1a1f2e;
+}
+.dark[data-chrono='afternoon'] {
+  --aurora-opacity: 0.9;
+  --sky-wash: linear-gradient(200deg, rgb(245 158 11 / 0.08), transparent 60%);
+  --bg: 13 12 9;
+  --surface: 22 20 15;
+  --surface-2: 30 27 20;
+  --color-island: #1c1608;
+}
 .dark[data-chrono='dusk'] {
-  --bg: 8 9 14;
-  --surface: 16 17 24;
+  --aurora-opacity: 1;
+  --stars-opacity: 0.35;
+  --sky-wash: linear-gradient(180deg, rgb(244 63 94 / 0.12), rgb(251 146 60 / 0.06) 50%, transparent 75%);
+  --bg: 24 9 14;
+  --surface: 37 16 22;
+  --surface-2: 48 22 30;
+  --text: 246 234 238;
+  --muted: 178 152 160;
+  --border: 64 32 42;
+  --color-canvas: #18090e;
+  --color-island: #1f0d10;
 }
-.dark[data-chrono='night'] {
-  --bg: 4 5 8;
-  --surface: 12 13 18;
-  --surface-2: 18 19 26;
-}
-
-/* Light theme: gently soften surfaces after dark to ease night use. */
-:root[data-chrono='night']:not(.dark) {
-  --bg: 240 241 245;
-  --surface: 248 249 251;
-  --surface-2: 237 239 244;
+.dark[data-chrono='evening'] {
+  --aurora-opacity: 0.7;
+  --stars-opacity: 0.6;
+  --sky-wash: linear-gradient(180deg, rgb(124 58 237 / 0.1), transparent 60%);
+  --bg: 13 11 20;
+  --surface: 22 19 33;
+  --surface-2: 30 26 44;
+  --text: 238 236 246;
+  --muted: 154 150 172;
+  --border: 42 38 58;
+  --color-canvas: #0d0b14;
+  --color-island: #130e1f;
 }
 
 @layer base {
@@ -148,26 +233,30 @@ html {
   }
 
   body {
-    @apply bg-bg text-ink antialiased;
-    font-family: var(--font-sans, 'Inter', system-ui, -apple-system, sans-serif);
+    @apply bg-bg text-ink;
+    font-family: var(--font-sans, 'DM Sans', system-ui, -apple-system, sans-serif);
     color-scheme: light dark;
     font-feature-settings: 'cv11', 'ss01', 'cv02', 'cv03';
-    /* `geometricPrecision` keeps glyph metrics consistent across DPI tiers —
-       `optimizeLegibility` can soften horizontal hinting on Windows HiDPI. */
-    text-rendering: geometricPrecision;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    /* Avoid the half-pixel composite blur on translated/animated layers. */
-    transform: translateZ(0);
-    backface-visibility: hidden;
+    /* `optimizeLegibility` turns on kerning/ligatures and, unlike
+       `geometricPrecision`, does NOT round glyph advances — text stays sharp on
+       fractional DPI. We deliberately do NOT put `transform: translateZ(0)` on
+       body: promoting the whole app to a single GPU texture layer is the classic
+       cause of blurry text in Electron on scaled (125/150/200%) displays,
+       because the layer isn't guaranteed to align to physical pixels. Individual
+       animated elements opt into their own layers via `will-change` where needed.
+       `-webkit-font-smoothing: auto` lets the platform pick its native antialias
+       (grayscale) rather than forcing the thinner macOS-style smoothing. */
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: auto;
+    -moz-osx-font-smoothing: auto;
     transition: background-color 0.45s ease, color 0.45s ease;
   }
 
-  /* Crisp 1px borders on hairline DPI — without this Tailwind's `border`
-     can render as a soft 1.33px line on 1.25x / 1.5x Windows scaling. */
-  img,
-  svg {
-    image-rendering: -webkit-optimize-contrast;
+  /* Let the browser use its default high-quality image scaling — 4K/HiDPI
+     assets stay crisp. (The old `-webkit-optimize-contrast` forced a cheaper
+     sharpening filter that can look harsh on high-DPI displays.) */
+  img {
+    image-rendering: auto;
   }
 
   /* Tighter, more confident headings (Linear/Apple cadence). */
@@ -258,6 +347,28 @@ html {
   .font-hindi {
     font-family: 'Rozha One', 'Yatra One', serif;
   }
+}
+
+/* ── Ambient space objects (SpaceObjects.jsx) ──────────────────────────────
+   Each meteor/drifter is spawned by JS with randomized start position, target
+   (--mx/--my), direction and duration, then removed on animationend — so no
+   two passes share a spot, interval, or heading. */
+@keyframes shooting-star-once {
+  0% { transform: translate(0, 0); opacity: 0; }
+  8% { opacity: 1; }
+  100% { transform: translate(var(--mx), var(--my)); opacity: 0; }
+}
+@keyframes drift-ltr {
+  0% { transform: translateX(-14vw); opacity: 0; }
+  14% { opacity: var(--drift-op, 0.5); }
+  86% { opacity: var(--drift-op, 0.5); }
+  100% { transform: translateX(114vw); opacity: 0; }
+}
+@keyframes drift-rtl {
+  0% { transform: translateX(114vw) scaleX(-1); opacity: 0; }
+  14% { opacity: var(--drift-op, 0.5); }
+  86% { opacity: var(--drift-op, 0.5); }
+  100% { transform: translateX(-14vw) scaleX(-1); opacity: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -14,33 +14,38 @@ import { cn } from '@/utils/cn'
  */
 function VerticalModePill({ mode, active, onSelect, onEdit }) {
   const Icon = getIcon(mode.icon)
-  const accentColor = mode.accentColor || '#6366f1'
+  const accentColor = mode.accentColor || 'rgb(var(--accent))'
 
   return (
     <div className="group relative">
       <button
         onClick={onSelect}
         className={cn(
-          'relative flex h-12 w-12 items-center justify-center rounded-2xl transition-all duration-200 border',
+          'relative flex h-12 w-12 items-center justify-center rounded-2xl transition-all duration-200',
           active
-            ? 'bg-surface text-ink ring-2 ring-offset-2 ring-offset-surface'
-            : 'border-line/60 bg-surface/60 text-muted backdrop-blur-xl hover:border-accent/50 hover:text-ink',
+            ? 'text-ink'
+            : 'text-muted hover:scale-105 hover:bg-ink/5 hover:text-ink',
         )}
-        style={active ? {
-          borderColor: accentColor,
-          '--tw-ring-color': accentColor,
-          boxShadow: `0 0 16px ${accentColor}60`
-        } : {}}
+        style={active ? { backgroundColor: `${mode.accentColor || '#6366f1'}1f` } : {}}
         aria-label={mode.name}
       >
+        {/* Sliding accent indicator — one per rail, glides between actives. */}
+        {active && (
+          <motion.span
+            layoutId="rail-mode-indicator"
+            transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+            className="absolute -left-[10px] h-7 w-1.5 rounded-r-full"
+            style={{ backgroundColor: accentColor }}
+          />
+        )}
         <span
-          className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full ring-2 ring-surface"
+          className={cn(
+            'absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full transition-opacity',
+            active ? 'opacity-100' : 'opacity-50',
+          )}
           style={{ backgroundColor: accentColor }}
         />
-        <Icon 
-          className="h-5 w-5" 
-          style={active ? { color: accentColor } : {}}
-        />
+        <Icon className="h-6 w-6" style={active ? { color: accentColor } : {}} />
       </button>
 
       {/* Tooltip */}
@@ -145,11 +150,16 @@ export function ModeSwitcher({ vertical = false }) {
     setEditorOpen(true)
   }
 
-  // ── Vertical: Compact floating strip on the left ──────────────────────────
+  // ── Vertical: unified sidebar rail (DESIGN_SYSTEM.md §5) ──────────────────
+  // One continuous glass rail — modes on top, utilities below a hairline —
+  // instead of a stack of disconnected chips.
   if (vertical) {
+    const railAction =
+      'flex h-12 w-12 items-center justify-center rounded-2xl text-muted transition-all duration-200 hover:scale-105 hover:bg-ink/5 hover:text-ink'
+
     return (
       <>
-        <div className="flex shrink-0 flex-col items-center gap-2">
+        <div className="flex shrink-0 flex-col items-center gap-2 rounded-[1.75rem] border border-line/60 bg-surface/70 px-2 py-3 shadow-premium-md backdrop-blur-xl">
           <VerticalModePill
             key="all"
             mode={allMode}
@@ -168,62 +178,49 @@ export function ModeSwitcher({ vertical = false }) {
             />
           ))}
 
-          <button
-            onClick={openCreate}
-            title="New mode"
-            className="flex h-12 w-12 items-center justify-center rounded-2xl border border-line/60 bg-surface/60 text-muted backdrop-blur-xl transition-colors hover:border-accent/50 hover:text-ink"
-          >
-            <Plus className="h-5 w-5" />
+          <button onClick={openCreate} title="New mode" className={railAction}>
+            <Plus className="h-6 w-6" />
           </button>
 
-          {/* Spacer */}
-          <div className="my-1 h-[1px] w-6 bg-line/50" />
+          {/* Hairline between modes and utilities */}
+          <div className="my-1 h-[1px] w-6 bg-line/60" />
 
-          {/* Exit Full Screen */}
           {fullscreen && (
             <button
               onClick={() => window.protrack?.window?.toggleFullScreen?.()}
               title="Exit Full Screen"
-              className="flex h-12 w-12 items-center justify-center rounded-2xl border border-amber-500/25 bg-amber-500/5 text-amber-400 hover:text-amber-500 hover:bg-amber-500/10 hover:border-amber-500/40 transition-colors"
+              className="flex h-10 w-10 items-center justify-center rounded-xl text-amber-400 transition-all duration-200 hover:scale-105 hover:bg-amber-500/10 hover:text-amber-500"
             >
-              <Minimize2 className="h-5 w-5" />
+              <Minimize2 className="h-6 w-6" />
             </button>
           )}
 
-          {/* Theme Toggle */}
           <button
             onClick={toggleTheme}
             title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
-            className="flex h-12 w-12 items-center justify-center rounded-2xl border border-line/60 bg-surface/60 text-muted backdrop-blur-xl transition-colors hover:border-accent/50 hover:text-ink"
+            className={railAction}
           >
-            {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            {theme === 'dark' ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
           </button>
 
-          {/* Settings */}
-          <button
-            onClick={() => setSettingsOpen(true)}
-            title="Settings"
-            className="flex h-12 w-12 items-center justify-center rounded-2xl border border-line/60 bg-surface/60 text-muted backdrop-blur-xl transition-colors hover:border-accent/50 hover:text-ink"
-          >
-            <Settings className="h-5 w-5" />
+          <button onClick={() => setSettingsOpen(true)} title="Settings" className={railAction}>
+            <Settings className="h-6 w-6" />
           </button>
 
-          {/* Support Corner */}
           <button
             onClick={() => setSupportOpen(true)}
             title="Support Corner"
-            className="flex h-12 w-12 items-center justify-center rounded-2xl border border-rose-500/25 bg-rose-500/5 text-rose-400 transition-colors hover:text-rose-500 hover:bg-rose-500/10 hover:border-rose-500/40"
+            className="flex h-10 w-10 items-center justify-center rounded-xl text-rose-400 transition-all duration-200 hover:scale-105 hover:bg-rose-500/10 hover:text-rose-500"
           >
-            <Heart className="h-5 w-5 fill-rose-400/20" />
+            <Heart className="h-6 w-6 fill-rose-400/20" />
           </button>
 
-          {/* Sign Out */}
           <button
             onClick={signOut}
             title="Sign out"
-            className="flex h-12 w-12 items-center justify-center rounded-2xl border border-line/60 bg-surface/60 text-muted backdrop-blur-xl transition-colors hover:border-red-500/40 hover:text-red-500 hover:bg-red-500/5"
+            className="flex h-10 w-10 items-center justify-center rounded-xl text-muted transition-all duration-200 hover:scale-105 hover:bg-red-500/10 hover:text-red-500"
           >
-            <LogOut className="h-5 w-5" />
+            <LogOut className="h-6 w-6" />
           </button>
         </div>
 

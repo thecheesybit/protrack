@@ -39,8 +39,12 @@ export const createUpdateSlice = (set) => ({
   reportUpdateReady: (version) =>
     set({ updateStatus: 'ready', updateVersion: version || null, updateProgress: 100 }),
 
+  // Errors apply in every state except 'ready' — once the update is fully
+  // downloaded, a late transient error must not hide the install button. An
+  // error DURING download, however, must surface: swallowing it left the UI
+  // stuck on "downloading" forever with no recovery path.
   reportUpdateError: (message) =>
-    set((s) => (s.updateStatus === 'downloading' || s.updateStatus === 'ready'
+    set((s) => (s.updateStatus === 'ready'
       ? {}
       : { updateStatus: 'error', updateError: message || 'Update check failed.' })),
 })

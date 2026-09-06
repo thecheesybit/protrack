@@ -15,10 +15,57 @@ const pkgVersion = JSON.parse(
 // normal `vite build` for Netlify stays a pure web build.
 const withElectron = process.env.ELECTRON === 'true'
 
+// The app document's Content-Security-Policy, injected as a <meta> tag at
+// BUILD time only (the dev server needs ws://localhost + inline HMR, so dev
+// stays unrestricted). This is the only CSP delivery that works everywhere:
+// Netlify could send a header, but the packaged desktop app loads over
+// file:// where no server — and no webRequest hook — ever sees the document.
+// IMPORTANT: this governs OUR document only. Never re-introduce a blanket
+// session-wide onHeadersReceived CSP in electron/main.js — stamping the app
+// policy onto cross-origin responses is what broke YouTube embeds (their MSE
+// streaming XHRs to googlevideo.com died against our connect-src) and risked
+// the Google auth popup, in packaged builds only (v1.9.x).
+const APP_CSP = [
+  "default-src 'self'",
+  // unsafe-inline/eval: Vite inline bootstrap + Firebase SDK internals.
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "img-src 'self' data: https: blob:",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "connect-src 'self' https://*.googleapis.com https://*.google.com" +
+    ' wss://*.firebaseio.com https://*.firebaseio.com' +
+    ' https://api.openai.com https://api.anthropic.com' +
+    ' https://api.deepseek.com https://api.elevenlabs.io',
+  'frame-src https://www.youtube.com https://www.youtube-nocookie.com' +
+    ' https://*.firebaseapp.com https://accounts.google.com',
+  "media-src 'self' blob: mediastream: https://www.youtube.com" +
+    ' https://www.youtube-nocookie.com https://*.googlevideo.com',
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+].join('; ')
+
+/** Injects the production CSP <meta> right after <meta charset>. */
+function injectCspPlugin() {
+  return {
+    name: 'protrack-inject-csp',
+    transformIndexHtml: {
+      handler(html, ctx) {
+        if (ctx.server) return html // dev server: no CSP, HMR needs freedom
+        return html.replace(
+          '<meta charset="UTF-8" />',
+          `<meta charset="UTF-8" />\n    <meta http-equiv="Content-Security-Policy" content="${APP_CSP}" />`,
+        )
+      },
+    },
+  }
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
     react(),
+    injectCspPlugin(),
     ...(withElectron
       ? [
           electron({

@@ -10,6 +10,7 @@ import { useHabitReminders } from '@/hooks/useHabitReminders'
 import { useDeadlines } from '@/hooks/useDeadlines'
 import { useCheckIns } from '@/hooks/useCheckIns'
 import { AuroraBackground } from '@/components/common/AuroraBackground'
+import { TimeHud } from '@/components/common/TimeHud'
 import { FlipClock } from '@/components/common/FlipClock'
 import { ZenOverlay } from '@/components/common/ZenOverlay'
 import { DynamicIsland } from '@/components/island/DynamicIsland'
@@ -31,7 +32,7 @@ import { CheckInCard } from '@/components/checkin/CheckInCard'
 import { SupportModal } from '@/components/support/SupportModal'
 import aiGif from '@/assets/ai.gif'
 import { APP_VERSION } from '@/lib/version'
-import { DEFAULT_FOCUS_SCENE } from '@/lib/focusScenes'
+import { DEFAULT_FOCUS_SCENE, youtubeId, buildSceneEmbedUrl } from '@/lib/focusScenes'
 import { cn } from '@/utils/cn'
 
 /**
@@ -143,6 +144,7 @@ export function Dashboard() {
     <div className="relative flex h-full flex-col">
       <AuroraBackground />
       <ZenOverlay />
+      <TimeHud />
       <FlipClock />
       <DynamicIsland />
 
@@ -167,7 +169,7 @@ export function Dashboard() {
               <ModeSwitcher vertical />
             </div>
 
-            <main className="min-h-0 flex-1 pl-14">
+            <main className="min-h-0 flex-1 pl-16">
               {modesLoading ? (
                 <div className="flex h-full items-center justify-center">
                   <Spinner className="h-8 w-8" />
@@ -265,8 +267,6 @@ export function Dashboard() {
   )
 }
 
-const YT_PATTERN = /(?:youtube\.fr\/|youtube\.com\/(?:watch\?v=|embed\/|v\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i
-
 function BackgroundAudioPlayer() {
   const status = useStore((s) => s.status)
   const userFocusAudioUrl = useStore((s) => s.settings?.focusAudioUrl || '')
@@ -282,25 +282,15 @@ function BackgroundAudioPlayer() {
 
   if (status !== 'running' || !focusAudioUrl || muted) return null
 
-  const youtubeMatch = focusAudioUrl.match(YT_PATTERN)
+  const videoId = youtubeId(focusAudioUrl)
 
   // When FocusLockScreen is showing the video iframe (which also carries audio),
   // this hidden player would duplicate playback — skip it.
-  if (focusLocked && focusVideoEnabled && youtubeMatch) return null
+  if (focusLocked && focusVideoEnabled && videoId) return null
 
-  if (youtubeMatch) {
-    const videoId = youtubeMatch[1]
-    // mute=0: the Electron main process pins a global autoplay-policy switch, so
-    // cross-origin iframes autoplay WITH sound. Playing unmuted avoids depending on
-    // the IFrame-API unMute handshake, which is unreliable over file:// (opaque
-    // origin can't be validated). For the web build (real HTTPS origin) we pass
-    // origin; for Electron (file://) we omit it — the main process injects a valid
-    // Referer/Origin header for youtube.com requests so the embed loads.
-    const isElectron = __IS_ELECTRON__
-    const originParam = !isElectron && typeof window !== 'undefined'
-      ? `&origin=${encodeURIComponent(window.location.origin)}`
-      : ''
-    const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&loop=1&playlist=${videoId}&enablejsapi=1${originParam}`
+  if (videoId) {
+    // Shared builder — same origin/autoplay handling as the lock screen.
+    const embedUrl = buildSceneEmbedUrl(videoId)
     return (
       <YTVolumeSync iframeRef={iframeRef} volume={volume}>
         <iframe
@@ -467,7 +457,7 @@ function DynamicBranding({ firstName }) {
 
   return (
     <div className="flex flex-col justify-center select-none">
-      <h1 className="text-base font-extrabold tracking-wide text-ink leading-none flex items-center gap-1.5 font-sans">
+      <h1 className="text-base font-bold tracking-wide text-ink leading-none flex items-center gap-1.5 font-display">
         {text}
         {phase === 'done' && (
           <span className="rounded bg-accent/10 px-1 py-0.2 text-[9px] font-bold text-accent normal-case tracking-normal">

@@ -285,61 +285,44 @@ function createWindow() {
   )
   ses.setPermissionCheckHandler((_wc, permission) => GRANTED_PERMISSIONS.has(permission))
 
-  // YouTube refuses to start its embed when the host page has a null/opaque
-  // origin and no Referer — exactly the case under file:// in the packaged app,
-  // which is why the Deep Focus scene played in a real browser but not in
-  // Electron. Spoof a valid YouTube Referer/Origin for requests to YouTube's own
-  // media hosts so the scene plays in EVERY mode (dev and packaged). Scoped
-  // narrowly to YouTube hosts via an exact suffix match so it can never touch
-  // Firebase/Google auth (googleapis, identitytoolkit, securetoken,
-  // accounts.google.com, firebaseapp.com).
-  const YT_MEDIA_HOSTS =
-    /(^|\.)(youtube\.com|youtube-nocookie\.com|googlevideo\.com|ytimg\.com)$/i
-  ses.webRequest.onBeforeSendHeaders((details, callback) => {
-    let hostname
-    try {
-      hostname = new URL(details.url).hostname
-    } catch {
-      callback({ requestHeaders: details.requestHeaders })
-      return
-    }
-    if (YT_MEDIA_HOSTS.test(hostname)) {
-      callback({
-        requestHeaders: {
-          ...details.requestHeaders,
-          Referer: 'https://www.youtube.com/',
-          Origin: 'https://www.youtube.com',
-        },
-      })
-      return
-    }
-    callback({ requestHeaders: details.requestHeaders })
-  })
-
+  // PACKAGED (file://) ONLY. Over file:// the host page has a null/opaque origin
+  // and sends no Referer, so YouTube refuses to start the embed. Supplying a
+  // Referer for YouTube's own hosts lets the scene load. This must NOT run in
+  // dev: dev serves the app from http://localhost:5173, which already has a real
+  // origin + Referer, and spoofing `Origin: youtube.com` there collides with the
+  // IFrame API's enablejsapi handshake (its postMessage origin no longer matches)
+  // and makes YouTube reject the video with "unavailable, error 152". We spoof
+  // only Referer (not Origin) — the Origin override is what broke the handshake,
+  // and Referer alone is enough for file:// playback. Scoped by exact host suffix
+  // so it can never touch Firebase/Google auth.
   if (!isDev) {
-    const CSP = [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: https: blob:",
-      "font-src 'self' data:",
-      "connect-src 'self' https://*.googleapis.com https://*.google.com" +
-        " wss://*.firebaseio.com https://*.firebaseio.com" +
-        " https://generativelanguage.googleapis.com" +
-        " https://securetoken.googleapis.com https://identitytoolkit.googleapis.com",
-      "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://*.firebaseapp.com https://accounts.google.com",
-      "media-src 'self' blob: mediastream: https://www.youtube.com https://www.youtube-nocookie.com https://*.googlevideo.com",
-      "worker-src blob: 'self'",
-    ].join('; ')
-    ses.webRequest.onHeadersReceived((details, callback) => {
-      callback({
-        responseHeaders: {
-          ...details.responseHeaders,
-          'Content-Security-Policy': [CSP],
-        },
-      })
+    const YT_MEDIA_HOSTS =
+      /(^|\.)(youtube\.com|youtube-nocookie\.com|googlevideo\.com|ytimg\.com)$/i
+    ses.webRequest.onBeforeSendHeaders((details, callback) => {
+      let hostname
+      try {
+        hostname = new URL(details.url).hostname
+      } catch {
+        callback({ requestHeaders: details.requestHeaders })
+        return
+      }
+      if (YT_MEDIA_HOSTS.test(hostname)) {
+        callback({
+          requestHeaders: { ...details.requestHeaders, Referer: 'https://www.youtube.com/' },
+        })
+        return
+      }
+      callback({ requestHeaders: details.requestHeaders })
     })
   }
+
+  // The app document's CSP is a build-time <meta> tag (vite.config.js,
+  // injectCspPlugin) — webRequest can't see file:// loads, so a header hook
+  // can never protect the packaged document. The previous session-wide
+  // onHeadersReceived injection stamped OUR policy onto every third-party
+  // response too, which silently killed YouTube embeds in packaged builds
+  // (their googlevideo.com streaming XHRs violated our connect-src) and
+  // risked the Google auth popup. Do not reintroduce it.
 
   if (isDev && DEV_URL) win.loadURL(DEV_URL)
   else win.loadFile(path.join(RENDERER_DIST, 'index.html'))
@@ -453,6 +436,18 @@ function createTray() {
 // affects the main renderer. Cross-origin iframes (YouTube) run in a separate
 // renderer process and require this Chromium-level switch to autoplay with audio.
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
+
+// GPU rendering path — crisp, hardware-accelerated output on HiDPI / 4K.
+// `ignore-gpu-blocklist` stops Chromium from silently falling back to the
+// software renderer on drivers it distrusts (a common cause of blurry, sluggish
+// output); the rasterization switches move layer + canvas painting onto the GPU
+// so text, blur, and gradients stay sharp when the OS scales the display.
+app.commandLine.appendSwitch('ignore-gpu-blocklist')
+app.commandLine.appendSwitch('enable-gpu-rasterization')
+app.commandLine.appendSwitch('enable-zero-copy')
+app.commandLine.appendSwitch('canvas-oop-rasterization')
+// High-quality downscaling for images/video so 4K content isn't nearest-neighbor.
+app.commandLine.appendSwitch('force-color-profile', 'srgb')
 
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {

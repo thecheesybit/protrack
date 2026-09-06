@@ -9,7 +9,7 @@ const FONT_SCALE_KEY = 'protrack:fontScale'
 const VALID_FONT_SCALES = ['tiny', 'compact', 'standard', 'large', 'huge']
 
 const FONT_FAMILY_KEY = 'protrack:fontFamily'
-const VALID_FONT_FAMILIES = ['inter', 'outfit', 'lora', 'playfair', 'mono']
+const VALID_FONT_FAMILIES = ['dmsans', 'inter', 'outfit', 'lora', 'playfair', 'mono']
 
 function readInitialFontScale() {
   try {
@@ -23,9 +23,10 @@ function readInitialFontScale() {
 function readInitialFontFamily() {
   try {
     const v = typeof localStorage !== 'undefined' && localStorage.getItem(FONT_FAMILY_KEY)
-    return VALID_FONT_FAMILIES.includes(v) ? v : 'inter'
+    // DM Sans is the design-system default; a stored choice always wins.
+    return VALID_FONT_FAMILIES.includes(v) ? v : 'dmsans'
   } catch {
-    return 'inter'
+    return 'dmsans'
   }
 }
 

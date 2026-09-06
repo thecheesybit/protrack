@@ -674,7 +674,7 @@ function GlassStat({ icon, label, value }) {
   return (
     <div className="flex flex-col items-center gap-1 rounded-xl border border-white/10 bg-white/5 py-2.5 backdrop-blur-sm">
       <span>{icon}</span>
-      <span className="text-lg font-bold leading-none text-white">{value}</span>
+      <span className="font-display text-lg font-semibold leading-none tracking-tight text-white">{value}</span>
       <span className="text-[10px] text-white/40">{label}</span>
     </div>
   )
