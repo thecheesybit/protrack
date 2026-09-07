@@ -23,7 +23,8 @@ src/
 │  ├─ marketing/          LandingPage (web)
 │  ├─ onboarding/         OnboardingGate (legal + scope select)
 │  ├─ layout/             Workspace (gate), Dashboard, BoardCanvas, TopBar, ModeSwitcher
-│  ├─ island/             DynamicIsland (universal notifier)
+│  ├─ island/             DynamicIsland (universal notifier — chimes per event)
+│  ├─ prompt/             CenterPrompt (blur takeover) + CheckinPromptBody, RoutinePromptBody
 │  ├─ desktop/            UpdateGate (forced auto-update overlay)
 │  ├─ focus/              FocusPanel, FocusMiniOverlay, ForestView
 │  ├─ calendar/           NlQuickCapture (chrono-node)
@@ -43,7 +44,8 @@ src/
 └─ lib/                   firebase, color, nlParse, time, icons, constants,
                           deadlines (pure helpers), priority (taxonomy),
                           dates (ymd/streak/lastNDays),
-                          dayAgenda (pure day-timeline aggregator: buildDayTimeline/summarizeDay)
+                          dayAgenda (pure day-timeline aggregator: buildDayTimeline/summarizeDay),
+                          sound (unified 7-tone bank: playSound(name)/chimeForIslandKind; audioFX is a shim)
 electron/                 main.js, preload.js, (auto-update inline in main)
 functions/                mintDesktopToken
 ```
@@ -62,9 +64,10 @@ Single store (`store/useStore.js`) composed from pure slices. Components read vi
 | `islandSlice` | active event + FIFO queue | **local only** — pure UI notifier |
 | `chronoSlice` | time-of-day band | local (driven by `useChronoTheme`) |
 | `updateSlice` | auto-update status/version/progress | fed by Electron IPC |
-| `checkinSlice` | recent check-ins + active prompt | Firestore listener (checkins, limit 14); prompt is **local only** |
+| `checkinSlice` | recent check-ins | Firestore listener (checkins, limit 14); prompting now routes through `promptSlice` |
+| `promptSlice` | active center-blur prompt + FIFO queue | **local only** — pure blocking-prompt queue (check-ins, routine cues, quotes) |
 
-Orchestration that owns timers/side-effects lives in hooks, never slices: `useFocusEngine` (tick, chime, notify, persist, ledger), `useIslandCycle` (auto-dismiss), `useChronoTheme` (writes `data-chrono` on `<html>`), `useNowMinutes` (timeline flag), `useAutoUpdate`, `useDesktopIntegration` (fingerprint + hotkeys + window state listeners).
+Orchestration that owns timers/side-effects lives in hooks, never slices: `useFocusEngine` (tick, chime, notify, persist, ledger), `useIslandCycle` (auto-dismiss + chime per new event via `chimeForIslandKind`), `useChronoTheme` (writes `data-chrono` on `<html>`), `useNowMinutes` (timeline flag), `useAutoUpdate`, `useDesktopIntegration` (fingerprint + hotkeys + window state listeners).
 
 ## 3. Firestore data model
 
@@ -117,7 +120,9 @@ Rules (`firestore.rules`): everything under `users/{uid}/**` is owner-only. Hand
 - **Slash commands** in `ChatTab` — `SLASH_PATTERNS` + `parseSlashCommand()` intercept `/done`, `/todo`, `/progress`, `/habit`, `/task` before the Gemini key gate; they call `executeTool` directly, making the AI useful offline and without an API key for common mutations.
 - **Lazy analytics** — `AnalyticsCharts.jsx` (all Recharts imports) is a separate file loaded via `React.lazy`. Non-hero mode shows stat cards with zero chart bundle; `vendor-charts` (364 KB) is only fetched when the widget is maximized.
 - **Zen overlay settings** — `settings.zenEnabled` (bool, default true) and `settings.zenDuration` (ms) control the idle quote overlay. Both are configurable in **Settings → Zen & Motivation**.
-- **Daily check-ins** — `lib/checkin.js` (pure, tested) defines three slots (morning 5–12 / midday 12–17 / evening 17–23), a rotating question bank, `shouldPrompt` gating (enabled, slot unanswered, snooze, 90 s settle), and trend/insight derivation. `useCheckIns` (mounted in `Dashboard`) evaluates once a minute — never during a running/locked focus session — and hydrates the bounded `checkins` listener into `checkinSlice`; `CheckInCard` is the bottom-left glass card. Each answer is one merge-write (≤3/day). The evening question references the morning intent when one was set (rule-based, zero tokens); the morning wording may be AI-personalized at most once per day via `fetchCheckinQuestion` (localStorage-cached, silent fallback to the bank when no key/network). Quiet adaptation: a ≤2 rating queues one gentle Island suggestion; a morning intent can become a to-do in one tap. Toggle: `settings.checkinsEnabled` (Settings → Sounds & Notifications → Wellness Controls). Dismissing snoozes all slots 90 min (`protrack:checkin:snoozedUntil`).
+- **Center-blur prompts** (P4) — `promptSlice` (pure FIFO) + `CenterPrompt` (mounted once in `Dashboard`): any prompt that needs an answer — check-ins, routine/habit cues, idle quotes — takes over screen-center behind a full `backdrop-blur` overlay (`z-[60]`, above the Island), one at a time, with a persistent "Esc / ✕ to close · snoozes" hint and focus-trap. `useCheckIns`, `useHabitReminders` and `ZenOverlay` push into the queue instead of rendering their own card/toast; the old `CheckInCard` + `HabitReminderToast` renders are retired. Closing unanswered runs that type's snooze (never silently lost). Suppressed during a running/locked focus session. Plays `playSound('prompt')` on open.
+- **Universal Island chimes** (P5) — `useIslandCycle` plays `playSound(chimeForIslandKind(kind))` once per new `islandActive` id (last-sounded id tracked to prevent replay). `islandSlice` stays pure — sound is added at the render layer only. One Settings toggle drives the single canonical `protrack:sounds` flag via `setSoundsEnabled` (old `protrack:sounds_enabled` is migrated once).
+- **Daily check-ins** — `lib/checkin.js` (pure, tested) defines three slots (morning 5–12 / midday 12–17 / evening 17–23), a rotating question bank, `shouldPrompt` gating (enabled, slot unanswered, snooze, 90 s settle), and trend/insight derivation. `useCheckIns` (mounted in `Dashboard`) evaluates once a minute — never during a running/locked focus session — and hydrates the bounded `checkins` listener into `checkinSlice`; it now pushes a `type:'checkin'` entry into `promptSlice` (rendered by `CenterPrompt`, not the old bottom-left card). Each answer is one merge-write (≤3/day). The evening question references the morning intent when one was set (rule-based, zero tokens); the morning wording may be AI-personalized at most once per day via `fetchCheckinQuestion` (localStorage-cached, silent fallback to the bank when no key/network). Quiet adaptation: a ≤2 rating queues one gentle Island suggestion; a morning intent can become a to-do in one tap. Toggle: `settings.checkinsEnabled` (Settings → Sounds & Notifications → Wellness Controls). Dismissing snoozes all slots 90 min (`protrack:checkin:snoozedUntil`).
 
 ## 5. Free-tier discipline (hard rules for new features)
 

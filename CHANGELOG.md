@@ -5,6 +5,12 @@
 ### Added
 - **Day-at-a-glance timeline (`TodayAgenda` redesign):** the Timetable widget's Day view is now a single merged, chronological timeline. It pulls together timetable slots, one-time events, to-dos & tasks with due dates, completed focus sessions and note deadlines for the selected day into one list — left time-rail with a continuous connector, colour-chipped cards showing title / time-range / duration, an "Anytime" bucket for untimed items, inline check-off for to-dos, a live red "now" line that auto-scrolls into view, and an "End of day · Xh Ym left" footer. Works in the global **All Scopes** view with a per-item mode-colour dot; cross-mode items are never hidden.
 - **`src/lib/dayAgenda.js`:** pure, unit-tested aggregator — `buildDayTimeline({ slots, events, todos, tasks, sessions, notes, date, nowMin })` and `summarizeDay(items, nowMin)`. No Firestore reads or side-effects; it only reshapes data the widgets already subscribe to, so it adds zero backend cost.
+- **Center-blur prompt system (`promptSlice` + `CenterPrompt`):** anything that needs an answer — daily check-ins, routine/habit cues, idle quotes — now takes over screen-center behind a full backdrop-blur, one prompt at a time, with a visible "Esc / ✕ to close" hint and a focus-trapped input. Closing without answering **snoozes** rather than losing the prompt. Replaces the bottom-left check-in card and the habit reminder toast. Suppressed during a running or locked focus session. Informational toasts stay in the Dynamic Island.
+- **Universal notification chimes:** every Dynamic Island event now plays one fitting sound (distinct tones for success / progress / deadline / sync / focus), driven by `chimeForIslandKind` at the render layer so the notifier slice stays pure. A single **Settings → Sounds** toggle now mutes everything.
+- **Unified sound module (`src/lib/sound.js`):** one 7-tone bank — `chime`, `pop`, `success`, `habit`, `notify`, `error`, `prompt` — behind `playSound(name)`, plus `chimeForIslandKind()`. The two previously drifting "sounds enabled" flags are consolidated into a single `protrack:sounds` key with a one-time migration. `src/lib/audioFX.js` is now a thin compatibility shim so existing callers keep working.
+
+### Changed
+- **Daily check-ins** surface as a center-blur prompt instead of a bottom-left glass card; dismissing still snoozes all slots for 90 minutes.
 
 ## v2.0.0 — 2026-09-07
 
