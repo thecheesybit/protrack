@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('protrack', {
     setFullScreen: (flag) => ipcRenderer.invoke('window:setFullScreen', flag),
     isFullScreen: () => ipcRenderer.invoke('window:isFullScreen'),
     setAlwaysOnTop: (flag) => ipcRenderer.invoke('window:setAlwaysOnTop', flag),
+    reload: () => ipcRenderer.invoke('window:reload'),
     // Main forwards maximize/unmaximize/enter-full-screen/leave-full-screen
     // events so the TitleBar icons always reflect the true window state.
     onStateChange: (cb) => subscribe('window:state', cb),
@@ -41,6 +42,11 @@ contextBridge.exposeInMainWorld('protrack', {
     set: (value) => ipcRenderer.invoke('secure:set', value),
     get: () => ipcRenderer.invoke('secure:get'),
     clear: () => ipcRenderer.invoke('secure:clear'),
+  },
+
+  // Native clipboard image writing
+  clipboard: {
+    writeImage: (dataUrl) => ipcRenderer.invoke('clipboard:writeImage', dataUrl),
   },
 
   // Stable hardware fingerprint (computed in main; raw traits never exposed).

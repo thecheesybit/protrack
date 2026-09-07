@@ -3,23 +3,203 @@ import { TOOL_DECLARATIONS, executeTool } from '@/services/geminiTools'
 import { secureStorage } from '@/services/cryptoService'
 
 /**
- * Gemini integration. The user's API key lives ONLY in localStorage — encrypted
- * at rest with the account's inherent encryption key.
+ * Gemini integration. The user's API key is stored persistently in localStorage
+ * and synced with OS keychain / DPAPI via Electron's secureStore on desktop.
+ * It is NEVER cleared automatically unless manually removed by the user.
  */
-// `gemini-flash-latest` is a stable alias that always points at the current
-// fast Gemini model — survives the periodic deprecation cycles (e.g. the
-// gemini-1.5-flash 404 we hit on 2026-06-07).
-const MODEL = 'gemini-flash-latest'
+export const GEMINI_MODELS = [
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-1.5-flash',
+  'gemini-1.5-pro',
+]
+
+let activeHealthyGeminiModel = 'gemini-2.0-flash'
+const persistentKeyCache = new Map()
+
+// Safe accessor for desktop bridge
+const getDesktopStore = () => {
+  if (typeof window !== 'undefined' && window.protrack?.secureStore) {
+    return window.protrack.secureStore
+  }
+  return null
+}
+
+// Background sync from desktop DPAPI store
+async function syncDesktopKeys() {
+  const store = getDesktopStore()
+  if (!store?.get) return
+  try {
+    const raw = await store.get()
+    if (!raw) return
+    try {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object') {
+        Object.entries(parsed).forEach(([provider, val]) => {
+          if (val && typeof val === 'string') {
+            persistentKeyCache.set(provider, val)
+            try {
+              localStorage.setItem(`protrack:persistent_${provider}_key`, val)
+            } catch {
+              /* ignore */
+            }
+          }
+        })
+      }
+    } catch {
+      if (raw.startsWith('AIza')) {
+        persistentKeyCache.set('gemini', raw)
+        try {
+          localStorage.setItem('protrack:persistent_gemini_key', raw)
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[geminiService] desktop key sync failed', err)
+  }
+}
+
+// Fire desktop key sync immediately
+if (typeof window !== 'undefined') {
+  syncDesktopKeys()
+}
+
+async function saveKeyToDesktop(provider, value) {
+  const store = getDesktopStore()
+  if (!store?.set || !store?.get) return
+  try {
+    let current = {}
+    try {
+      const raw = await store.get()
+      if (raw) current = JSON.parse(raw)
+    } catch {
+      /* ignore */
+    }
+    if (value) {
+      current[provider] = value
+    } else {
+      delete current[provider]
+    }
+    await store.set(JSON.stringify(current))
+  } catch (err) {
+    console.warn('[geminiService] desktop key save failed', err)
+  }
+}
 
 export function getApiKey(provider) {
-  return secureStorage.getItemSync(`protrack:${provider}_key`) || ''
+  // 1. In-memory persistent cache
+  if (persistentKeyCache.has(provider)) {
+    const cached = persistentKeyCache.get(provider)
+    if (cached) return cached
+  }
+  // 2. Dedicated persistent localStorage (never cleared by PIN/session locks)
+  if (typeof localStorage !== 'undefined') {
+    const persistent = localStorage.getItem(`protrack:persistent_${provider}_key`)
+    if (persistent) {
+      persistentKeyCache.set(provider, persistent)
+      return persistent
+    }
+  }
+  // 3. Environment variable fallback (for Gemini)
+  if (provider === 'gemini' && import.meta.env?.VITE_GEMINI_API_KEY) {
+    const envKey = import.meta.env.VITE_GEMINI_API_KEY
+    if (envKey) {
+      persistentKeyCache.set(provider, envKey)
+      return envKey
+    }
+  }
+  // 4. Fallback to legacy secureStorage
+  const legacy = secureStorage.getItemSync(`protrack:${provider}_key`)
+  if (legacy) {
+    persistentKeyCache.set(provider, legacy)
+    return legacy
+  }
+  return ''
 }
+
 export function hasApiKey(provider) {
   return Boolean(getApiKey(provider))
 }
+
 export function setApiKey(provider, value) {
-  if (value) secureStorage.setItem(`protrack:${provider}_key`, value.trim())
-  else secureStorage.removeItem(`protrack:${provider}_key`)
+  const clean = value ? String(value).trim() : ''
+  if (clean) {
+    persistentKeyCache.set(provider, clean)
+    try {
+      localStorage.setItem(`protrack:persistent_${provider}_key`, clean)
+    } catch {
+      /* ignore */
+    }
+    saveKeyToDesktop(provider, clean)
+    secureStorage.setItem(`protrack:${provider}_key`, clean)
+  } else {
+    persistentKeyCache.delete(provider)
+    try {
+      localStorage.removeItem(`protrack:persistent_${provider}_key`)
+    } catch {
+      /* ignore */
+    }
+    saveKeyToDesktop(provider, '')
+    secureStorage.removeItem(`protrack:${provider}_key`)
+  }
+}
+
+export function isRetryableGeminiError(err) {
+  if (!err) return false
+  const msg = String(err?.message || err).toLowerCase()
+  const status = err?.status || err?.statusCode
+  if (status === 503 || status === 429 || status === 404 || status === 500 || status === 502) return true
+  return (
+    msg.includes('503') ||
+    msg.includes('high demand') ||
+    msg.includes('overloaded') ||
+    msg.includes('resource has been exhausted') ||
+    msg.includes('rate limit') ||
+    msg.includes('quota') ||
+    msg.includes('429') ||
+    msg.includes('404') ||
+    msg.includes('not found') ||
+    msg.includes('unavailable') ||
+    msg.includes('service unavailable')
+  )
+}
+
+/**
+ * Executes a Gemini operation with an automatic multi-model fallback cascade.
+ * If gemini-2.0-flash hits a 503 (high demand) or 429 quota spike, it automatically
+ * retries with gemini-1.5-flash, gemini-2.0-flash-lite, etc.
+ */
+export async function executeGeminiWithModelFallback(apiKey, taskFn) {
+  const key = apiKey || getGeminiKey()
+  if (!key) throw new Error('Add your Gemini API key in Settings first')
+  const ai = new GoogleGenerativeAI(key)
+
+  const modelsToTry = [
+    activeHealthyGeminiModel,
+    ...GEMINI_MODELS.filter((m) => m !== activeHealthyGeminiModel),
+  ]
+
+  let lastError = null
+  for (let i = 0; i < modelsToTry.length; i++) {
+    const modelName = modelsToTry[i]
+    try {
+      const res = await taskFn(ai, modelName)
+      activeHealthyGeminiModel = modelName
+      return res
+    } catch (err) {
+      lastError = err
+      if (isRetryableGeminiError(err) && i < modelsToTry.length - 1) {
+        console.warn(
+          `[geminiService] Model '${modelName}' hit transient error (${err.message}). Falling back to '${modelsToTry[i + 1]}'...`
+        )
+        continue
+      }
+      throw err
+    }
+  }
+  throw lastError
 }
 
 export function getGeminiKey() {
@@ -117,43 +297,46 @@ export async function chatWithGemini(history, contextText, ctx = {}) {
   for (const p of order) {
     try {
       if (p === 'gemini') {
-        if (!hasGeminiKey()) throw new Error('Gemini key missing')
-        
-        const model = client().getGenerativeModel({
-          model: MODEL,
-          systemInstruction: `${SYSTEM}\n\nCURRENT WORKSPACE CONTEXT:\n${contextText}`,
-          tools: TOOL_DECLARATIONS,
-        })
-        const chat = model.startChat({
-          history: history.slice(0, -1).map((m) => ({
-            role: m.role === 'user' ? 'user' : 'model',
-            parts: [{ text: m.text }],
-          })),
-        })
+        const apiKey = getGeminiKey()
+        if (!apiKey) throw new Error('Gemini key missing')
 
-        const last = history[history.length - 1]
-        let result = await chat.sendMessage(last.text)
-        const toolEvents = []
+        return await executeGeminiWithModelFallback(apiKey, async (ai, modelName) => {
+          const model = ai.getGenerativeModel({
+            model: modelName,
+            systemInstruction: `${SYSTEM}\n\nCURRENT WORKSPACE CONTEXT:\n${contextText}`,
+            tools: TOOL_DECLARATIONS,
+          })
+          const chat = model.startChat({
+            history: history.slice(0, -1).map((m) => ({
+              role: m.role === 'user' ? 'user' : 'model',
+              parts: [{ text: m.text }],
+            })),
+          })
 
-        for (let hop = 0; hop < 4; hop++) {
-          const calls = result.response.functionCalls?.() || []
-          if (!calls.length) break
+          const last = history[history.length - 1]
+          let result = await chat.sendMessage(last.text)
+          const toolEvents = []
 
-          const responseParts = []
-          for (const call of calls) {
-            const outcome = await executeTool(call.name, call.args || {}, ctx)
-            toolEvents.push({ name: call.name, ...outcome })
-            responseParts.push({
-              functionResponse: {
-                name: call.name,
-                response: outcome,
-              },
-            })
+          for (let hop = 0; hop < 4; hop++) {
+            const calls = result.response.functionCalls?.() || []
+            if (!calls.length) break
+
+            const responseParts = []
+            for (const call of calls) {
+              const outcome = await executeTool(call.name, call.args || {}, ctx)
+              toolEvents.push({ name: call.name, ...outcome })
+              responseParts.push({
+                functionResponse: {
+                  name: call.name,
+                  response: outcome,
+                },
+              })
+            }
+            result = await chat.sendMessage(responseParts)
           }
-          result = await chat.sendMessage(responseParts)
-        }
 
-        return { text: result.response.text(), toolEvents }
+          return { text: result.response.text(), toolEvents }
+        })
       } else {
         // Fallback for OpenAI, Anthropic, DeepSeek (text-only response)
         const last = history[history.length - 1]
@@ -184,7 +367,8 @@ export async function chatWithGemini(history, contextText, ctx = {}) {
  * Used as the Electron fallback when webkitSpeechRecognition is unavailable.
  */
 export async function transcribeAudio(blob) {
-  const model = client().getGenerativeModel({ model: MODEL })
+  const apiKey = getGeminiKey()
+  if (!apiKey) throw new Error('Add your Gemini API key in Settings first')
   const arrayBuffer = await blob.arrayBuffer()
   const bytes = new Uint8Array(arrayBuffer)
   let binary = ''
@@ -197,11 +381,15 @@ export async function transcribeAudio(blob) {
   if (mimeType.includes(';')) {
     mimeType = mimeType.split(';')[0]
   }
-  const result = await model.generateContent([
-    { text: 'Transcribe this audio recording verbatim. Return only the transcript text, no other commentary.' },
-    { inlineData: { mimeType, data: base64 } },
-  ])
-  return result.response.text().trim()
+
+  return await executeGeminiWithModelFallback(apiKey, async (ai, modelName) => {
+    const model = ai.getGenerativeModel({ model: modelName })
+    const result = await model.generateContent([
+      { text: 'Transcribe this audio recording verbatim. Return only the transcript text, no other commentary.' },
+      { inlineData: { mimeType, data: base64 } },
+    ])
+    return result.response.text().trim()
+  })
 }
 
 /** Turn a raw voice transcript into a structured note. */
@@ -391,10 +579,14 @@ export async function callAIProvider(prompt, systemInstruction, provider = 'auto
   for (const p of order) {
     try {
       if (p === 'gemini') {
-        if (!hasGeminiKey()) throw new Error('Gemini key missing')
-        const model = client().getGenerativeModel({ model: MODEL, systemInstruction })
-        const res = await model.generateContent(prompt)
-        return { text: res.response.text(), provider: 'gemini' }
+        const apiKey = getGeminiKey()
+        if (!apiKey) throw new Error('Gemini key missing')
+        const text = await executeGeminiWithModelFallback(apiKey, async (ai, modelName) => {
+          const model = ai.getGenerativeModel({ model: modelName, systemInstruction })
+          const res = await model.generateContent(prompt)
+          return res.response.text()
+        })
+        return { text, provider: 'gemini' }
       } else if (p === 'openai') {
         if (!hasOpenAIKey()) throw new Error('OpenAI key missing')
         const text = await callOpenAI(prompt, systemInstruction)

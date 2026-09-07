@@ -5,7 +5,7 @@
  */
 export const createModeSlice = (set, get) => ({
   modes: [],
-  activeModeId: null,
+  activeModeId: 'all',
   modesLoading: true,
 
   setModes: (modes) => set({ modes, modesLoading: false }),

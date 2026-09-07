@@ -22,20 +22,20 @@ export function StatCard({ icon, label, value, variant = 'compact', tone = 'sky'
   if (variant === 'hero') {
     return (
       <motion.div
-        whileHover={{ y: -4 }}
+        whileHover={{ y: -3, scale: 1.01 }}
         transition={{ type: 'spring', stiffness: 360, damping: 26 }}
         className={cn(
-          'relative flex min-h-[5.5rem] flex-col justify-between overflow-hidden rounded-2xl p-3.5 text-white shadow-premium-md transition-shadow hover:shadow-premium-lg',
+          'relative flex min-h-[4.75rem] sm:min-h-[5.25rem] flex-col justify-between overflow-hidden rounded-2xl p-3 sm:p-3.5 text-white shadow-premium-sm transition-all hover:shadow-premium-md',
           HERO_TONES[tone] || HERO_TONES.sky,
         )}
       >
-        <span className="pointer-events-none absolute -right-2 -top-2 opacity-25 [&>svg]:h-16 [&>svg]:w-16">
+        <span className="pointer-events-none absolute -right-2 -top-2 opacity-25 [&>svg]:h-14 [&>svg]:w-14 sm:[&>svg]:h-16 sm:[&>svg]:w-16">
           {icon}
         </span>
-        <span className="font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-white/75">
+        <span className="font-mono text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.1em] text-white/80">
           {label}
         </span>
-        <span className="font-display text-3xl font-semibold leading-none tracking-tight">
+        <span className="font-display text-2xl sm:text-3xl font-semibold leading-none tracking-tight">
           {value}
         </span>
       </motion.div>

@@ -7,6 +7,7 @@ import {
   shell,
   safeStorage,
   nativeImage,
+  clipboard,
   globalShortcut,
   screen,
 } from 'electron'
@@ -81,11 +82,13 @@ const MIME_TYPES = {
 const staticAssetCache = new Map()
 
 function serveIndex(res) {
-  const cached = staticAssetCache.get('index.html')
-  if (cached) {
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-    res.end(cached)
-    return
+  if (!isDev) {
+    const cached = staticAssetCache.get('index.html')
+    if (cached) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+      res.end(cached)
+      return
+    }
   }
   fs.readFile(path.join(RENDERER_DIST, 'index.html'), (err, html) => {
     if (err) {
@@ -93,7 +96,7 @@ function serveIndex(res) {
       res.end('Not found')
       return
     }
-    staticAssetCache.set('index.html', html)
+    if (!isDev) staticAssetCache.set('index.html', html)
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
     res.end(html)
   })
@@ -116,26 +119,28 @@ function handleLocalRequest(req, res) {
     return
   }
 
-  const cached = staticAssetCache.get(filePath)
-  if (cached) {
-    const ext = path.extname(filePath).toLowerCase()
-    res.writeHead(200, {
-      'Content-Type': MIME_TYPES[ext] || 'application/octet-stream',
-      'Cache-Control': 'public, max-age=31536000, immutable',
-    })
-    res.end(cached)
-    return
+  if (!isDev) {
+    const cached = staticAssetCache.get(filePath)
+    if (cached) {
+      const ext = path.extname(filePath).toLowerCase()
+      res.writeHead(200, {
+        'Content-Type': MIME_TYPES[ext] || 'application/octet-stream',
+        'Cache-Control': 'public, max-age=31536000, immutable',
+      })
+      res.end(cached)
+      return
+    }
   }
 
   fs.readFile(filePath, (err, data) => {
     if (err) return serveIndex(res) // SPA fallback for client routes
     const ext = path.extname(filePath).toLowerCase()
-    if (data.length < 5 * 1024 * 1024) {
+    if (!isDev && data.length < 5 * 1024 * 1024) {
       staticAssetCache.set(filePath, data)
     }
     res.writeHead(200, {
       'Content-Type': MIME_TYPES[ext] || 'application/octet-stream',
-      'Cache-Control': 'public, max-age=31536000, immutable',
+      'Cache-Control': isDev ? 'no-cache' : 'public, max-age=31536000, immutable',
     })
     res.end(data)
   })
@@ -623,10 +628,8 @@ if (!gotLock) {
   })
 
   app.whenReady().then(async () => {
-    // Production: bring up the localhost static server before the first window so
-    // createWindow can load http://localhost instead of file:// (see the server
-    // block above for why). Dev uses the Vite server and skips this.
-    if (!isDev) await startLocalServer()
+    // Start local server whenever DEV_URL (Vite dev server) is not present
+    if (!DEV_URL) await startLocalServer()
     createWindow()
     createTray()
 
@@ -705,6 +708,12 @@ ipcMain.handle('window:setAlwaysOnTop', (_e, flag) => {
   if (!win) return false
   win.setAlwaysOnTop(Boolean(flag), 'screen-saver')
   return win.isAlwaysOnTop()
+})
+ipcMain.handle('window:reload', () => {
+  if (!win) return false
+  staticAssetCache.clear()
+  win.webContents.reloadIgnoringCache()
+  return true
 })
 
 /* ── IPC: native PiP mini-widget morphing ───────────────── */
@@ -834,6 +843,17 @@ ipcMain.handle('app:info', () => ({
   shortcuts: SHORTCUTS,
   storeBuild: isStoreBuild,
 }))
+ipcMain.handle('clipboard:writeImage', (_e, dataUrl) => {
+  try {
+    if (!dataUrl) return false
+    const img = nativeImage.createFromDataURL(dataUrl)
+    clipboard.writeImage(img)
+    return true
+  } catch (err) {
+    console.error('[clipboard:writeImage]', err)
+    return false
+  }
+})
 
 /* ── IPC: hardware fingerprint identity ─────────────────── */
 ipcMain.handle('device:fingerprint', () => ({

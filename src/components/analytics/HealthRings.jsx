@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { cn } from '@/utils/cn'
 
 const clamp01 = (x) => Math.max(0, Math.min(1, Number.isFinite(x) ? x : 0))
 
@@ -7,7 +8,7 @@ const clamp01 = (x) => Math.max(0, Math.min(1, Number.isFinite(x) ? x : 0))
  * current streak, and sessions completed today. Pure SVG + Framer; data is all
  * derived client-side, so it adds zero Firestore cost.
  */
-export function HealthRings({ todayMins = 0, streak = 0, sessionsToday = 0, focusGoalMin = 120 }) {
+export function HealthRings({ todayMins = 0, streak = 0, sessionsToday = 0, focusGoalMin = 120, size = 168 }) {
   const rings = [
     {
       key: 'focus',
@@ -35,13 +36,13 @@ export function HealthRings({ todayMins = 0, streak = 0, sessionsToday = 0, focu
     },
   ]
 
-  const size = 168
-  const stroke = 13
-  const gap = 5
+  const isCompact = size < 145
+  const stroke = isCompact ? 10 : 13
+  const gap = isCompact ? 3.5 : 5
   const center = size / 2
 
   return (
-    <div className="flex flex-col items-center gap-4">
+    <div className={cn("flex flex-col items-center", isCompact ? "gap-2" : "gap-4")}>
       <div className="relative" style={{ width: size, height: size }}>
         <svg width={size} height={size} className="-rotate-90">
           {rings.map((ring, i) => {
@@ -77,15 +78,15 @@ export function HealthRings({ todayMins = 0, streak = 0, sessionsToday = 0, focu
         </svg>
       </div>
 
-      <div className="grid w-full grid-cols-3 gap-2">
+      <div className="grid w-full grid-cols-3 gap-1.5 sm:gap-2">
         {rings.map((ring) => (
           <div key={ring.key} className="flex flex-col items-center text-center">
-            <span className="flex items-center gap-1 text-[11px] font-medium text-muted">
-              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: ring.color }} />
+            <span className={cn("flex items-center gap-1 font-medium text-muted", isCompact ? "text-[10px]" : "text-[11px]")}>
+              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: ring.color }} />
               {ring.label}
             </span>
-            <span className="text-base font-bold leading-tight text-ink">{ring.display}</span>
-            <span className="text-[10px] text-muted/70">{ring.goal}</span>
+            <span className={cn("font-bold leading-tight text-ink", isCompact ? "text-sm" : "text-base")}>{ring.display}</span>
+            <span className={cn("text-muted/70", isCompact ? "text-[9px]" : "text-[10px]")}>{ring.goal}</span>
           </div>
         ))}
       </div>

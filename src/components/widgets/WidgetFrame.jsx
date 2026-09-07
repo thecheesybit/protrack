@@ -55,12 +55,9 @@ export function WidgetFrame({
   }, [widget.id])
 
   return (
-    <motion.div
-      layout
-      layoutId={`widget-${widget.id}`}
-      transition={{ type: 'spring', stiffness: 380, damping: 34 }}
+    <div
       className={cn(
-        'edge-light group relative flex flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-surface/70 backdrop-blur-2xl transition-all duration-200 hover:border-accent/40',
+        'edge-light group relative flex flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-surface/70 backdrop-blur-2xl transition-colors duration-200 hover:border-accent/40',
         isHero
           ? 'h-full shadow-glass-lg'
           : collapsed
@@ -138,6 +135,6 @@ export function WidgetFrame({
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </div>
   )
 }
