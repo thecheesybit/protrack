@@ -2,8 +2,11 @@ import { useStore } from '@/store/useStore'
 
 /**
  * Enters Picture-in-Picture mode.
- * In desktop Electron: morphs the window to a floating 300x380 always-on-top mini-widget.
- * In web browser: sets pipActive for Document PiP or floating in-app box.
+ * In desktop Electron: morphs the single window down to a small always-on-top
+ * square (see electron/main.js `pip:enter`) that renders <PipAppView/>.
+ * In a browser: just flips `pipActive` so <PipFocusWindow/> can open a real
+ * Document Picture-in-Picture window.
+ * The focus timer and scene audio keep running across the transition.
  */
 export async function enterPip() {
   const { setPipActive } = useStore.getState()
@@ -18,7 +21,9 @@ export async function enterPip() {
 }
 
 /**
- * Exits Picture-in-Picture mode and restores the main application window.
+ * Leaves Picture-in-Picture and restores the main window to its exact prior
+ * geometry / maximized / fullscreen state (handled in `pip:exit`). The session
+ * keeps running — this is the "Expand" affordance. Never resets the timer.
  */
 export async function exitPip() {
   const { setPipActive } = useStore.getState()
@@ -30,4 +35,14 @@ export async function exitPip() {
     }
   }
   setPipActive(false)
+}
+
+/**
+ * Leaves Picture-in-Picture AND pauses the session — the "Close" affordance in
+ * the mini widget. Distinct from `exitPip` (Expand), which leaves the clock
+ * running. The window still restores to its prior state; only the timer stops.
+ */
+export async function closePip() {
+  useStore.getState().pause()
+  await exitPip()
 }

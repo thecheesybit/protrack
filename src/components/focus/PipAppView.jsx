@@ -1,6 +1,10 @@
 import { Play, Pause, Maximize2, X, Volume2, VolumeX } from 'lucide-react'
 import { useStore } from '@/store/useStore'
-import { exitPip } from '@/lib/pip'
+import { exitPip, closePip } from '@/lib/pip'
+
+// Electron drag regions swallow DOM clicks/dblclicks — any interactive target
+// (and the double-click-to-restore zone) must opt out with `no-drag`.
+const NO_DRAG = { WebkitAppRegion: 'no-drag' }
 
 function mmss(sec) {
   const s = Math.max(0, sec)
@@ -34,10 +38,21 @@ function MiniRing({ progress, color = '#f59e0b', size = 150, children }) {
 }
 
 /**
- * Minimal Picture-in-Picture view for the desktop floating window: nothing but
- * the timer ring by default. The whole square is a drag handle (moves the native
- * always-on-top window); play/pause, mute, expand and close fade in only on
- * hover, like a video PiP. Scene audio keeps playing via BackgroundAudioPlayer.
+ * Desktop floating Picture-in-Picture view. The native window is morphed to a
+ * small always-on-top square (see electron/main.js `pip:enter`); this fills it.
+ *
+ * Interaction model:
+ *  - The whole square is a drag handle that moves the OS window.
+ *  - The timer digits are a NON-drag zone: DOUBLE-CLICK them to expand back to
+ *    the full window (drag regions eat dblclick, so the restore target has to
+ *    be a `no-drag` element).
+ *  - A slim bar pinned to the bottom always shows mm:ss + a pause/resume dot —
+ *    no hover required.
+ *  - Hovering reveals the full controls: mute, Expand (keep the clock running),
+ *    Close (restore + pause), and a large play/pause.
+ *
+ * The countdown and scene audio never reset here — the tick lives in
+ * useFocusEngine and BackgroundAudioPlayer keeps playing through the morph.
  */
 export function PipAppView() {
   const status = useStore((s) => s.status)
@@ -52,9 +67,11 @@ export function PipAppView() {
 
   const isBreak = phase === 'break'
   const accent = isBreak ? '#10b981' : session?.color || '#f59e0b'
+  // phaseTotalSec is the single source of truth for ring progress.
   const total = phaseTotalSec || secondsLeft || 1
   const progress = Math.min(1, Math.max(0, 1 - secondsLeft / total))
   const running = status === 'running'
+  const toggleRun = () => (running ? pause() : resume())
 
   return (
     <div
@@ -63,21 +80,28 @@ export function PipAppView() {
     >
       {/* Timer — the only thing shown at rest */}
       <MiniRing progress={progress} color={accent} size={150}>
-        <span className="text-[2.6rem] font-bold leading-none tabular-nums tracking-tight text-white drop-shadow-sm">
-          {mmss(secondsLeft)}
-        </span>
-        <span
-          className="mt-1 text-[9px] font-semibold uppercase tracking-[0.2em]"
-          style={{ color: accent }}
+        <div
+          onDoubleClick={exitPip}
+          title="Double-click to expand"
+          className="flex cursor-pointer flex-col items-center rounded-xl px-3 py-1"
+          style={NO_DRAG}
         >
-          {isBreak ? 'Break' : 'Focus'}
-        </span>
+          <span className="text-[2.4rem] font-bold leading-none tabular-nums tracking-tight text-white drop-shadow-sm">
+            {mmss(secondsLeft)}
+          </span>
+          <span
+            className="mt-1 text-[9px] font-semibold uppercase tracking-[0.2em]"
+            style={{ color: accent }}
+          >
+            {isBreak ? 'Break' : 'Focus'}
+          </span>
+        </div>
       </MiniRing>
 
       {/* Hover controls (video-PiP style) — hidden until the pointer is over */}
       <div
         className="pointer-events-none absolute inset-0 flex flex-col justify-between bg-black/45 p-2 opacity-0 backdrop-blur-[1px] transition-opacity duration-200 group-hover:opacity-100"
-        style={{ WebkitAppRegion: 'no-drag' }}
+        style={NO_DRAG}
       >
         {/* Top row: mute (left) · expand + close (right) */}
         <div className="flex items-center justify-between">
@@ -100,17 +124,17 @@ export function PipAppView() {
               type="button"
               onClick={exitPip}
               className="pointer-events-auto flex h-7 w-7 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white/85 transition-all hover:bg-white/20 active:scale-95"
-              title="Expand — back to full screen"
-              aria-label="Expand"
+              title="Expand — restore the window, keep the timer running"
+              aria-label="Expand to full window"
             >
               <Maximize2 className="h-3.5 w-3.5" />
             </button>
             <button
               type="button"
-              onClick={exitPip}
+              onClick={closePip}
               className="pointer-events-auto flex h-7 w-7 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white/85 transition-all hover:bg-red-500 hover:text-white active:scale-95"
-              title="Close PiP"
-              aria-label="Close"
+              title="Close — restore the window and pause the session"
+              aria-label="Close and pause the session"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -121,7 +145,7 @@ export function PipAppView() {
         <div className="flex items-center justify-center">
           <button
             type="button"
-            onClick={() => (running ? pause() : resume())}
+            onClick={toggleRun}
             className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full text-white shadow-lg transition-transform hover:scale-105 active:scale-95"
             style={{ backgroundColor: accent, boxShadow: `0 0 18px ${accent}66` }}
             title={running ? 'Pause' : 'Resume'}
@@ -133,6 +157,23 @@ export function PipAppView() {
 
         {/* Bottom spacer keeps the play button vertically centered */}
         <div className="h-7" />
+      </div>
+
+      {/* Always-visible status bar: mm:ss + pause/resume, no hover needed */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-center justify-between gap-2 px-2.5 pb-1.5">
+        <span className="rounded-md bg-black/45 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-white/90 backdrop-blur-sm">
+          {mmss(secondsLeft)}
+        </span>
+        <button
+          type="button"
+          onClick={toggleRun}
+          className="pointer-events-auto flex h-6 w-6 items-center justify-center rounded-md border border-white/15 bg-black/45 text-white/90 backdrop-blur-sm transition-colors hover:bg-black/70 active:scale-95"
+          style={NO_DRAG}
+          title={running ? 'Pause' : 'Resume'}
+          aria-label={running ? 'Pause' : 'Resume'}
+        >
+          {running ? <Pause className="h-3 w-3 fill-current" /> : <Play className="h-3 w-3 fill-current ml-[1px]" />}
+        </button>
       </div>
     </div>
   )

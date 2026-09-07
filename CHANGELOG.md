@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.1.2 — 2026-09-07
+
+### Changed
+- **Picture-in-Picture is finished.** Double-clicking the floating timer now expands the window back to its exact prior state (geometry / maximized / fullscreen) with the countdown and scene audio unbroken — the restore target is a `no-drag` zone so Electron's drag region can't swallow the double-click. The mini widget also gains an always-visible bottom bar (mm:ss + a pause/resume dot) so the timer can be controlled without hovering.
+- **Expand vs Close are now distinct** in the PiP widget: **Expand** (`⤢`) restores the window and leaves the clock running; **Close** (`✕`) restores the window *and pauses* the session (`closePip()` in `src/lib/pip.js`). Tooltips say exactly what each does.
+
+### Removed
+- **Dead PiP variants.** `FloatingFocusPip.jsx` (buggy hard-coded position) is deleted; `PipFocusWindow.jsx` is now strictly the browser-only Document Picture-in-Picture fallback with its stray desktop `window.protrack.window.*` calls removed. Desktop runs 100% on the single-window morph path (`pip.js` → `electron/main.js` → `PipAppView`). PiP bounds in `electron/main.js` are hoisted to named constants; no behaviour change.
+
 ## v2.1.1 — 2026-09-07
 
 ### Added

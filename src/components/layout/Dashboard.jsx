@@ -26,7 +26,6 @@ import { FocusPanel } from '@/components/focus/FocusPanel'
 import { FocusMiniOverlay } from '@/components/focus/FocusMiniOverlay'
 import { FocusLockScreen } from '@/components/focus/FocusLockScreen'
 import { PipFocusWindow } from '@/components/focus/PipFocusWindow'
-import { FloatingFocusPip } from '@/components/focus/FloatingFocusPip'
 import { PipAppView } from '@/components/focus/PipAppView'
 import { SessionCompleteModal } from '@/components/focus/SessionCompleteModal'
 import { HydrationReminder } from '@/components/wellness/HydrationReminder'
@@ -162,8 +161,9 @@ export function Dashboard() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // In desktop Electron, entering PiP morphs the native window down to a 300x380
-  // always-on-top box at the screen corner. Render the dedicated PiP view directly.
+  // In desktop Electron, entering PiP morphs the single native window down to a
+  // small always-on-top square at the screen corner (electron/main.js `pip:enter`).
+  // Render only the dedicated PiP view + the scene-audio player.
   if (typeof window !== 'undefined' && window.protrack?.isDesktop && pipActive) {
     return (
       <div className="relative h-screen w-screen overflow-hidden select-none bg-slate-950 font-sans text-white antialiased">
@@ -290,7 +290,6 @@ export function Dashboard() {
       <FocusPanel />
       <FocusMiniOverlay />
       <PipFocusWindow />
-      <FloatingFocusPip />
       <SessionCompleteModal />
       <HydrationReminder />
       <CenterPrompt />
