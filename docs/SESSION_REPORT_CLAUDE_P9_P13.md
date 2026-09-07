@@ -99,13 +99,15 @@ $$\text{P9} \longrightarrow \text{P10} \longrightarrow \text{P11} \longrightarro
      - Sprite dictionary mapping species (`oak`, `pine`, `blossom`, `sapling`) and variants to PNG imports with intrinsic aspect ratios.
      - Exported `<SpriteTree>` and `<SpriteShrub>` components with Framer Motion spring pop-in animations.
   3. `src/components/focus/CalendarForest.jsx`:
-     - Replaced hand-drawn SVG trees in `DayGrove` with `<SpriteTree>` and `<SpriteShrub>`.
+     - Replaced hand-drawn SVG trees in `DayGrove` with `<SpriteTree>`.
+     - Per user request to eliminate shrub clutter, removed all shrubs completely from the calendar baseline and `DayGrove` so focus trees stand clean and prominent.
      - Maintained all tooltip math (`getTreeTooltip`), overlap calculation, z-layer depth, and focus session count mapping.
      - Kept SVG components exported for clean backward compatibility.
   4. `src/components/focus/__tests__/CalendarForest.test.js`:
-     - Added 4 test cases verifying sprite exports, species resolution, and component exports.
+     - Verified sprite exports, species resolution, and component exports.
 - **Invariants Maintained:**
-  - Lightweight bundle size (individual PNGs 38KB–178KB).
+  - Lightweight bundle size.
+  - Zero shrubs cluttering the calendar baseline.
   - No new external runtime dependencies.
 
 ---

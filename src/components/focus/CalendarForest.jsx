@@ -2,7 +2,7 @@ import { memo, useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ymd } from '@/lib/dates'
 import { cn } from '@/utils/cn'
-import { SpriteTree, SpriteShrub } from './ForestSprites'
+import { SpriteTree } from './ForestSprites'
 
 export { SpriteTree, SpriteShrub } from './ForestSprites'
 
@@ -402,7 +402,7 @@ export function DayGrove({
   }, [sessions, dateStr])
 
   const count = daySessions.length
-  const totalMin = useMemo(
+  const _totalMin = useMemo(
     () => daySessions.reduce((acc, s) => acc + (s.durationMin || 0), 0),
     [daySessions],
   )
@@ -468,23 +468,9 @@ export function DayGrove({
                 delay={0.05}
               />
             </div>
-
-            {/* Lush Shrub / Bush at the foot of the trunk */}
-            <div
-              className="absolute -bottom-1 -right-2 z-20 cursor-pointer"
-              onMouseEnter={() =>
-                setHoveredTree({
-                  title: 'Forest Shrub',
-                  detail: `${totalMin}m total focus today (1 tree planted)`,
-                })
-              }
-              onMouseLeave={() => setHoveredTree(null)}
-            >
-              <SpriteShrub variant={0} height={20} delay={0.12} />
-            </div>
           </div>
         ) : count === 2 ? (
-          /* 2 Sessions: Two distinct trees of different heights + bushes */
+          /* 2 Sessions: Two distinct trees of different heights */
           <div className="relative flex items-end justify-center -space-x-2">
             {/* Tree 1: Left Oak */}
             <div
@@ -507,20 +493,6 @@ export function DayGrove({
                 height={daySessions[1].durationMin >= 45 ? 92 : 80}
                 delay={0.09}
               />
-            </div>
-
-            {/* Ground Bush Cluster */}
-            <div
-              className="absolute -bottom-1 -left-1 z-20 cursor-pointer"
-              onMouseEnter={() =>
-                setHoveredTree({
-                  title: 'Forest Bush',
-                  detail: `${totalMin}m total focus today (2 trees planted)`,
-                })
-              }
-              onMouseLeave={() => setHoveredTree(null)}
-            >
-              <SpriteShrub variant={1} height={22} delay={0.15} />
             </div>
           </div>
         ) : (
@@ -579,41 +551,13 @@ export function DayGrove({
                 </div>
               )
             })}
-
-            {/* Overlapping ground shrubs flanking the base */}
-            <div
-              className="absolute -bottom-1 -left-1 z-20 cursor-pointer"
-              onMouseEnter={() =>
-                setHoveredTree({
-                  title: 'Forest Grove',
-                  detail: `${count} trees planted · ${totalMin}m total focus today`,
-                })
-              }
-              onMouseLeave={() => setHoveredTree(null)}
-            >
-              <SpriteShrub variant={0} height={Math.min(18, 13 + count)} delay={0.18} />
-            </div>
-            <div
-              className="absolute -bottom-1 -right-1 z-20 cursor-pointer"
-              onMouseEnter={() =>
-                setHoveredTree({
-                  title: 'Forest Grove',
-                  detail: `${count} trees planted · ${totalMin}m total focus today`,
-                })
-              }
-              onMouseLeave={() => setHoveredTree(null)}
-            >
-              <SpriteShrub variant={2} height={Math.min(16, 12 + count)} delay={0.22} />
-            </div>
           </div>
         )}
       </div>
 
-      {/* ── Grassy Soil Baseline & Terrain Contour ─────────────────── */}
-      <div className="relative h-2 w-full shrink-0 overflow-hidden">
-        {/* Grassy horizon band */}
-        <div className="absolute inset-x-0 bottom-0 h-1.5 rounded-t-full bg-gradient-to-r from-emerald-600/35 via-emerald-500/50 to-emerald-600/35" />
-        <div className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-emerald-400/60 blur-[0.5px]" />
+      {/* ── Grassy Soil Baseline ─────────────────── */}
+      <div className="relative h-1 w-full shrink-0 overflow-hidden">
+        <div className="absolute inset-x-0 bottom-0 h-0.5 bg-emerald-500/20 blur-[0.5px]" />
       </div>
     </div>
   )

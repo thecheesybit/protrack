@@ -124,3 +124,4 @@ export const SpriteShrub = memo(function SpriteShrub({
     />
   )
 })
+
