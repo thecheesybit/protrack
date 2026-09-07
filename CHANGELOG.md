@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.1.1 — 2026-09-07
+
+### Added
+- **Day-at-a-glance timeline (`TodayAgenda` redesign):** the Timetable widget's Day view is now a single merged, chronological timeline. It pulls together timetable slots, one-time events, to-dos & tasks with due dates, completed focus sessions and note deadlines for the selected day into one list — left time-rail with a continuous connector, colour-chipped cards showing title / time-range / duration, an "Anytime" bucket for untimed items, inline check-off for to-dos, a live red "now" line that auto-scrolls into view, and an "End of day · Xh Ym left" footer. Works in the global **All Scopes** view with a per-item mode-colour dot; cross-mode items are never hidden.
+- **`src/lib/dayAgenda.js`:** pure, unit-tested aggregator — `buildDayTimeline({ slots, events, todos, tasks, sessions, notes, date, nowMin })` and `summarizeDay(items, nowMin)`. No Firestore reads or side-effects; it only reshapes data the widgets already subscribe to, so it adds zero backend cost.
+
 ## v2.0.0 — 2026-09-07
 
 ### Added

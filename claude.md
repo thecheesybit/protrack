@@ -42,7 +42,8 @@ src/
 ├─ desktop/               isDesktop, TitleBar
 └─ lib/                   firebase, color, nlParse, time, icons, constants,
                           deadlines (pure helpers), priority (taxonomy),
-                          dates (ymd/streak/lastNDays)
+                          dates (ymd/streak/lastNDays),
+                          dayAgenda (pure day-timeline aggregator: buildDayTimeline/summarizeDay)
 electron/                 main.js, preload.js, (auto-update inline in main)
 functions/                mintDesktopToken
 ```
