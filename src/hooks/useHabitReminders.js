@@ -1,12 +1,10 @@
-import React, { useEffect, useRef } from 'react'
-import toast from 'react-hot-toast'
+import { useEffect, useRef } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { useHabits } from '@/hooks/useWellness'
 import { useStore } from '@/store/useStore'
 import { notify } from '@/lib/notify'
 import { playHabitChime } from '@/lib/audioFX'
-import { HabitReminderToast } from '@/components/wellness/HabitReminderToast'
-import { recordHabitCompletion, toggleHabitToday } from '@/services/habitService'
+import { toggleHabitToday } from '@/services/habitService'
 import { ymd } from '@/lib/dates'
 
 /**
@@ -74,8 +72,9 @@ function completionsToday(habit) {
 }
 
 /**
- * Fires the interactive toast, audio chime, and Dynamic Island notification
- * for a habit reminder.
+ * Fires the center prompt, audio chime, and Dynamic Island notification for a
+ * habit reminder. The prompt is the thing that "needs an answer"; the Island
+ * banner + OS notification stay informational.
  */
 export function triggerHabitCue(uid, habit) {
   if (!uid || !habit) return
@@ -85,32 +84,13 @@ export function triggerHabitCue(uid, habit) {
     playHabitChime()
   }
 
-  const target = Math.max(1, habit.timesPerDay || 1)
-  const current = completionsToday(habit)
-
-  // 2. Interactive In-App Toast
+  // 2. Interactive center prompt — screen-center, blur, Mark done / Snooze.
   if (habit.reminderToast !== false) {
-    toast.custom(
-      (t) =>
-        React.createElement(HabitReminderToast, {
-          toastId: t.id,
-          habit,
-          targetCount: target,
-          currentCount: current,
-          onDone: async (h) => {
-            await recordHabitCompletion(uid, h)
-          },
-          onSnooze: () => {
-            setTimeout(() => {
-              triggerHabitCue(uid, habit)
-            }, 10 * 60 * 1000)
-          },
-        }),
-      {
-        duration: 28000,
-        id: `habit-reminder-${habit.id}`,
-      },
-    )
+    useStore.getState().pushPrompt({
+      type: 'routine',
+      payload: habit,
+      snoozeMs: 10 * 60 * 1000,
+    })
   }
 
   // 3. Dynamic Island Banner
@@ -119,7 +99,7 @@ export function triggerHabitCue(uid, habit) {
     title: `Time to ${habit.name}`,
     detail: habit.scienceRationale
       ? `${habit.scienceRationale.slice(0, 75)}…`
-      : 'Click Done on the reminder toast to track.',
+      : 'Open the reminder to mark it done.',
     duration: 6500,
   })
 
@@ -128,6 +108,15 @@ export function triggerHabitCue(uid, habit) {
     `Habit Reminder · ${habit.name}`,
     habit.scienceRationale || `Time to ${habit.name.toLowerCase()}. Open PRO TRACK to track response.`,
   )
+}
+
+/**
+ * Re-fire a habit cue after `ms` (default 10 min). Used by the center prompt's
+ * Snooze / dismiss path — mirrors the old toast's fire-and-forget timer.
+ */
+export function snoozeHabitCue(uid, habit, ms = 10 * 60 * 1000) {
+  if (!uid || !habit) return
+  setTimeout(() => triggerHabitCue(uid, habit), ms)
 }
 
 export function useHabitReminders() {

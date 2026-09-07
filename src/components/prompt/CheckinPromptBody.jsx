@@ -1,8 +1,6 @@
 import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Sunrise, Sun, Sunset, X, ListPlus, Check } from 'lucide-react'
+import { Sunrise, Sun, Sunset, ListPlus, Check } from 'lucide-react'
 import { useStore } from '@/store/useStore'
-import { useAuth } from '@/hooks/useAuth'
 import { saveCheckinAnswer } from '@/services/checkinService'
 import { addTodo } from '@/services/todoService'
 import { snoozeCheckins } from '@/hooks/useCheckIns'
@@ -17,40 +15,18 @@ const SLOT_META = {
 }
 
 /**
- * The daily check-in card — a quiet glass panel in the bottom-left corner.
- * One short question, answered in a tap or a line; dismissing snoozes all
- * slots for 90 minutes. Renders nothing unless useCheckIns offered a prompt.
+ * Check-in body for the center prompt. One short question answered in a tap or
+ * a line; a successful save advances the queue, a save failure snoozes 15 min.
+ * Ported from the old bottom-left CheckInCard — same logic, now blocking and
+ * screen-centered (so it autofocuses, which the corner card deliberately did
+ * not).
  */
-export function CheckInCard() {
-  const prompt = useStore((s) => s.checkinPrompt)
-  const focusLocked = useStore((s) => s.focusLocked)
-
-  return (
-    <AnimatePresence>
-      {prompt && !focusLocked && (
-        <motion.div
-          initial={{ opacity: 0, y: 16, scale: 0.97 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 16, scale: 0.97 }}
-          transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-          className="fixed bottom-6 left-6 z-30 w-[21rem] rounded-2xl border border-line bg-surface/90 p-4 shadow-glass backdrop-blur-md"
-        >
-          {/* key resets answer state whenever a different question arrives */}
-          <CheckInBody key={prompt.question.id} prompt={prompt} />
-        </motion.div>
-      )}
-    </AnimatePresence>
-  )
-}
-
-function CheckInBody({ prompt }) {
-  const { user } = useAuth()
+export function CheckinPromptBody({ prompt, uid, onResolve }) {
   const checkins = useStore((s) => s.checkins)
   const activeModeId = useStore((s) => s.activeModeId)
-  const clearCheckinPrompt = useStore((s) => s.clearCheckinPrompt)
   const pushIsland = useStore((s) => s.pushIsland)
 
-  const { slot, question } = prompt
+  const { slot, question } = prompt.payload || {}
   const { icon: SlotIcon, label } = SLOT_META[slot] || SLOT_META.morning
 
   const [text, setText] = useState('')
@@ -58,26 +34,21 @@ function CheckInBody({ prompt }) {
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const dismiss = () => {
-    snoozeCheckins()
-    clearCheckinPrompt()
-  }
-
   // scaleValue lets a chip tap save immediately — React state (`scale`) won't
   // have flushed yet inside the same click handler.
   const save = async ({ alsoTodo = false, scaleValue = null } = {}) => {
     const value = question.type === 'intent' ? text.trim() : scaleValue ?? scale
-    if (!user || !value || saving) return
+    if (!uid || !value || saving) return
     setSaving(true)
     try {
-      await saveCheckinAnswer(user.uid, ymd(), slot, {
+      await saveCheckinAnswer(uid, ymd(), slot, {
         qid: question.id,
         type: question.type,
         value,
         ...(note.trim() ? { note: note.trim() } : {}),
       })
-      if (alsoTodo) await addTodo(user.uid, { text: value, modeId: activeModeId })
-      clearCheckinPrompt()
+      if (alsoTodo) await addTodo(uid, { text: value, modeId: activeModeId })
+      onResolve()
       pushIsland({
         kind: 'success',
         title: 'Checked in',
@@ -105,7 +76,7 @@ function CheckInBody({ prompt }) {
         duration: 4500,
       })
       snoozeCheckins(15 * 60 * 1000)
-      clearCheckinPrompt()
+      onResolve()
     } finally {
       setSaving(false)
     }
@@ -116,29 +87,18 @@ function CheckInBody({ prompt }) {
   const insight = checkinInsight(checkins)
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-accent">
-          <SlotIcon className="h-3.5 w-3.5" />
-          {label}
-        </span>
-        <button
-          onClick={dismiss}
-          className="rounded-md p-1 text-muted transition-colors hover:bg-surface-2 hover:text-ink"
-          title="Not now (snoozes for 90 minutes)"
-          aria-label="Dismiss check-in"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
+    <div className="flex flex-col gap-3 pr-6">
+      <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-accent">
+        <SlotIcon className="h-3.5 w-3.5" />
+        {label}
+      </span>
 
-      <p className="text-sm font-semibold leading-snug text-ink">{question.text}</p>
+      <p className="text-base font-semibold leading-snug text-ink">{question.text}</p>
 
       {question.type === 'intent' ? (
         <div className="flex flex-col gap-2">
-          {/* No autoFocus — the card must never steal the keyboard from
-              whatever the user is typing when it slides in. */}
           <input
+            autoFocus
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && save()}

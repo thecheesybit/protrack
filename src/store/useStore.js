@@ -9,6 +9,7 @@ import { createChronoSlice } from './slices/chronoSlice'
 import { createUpdateSlice } from './slices/updateSlice'
 import { createPatreonSlice } from './slices/patreonSlice'
 import { createCheckinSlice } from './slices/checkinSlice'
+import { createPromptSlice } from './slices/promptSlice'
 import { createLockSlice } from './slices/lockSlice'
 
 /**
@@ -27,5 +28,6 @@ export const useStore = create((...a) => ({
   ...createUpdateSlice(...a),
   ...createPatreonSlice(...a),
   ...createCheckinSlice(...a),
+  ...createPromptSlice(...a),
   ...createLockSlice(...a),
 }))
