@@ -301,3 +301,69 @@ describe('buildDayTimeline — contract', () => {
     expect(item.ref).toBe(todos[0])
   })
 })
+
+// ---------------------------------------------------------------------------
+// carry-forward (P10)
+// ---------------------------------------------------------------------------
+describe('buildDayTimeline — carry-forward (P10)', () => {
+  const yesterdayAt = (h, m = 0) => new Date(Y, M, D - 1, h, m, 0, 0)
+
+  it('carries an incomplete overdue todo forward to today', () => {
+    const todos = [{ id: 'overdue1', text: 'Missed yesterday', dueAt: yesterdayAt(14, 0), done: false }]
+    const out = buildDayTimeline({ todos, date: DAY, carryForward: true })
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatchObject({
+      id: 'todo:overdue1',
+      kind: 'todo',
+      startMin: null, // placed in anytime bucket
+      overdue: true,
+      carriedFrom: '2024-06-14',
+    })
+  })
+
+  it('carries an incomplete overdue kanban task forward to today', () => {
+    const tasks = [{ id: 'task-overdue', title: 'Finish essay', dueAt: yesterdayAt(18, 0), column: 'todo', done: false }]
+    const out = buildDayTimeline({ tasks, date: DAY, carryForward: true })
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatchObject({
+      id: 'task:task-overdue',
+      kind: 'task',
+      startMin: null,
+      overdue: true,
+      carriedFrom: '2024-06-14',
+    })
+  })
+
+  it('does NOT carry forward a completed todo or done task', () => {
+    const todos = [{ id: 'done-todo', text: 'Completed', dueAt: yesterdayAt(12, 0), done: true }]
+    const tasks = [{ id: 'done-task', title: 'Done task', dueAt: yesterdayAt(12, 0), column: 'done' }]
+    const out = buildDayTimeline({ todos, tasks, date: DAY, carryForward: true })
+    expect(out).toHaveLength(0)
+  })
+
+  it('does NOT carry forward future items', () => {
+    const todos = [{ id: 'future-todo', text: 'Tomorrow', dueAt: nextDayAt(12, 0), done: false }]
+    const out = buildDayTimeline({ todos, date: DAY, carryForward: true })
+    expect(out).toHaveLength(0)
+  })
+
+  it('does NOT carry overdue items onto non-today dates', () => {
+    const todos = [{ id: 'overdue-not-today', text: 'Old task', dueAt: yesterdayAt(12, 0), done: false }]
+    // Browsing a future day (June 16)
+    const out = buildDayTimeline({ todos, date: nextDayAt(10, 0), carryForward: true })
+    expect(out).toHaveLength(0)
+  })
+
+  it('does not duplicate items that are due on the current day', () => {
+    const todos = [{ id: 'due-today', text: 'Due at 14:00 today', dueAt: at(14, 0), done: false }]
+    const out = buildDayTimeline({ todos, date: DAY, carryForward: true })
+    expect(out).toHaveLength(1)
+    expect(out[0].carriedFrom).toBeUndefined()
+  })
+
+  it('respects carryForward: false opt-out', () => {
+    const todos = [{ id: 'overdue-optout', text: 'Missed', dueAt: yesterdayAt(14, 0), done: false }]
+    const out = buildDayTimeline({ todos, date: DAY, carryForward: false })
+    expect(out).toHaveLength(0)
+  })
+})

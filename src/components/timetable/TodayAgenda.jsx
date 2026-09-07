@@ -495,13 +495,20 @@ function AgendaCard({ item, compact = false, modeDot, onOpen, onToggle, onDelete
       )}
 
       <div className="min-w-0 flex-1">
-        <div
-          className={cn(
-            'truncate text-xs font-semibold text-ink',
-            item.done && 'text-muted line-through',
+        <div className="flex items-center gap-1.5 truncate">
+          <span
+            className={cn(
+              'truncate text-xs font-semibold text-ink',
+              item.done && 'text-muted line-through',
+            )}
+          >
+            {item.title}
+          </span>
+          {item.carriedFrom && (
+            <span className="shrink-0 rounded bg-amber-500/15 border border-amber-500/30 px-1 py-0.5 text-[8px] font-medium text-amber-300">
+              from {item.carriedFrom}
+            </span>
           )}
-        >
-          {item.title}
         </div>
         {!compact && (
           <div className="flex items-center gap-1.5 text-[10px] text-muted">

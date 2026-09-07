@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo, memo } from 'react'
 import { Pencil, Sparkles, X, Check, ChevronLeft, ChevronRight } from 'lucide-react'
 import { classifyDeadline } from '@/lib/deadlines'
 import { NoteDeadlineChip } from './NoteDeadlineChip'
+import { ItemDetailPopover } from './ItemDetailPopover'
 import { getWeekDate, ymd } from '@/lib/dates'
 import { DayGrove } from '@/components/focus/CalendarForest'
 import {
@@ -247,6 +248,7 @@ export function TimetableGrid({
 }) {
   const [drag, setDrag] = useState(null)
   const [weekOffset, setWeekOffset] = useState(0)
+  const [popoverItem, setPopoverItem] = useState(null)
   const scrollRef = useRef(null)
   const today = todayDow()
   const nowMin = useNowMinutes()
@@ -387,6 +389,10 @@ export function TimetableGrid({
             <div
               key={d}
               onClick={() => onSelect?.({ dayIndex: i, startMin: 9 * 60, endMin: 10 * 60 })}
+              onDoubleClick={(e) => {
+                e.stopPropagation()
+                onSelect?.({ dayIndex: i, startMin: 9 * 60, endMin: 10 * 60 })
+              }}
               className={cn(
                 'flex flex-1 flex-col items-center justify-center py-1.5 px-1 rounded-2xl border transition-all cursor-pointer select-none',
                 isToday
@@ -405,80 +411,103 @@ export function TimetableGrid({
         })}
       </div>
 
-      {/* All-Day / Tasks shelf across the week */}
-      <div className="flex border-b border-line/50 pl-12 bg-surface-2/20 shrink-0 min-h-[30px] max-h-[76px] overflow-y-auto">
+      {/* All-Day / Tasks shelf across the week — compact markers with rich side detail (P10) */}
+      <div className="flex border-b border-line/50 pl-12 bg-surface-2/20 shrink-0 min-h-[30px] max-h-[58px]">
         {DAYS.map((d, day) => {
-          const colDate = getWeekDate(day)
+          const colDate = getWeekDate(day, activeRefDate)
           const colDateStr = ymd(colDate)
-          const isCurrentToday = day === today
+          const isCurrentToday = day === today && weekOffset === 0
 
           // Tasks for this day's top tray:
           // 1. All-day tasks due on this day or tasks with midnight deadline
           // 2. Unscheduled tasks (no dueAt) when day is today
+          // 3. Overdue incomplete tasks carried forward onto today
           const dayTopTasks = allTodos.filter((t) => {
             if (t.type === 'event') return false
+            const isDone = Boolean(t.done) || t.column === 'done'
             if (!t.dueAt) return isCurrentToday
             const d2 = t.dueAt?.toDate ? t.dueAt.toDate() : new Date(t.dueAt)
             if (isNaN(d2.getTime())) return false
-            if (ymd(d2) !== colDateStr) return false
+            const isDueToday = ymd(d2) === colDateStr
             const mins = d2.getHours() * 60 + d2.getMinutes()
-            return t.allDay || mins === 0 || mins < DAY_START_MIN
+            const isUntimedOrMidnight = t.allDay || mins === 0 || mins < DAY_START_MIN
+            if (isDueToday) return isUntimedOrMidnight
+            // Display-only carry-forward for incomplete overdue items onto today
+            if (isCurrentToday && !isDone && d2 < new Date()) return true
+            return false
           })
+
+          const VISIBLE_COUNT = 2
+          const visibleTasks = dayTopTasks.slice(0, VISIBLE_COUNT)
+          const overflowCount = Math.max(0, dayTopTasks.length - VISIBLE_COUNT)
 
           return (
             <div
               key={`tray-${d}`}
               onClick={() => onSelect?.({ dayIndex: day, startMin: 9 * 60, endMin: 10 * 60 })}
+              onDoubleClick={(e) => {
+                e.stopPropagation()
+                onSelect?.({ dayIndex: day, startMin: 9 * 60, endMin: 10 * 60 })
+              }}
               className={cn(
-                'flex-1 border-l border-line/30 p-1 flex flex-col gap-1 min-h-[30px] cursor-pointer hover:bg-surface-2/40 transition-colors',
+                'flex-1 border-l border-line/30 p-1 flex flex-wrap items-center content-start gap-1 min-h-[30px] cursor-pointer hover:bg-surface-2/40 transition-colors overflow-hidden',
                 isCurrentToday && 'bg-accent/5',
               )}
               title={`Click to add task on ${d}`}
             >
-              {dayTopTasks.map((t) => (
-                <div
-                  key={t.id}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onOpenSlot?.({
-                      label: t.text || t.title,
-                      startMin: nowMin,
-                      endMin: Math.min(nowMin + 30, DAY_END_MIN),
-                      color: '#f59e0b',
-                    })
-                  }}
-                  className="group/task flex items-center gap-1 rounded bg-amber-500/15 border border-amber-500/35 px-1 py-0.5 text-[9px] font-medium text-amber-200 hover:bg-amber-500/25 transition-all shadow-xs"
-                  title={`${t.text || t.title} · click to focus`}
-                >
-                  <button
-                    type="button"
+              {visibleTasks.map((t, idx) => {
+                const d2 = t.dueAt ? (t.dueAt?.toDate ? t.dueAt.toDate() : new Date(t.dueAt)) : null
+                const isCarried = isCurrentToday && d2 && ymd(d2) !== colDateStr
+                const itemData = {
+                  ...t,
+                  carriedFrom: isCarried ? ymd(d2) : undefined,
+                  overdue: isCarried,
+                }
+
+                return (
+                  <div
+                    key={t.id}
                     onClick={(e) => {
                       e.stopPropagation()
-                      onToggleTask?.(t)
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      setPopoverItem({ item: itemData, anchorRect: rect })
                     }}
-                    className="shrink-0 hover:opacity-80"
-                    title={t.done ? 'Mark incomplete' : 'Mark complete'}
+                    onMouseEnter={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      setPopoverItem({ item: itemData, anchorRect: rect })
+                    }}
+                    className={cn(
+                      'group/marker flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium transition-all shadow-xs border max-w-full',
+                      isCarried
+                        ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 hover:bg-amber-500/30'
+                        : 'bg-surface-3/80 border-line/70 text-ink hover:border-accent/50 hover:bg-surface-3',
+                    )}
+                    title={`${t.text || t.title}${isCarried ? ` (carried from ${ymd(d2)})` : ''}`}
                   >
-                    <Check className={cn('h-2.5 w-2.5', t.done ? 'text-emerald-400' : 'text-amber-300 opacity-60 hover:opacity-100')} />
-                  </button>
-                  <span className={cn('truncate flex-1', t.done && 'line-through opacity-60')}>
-                    {t.text || t.title}
-                  </span>
-                  {onDeleteTask && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onDeleteTask(t.id)
-                      }}
-                      className="rounded p-0.5 text-amber-300 opacity-0 transition-opacity hover:text-white group-hover/task:opacity-100"
-                      title="Delete task"
-                    >
-                      <X className="h-2 w-2" />
-                    </button>
-                  )}
-                </div>
-              ))}
+                    <span className="flex h-3 w-3 shrink-0 items-center justify-center rounded-full bg-accent/20 text-[8px] font-bold text-accent">
+                      {idx + 1}
+                    </span>
+                    <span className={cn('truncate max-w-[58px]', t.done && 'line-through opacity-60')}>
+                      {t.text || t.title}
+                    </span>
+                  </div>
+                )
+              })}
+
+              {overflowCount > 0 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    const rect = e.currentTarget.getBoundingClientRect()
+                    setPopoverItem({ item: dayTopTasks[VISIBLE_COUNT], anchorRect: rect })
+                  }}
+                  className="flex items-center rounded-full bg-surface-3/90 border border-line/80 px-1.5 py-0.5 text-[8px] font-bold text-muted hover:text-ink hover:border-accent transition-colors"
+                  title={`${overflowCount} more tasks`}
+                >
+                  +{overflowCount}
+                </button>
+              )}
             </div>
           )
         })}
@@ -705,6 +734,30 @@ export function TimetableGrid({
           </span>
           <span className="text-[10px] text-muted/75">Click session to focus · Drag to schedule</span>
         </div>
+      )}
+
+      {popoverItem && (
+        <ItemDetailPopover
+          item={popoverItem.item}
+          anchorRect={popoverItem.anchorRect}
+          onClose={() => setPopoverItem(null)}
+          onToggleComplete={(item) => {
+            onToggleTask?.(item)
+            setPopoverItem((prev) => (prev ? { ...prev, item: { ...prev.item, done: !prev.item.done } } : null))
+          }}
+          onStartFocus={(item) => {
+            onOpenSlot?.({
+              label: item.text || item.title,
+              startMin: nowMin,
+              endMin: Math.min(nowMin + 30, DAY_END_MIN),
+              color: '#f59e0b',
+            })
+          }}
+          onDelete={(item) => {
+            onDeleteTask?.(item.id)
+            setPopoverItem(null)
+          }}
+        />
       )}
     </div>
   )

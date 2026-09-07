@@ -29,7 +29,7 @@
  *   }
  */
 import { isSlotOnDay, DAY_START_MIN, DAY_END_MIN } from '@/lib/time'
-import { dueAtToMinutes } from '@/lib/deadlines'
+import { dueAtToMinutes, classifyDeadline } from '@/lib/deadlines'
 import { ymd } from '@/lib/dates'
 
 const FALLBACK_COLOR = '#6366f1'
@@ -225,9 +225,11 @@ export function buildDayTimeline({
   notes = [],
   date = new Date(),
   nowMin = null,
+  carryForward = true,
 } = {}) {
   const dow = (date.getDay() + 6) % 7 // 0 = Monday … 6 = Sunday
   const dayStr = ymd(date)
+  const isCurrentToday = dayStr === ymd(new Date())
   const out = []
 
   for (const slot of slots) {
@@ -244,12 +246,33 @@ export function buildDayTimeline({
 
   for (const todo of todos) {
     if (!todo || todo.id == null || todo.type === 'event') continue
-    if (sameLocalDay(todo.dueAt, date)) out.push(normalizeDue(todo, 'todo'))
+    if (sameLocalDay(todo.dueAt, date)) {
+      out.push(normalizeDue(todo, 'todo'))
+    } else if (carryForward && isCurrentToday && !todo.done && todo.dueAt) {
+      if (classifyDeadline(todo.dueAt) === 'overdue') {
+        const item = normalizeDue(todo, 'todo')
+        item.startMin = null
+        item.carriedFrom = ymd(todo.dueAt)
+        item.overdue = true
+        out.push(item)
+      }
+    }
   }
 
   for (const task of tasks) {
     if (!task || task.id == null) continue
-    if (sameLocalDay(task.dueAt, date)) out.push(normalizeDue(task, 'task'))
+    const isDone = task.column === 'done' || Boolean(task.done)
+    if (sameLocalDay(task.dueAt, date)) {
+      out.push(normalizeDue(task, 'task'))
+    } else if (carryForward && isCurrentToday && !isDone && task.dueAt) {
+      if (classifyDeadline(task.dueAt) === 'overdue') {
+        const item = normalizeDue(task, 'task')
+        item.startMin = null
+        item.carriedFrom = ymd(task.dueAt)
+        item.overdue = true
+        out.push(item)
+      }
+    }
   }
 
   for (const s of sessions) {
