@@ -139,3 +139,45 @@ describe('CalendarForest - Tooltip Formatting', () => {
     expect(tooltip.detail).toContain('Tree 1 of 1')
   })
 })
+
+describe('CalendarForest - Raster Forest Sprites', () => {
+  it('exports TREE_SPRITES with 9 valid tree sprites', async () => {
+    const { TREE_SPRITES } = await import('../ForestSprites')
+    expect(TREE_SPRITES).toHaveLength(9)
+    TREE_SPRITES.forEach((tree) => {
+      expect(tree.id).toBeDefined()
+      expect(tree.src).toBeDefined()
+      expect(tree.aspect).toBeGreaterThan(0)
+    })
+  })
+
+  it('exports SHRUB_SPRITES with 3 valid shrub sprites', async () => {
+    const { SHRUB_SPRITES } = await import('../ForestSprites')
+    expect(SHRUB_SPRITES).toHaveLength(3)
+    SHRUB_SPRITES.forEach((shrub) => {
+      expect(shrub.id).toBeDefined()
+      expect(shrub.src).toBeDefined()
+      expect(shrub.aspect).toBeGreaterThan(0)
+    })
+  })
+
+  it('resolves species and variants deterministically', async () => {
+    const { resolveTreeSprite } = await import('../ForestSprites')
+    const oak0 = resolveTreeSprite('oak', 0)
+    const oak1 = resolveTreeSprite('oak', 1)
+    const pine0 = resolveTreeSprite('pine', 0)
+    const blossom0 = resolveTreeSprite('blossom', 0)
+
+    expect(oak0.id).toBeDefined()
+    expect(oak1.id).toBeDefined()
+    expect(oak0.id).not.toEqual(oak1.id)
+    expect(pine0.id).toBeDefined()
+    expect(blossom0.id).toBeDefined()
+  })
+
+  it('re-exports SpriteTree and SpriteShrub from CalendarForest', async () => {
+    const { SpriteTree, SpriteShrub } = await import('../CalendarForest')
+    expect(SpriteTree).toBeDefined()
+    expect(SpriteShrub).toBeDefined()
+  })
+})

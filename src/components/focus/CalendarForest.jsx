@@ -2,6 +2,9 @@ import { memo, useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ymd } from '@/lib/dates'
 import { cn } from '@/utils/cn'
+import { SpriteTree, SpriteShrub } from './ForestSprites'
+
+export { SpriteTree, SpriteShrub } from './ForestSprites'
 
 function toDate(ts) {
   if (!ts) return null
@@ -458,11 +461,12 @@ export function DayGrove({
               onMouseEnter={() => setHoveredTree(getTreeTooltip(daySessions[0], 0, 1))}
               onMouseLeave={() => setHoveredTree(null)}
             >
-              {daySessions[0].durationMin >= 45 ? (
-                <IllustratedOak height={88} width={58} delay={0.05} />
-              ) : (
-                <IllustratedPine height={84} width={48} delay={0.05} />
-              )}
+              <SpriteTree
+                species={daySessions[0].durationMin >= 45 ? 'oak' : 'pine'}
+                variant={0}
+                height={daySessions[0].durationMin >= 45 ? 88 : 84}
+                delay={0.05}
+              />
             </div>
 
             {/* Lush Shrub / Bush at the foot of the trunk */}
@@ -476,7 +480,7 @@ export function DayGrove({
               }
               onMouseLeave={() => setHoveredTree(null)}
             >
-              <IllustratedBush width={34} height={20} delay={0.12} />
+              <SpriteShrub variant={0} height={20} delay={0.12} />
             </div>
           </div>
         ) : count === 2 ? (
@@ -488,7 +492,7 @@ export function DayGrove({
               onMouseEnter={() => setHoveredTree(getTreeTooltip(daySessions[0], 0, 2))}
               onMouseLeave={() => setHoveredTree(null)}
             >
-              <IllustratedOak height={86} width={54} delay={0.04} />
+              <SpriteTree species="oak" variant={0} height={86} delay={0.04} />
             </div>
 
             {/* Tree 2: Right Pine or Blossom */}
@@ -497,11 +501,12 @@ export function DayGrove({
               onMouseEnter={() => setHoveredTree(getTreeTooltip(daySessions[1], 1, 2))}
               onMouseLeave={() => setHoveredTree(null)}
             >
-              {daySessions[1].durationMin >= 45 ? (
-                <IllustratedPine height={92} width={50} delay={0.09} />
-              ) : (
-                <IllustratedBlossom height={80} width={52} delay={0.09} />
-              )}
+              <SpriteTree
+                species={daySessions[1].durationMin >= 45 ? 'pine' : 'blossom'}
+                variant={1}
+                height={daySessions[1].durationMin >= 45 ? 92 : 80}
+                delay={0.09}
+              />
             </div>
 
             {/* Ground Bush Cluster */}
@@ -515,7 +520,7 @@ export function DayGrove({
               }
               onMouseLeave={() => setHoveredTree(null)}
             >
-              <IllustratedBush width={36} height={22} delay={0.15} />
+              <SpriteShrub variant={1} height={22} delay={0.15} />
             </div>
           </div>
         ) : (
@@ -523,13 +528,13 @@ export function DayGrove({
           <div className="relative flex items-end justify-center overflow-visible">
             {daySessions.map((s, idx) => {
               // Select tree species: long sessions get majestic Pine/Oak, others cycle varieties
-              const species = [IllustratedOak, IllustratedPine, IllustratedBlossom]
-              const TreeComponent =
+              const speciesList = ['oak', 'pine', 'blossom']
+              const species =
                 (s.durationMin || 0) >= 60
                   ? idx % 2 === 0
-                    ? IllustratedOak
-                    : IllustratedPine
-                  : species[idx % species.length]
+                    ? 'oak'
+                    : 'pine'
+                  : speciesList[idx % speciesList.length]
 
               // Dynamic scale and overlap so any number of trees fits gracefully within column
               const targetGroveWidth = Math.min(132, Math.max(80, 52 + count * 13))
@@ -537,7 +542,6 @@ export function DayGrove({
               const heightFactors = [0.94, 1.06, 0.92, 1.04, 0.96, 1.08, 0.93]
               const hFactor = heightFactors[idx % heightFactors.length]
               const h = Math.round(baseH * hFactor)
-              const w = Math.round(h * (TreeComponent === IllustratedPine ? 0.56 : 0.64))
 
               const avgWidth = Math.round(baseH * 0.62)
               const overlapPx = count > 1
@@ -566,9 +570,10 @@ export function DayGrove({
                     setHoveredTree(null)
                   }}
                 >
-                  <TreeComponent
+                  <SpriteTree
+                    species={species}
+                    variant={idx}
                     height={h}
-                    width={w}
                     delay={Math.min(0.35, idx * 0.04)}
                   />
                 </div>
@@ -586,7 +591,7 @@ export function DayGrove({
               }
               onMouseLeave={() => setHoveredTree(null)}
             >
-              <IllustratedBush width={Math.min(32, 22 + count)} height={Math.min(18, 13 + count)} delay={0.18} />
+              <SpriteShrub variant={0} height={Math.min(18, 13 + count)} delay={0.18} />
             </div>
             <div
               className="absolute -bottom-1 -right-1 z-20 cursor-pointer"
@@ -598,7 +603,7 @@ export function DayGrove({
               }
               onMouseLeave={() => setHoveredTree(null)}
             >
-              <IllustratedBush width={Math.min(28, 20 + count)} height={Math.min(16, 12 + count)} delay={0.22} />
+              <SpriteShrub variant={2} height={Math.min(16, 12 + count)} delay={0.22} />
             </div>
           </div>
         )}
