@@ -20,6 +20,7 @@ import { updateTodo, deleteTodo } from '@/services/todoService'
 import { MODE_PALETTE } from '@/lib/constants'
 import { DAY_START_MIN, todayDow, minutesToLabel, durationLabel } from '@/lib/time'
 import { ymd } from '@/lib/dates'
+import { openItemCounts } from '@/lib/counts'
 import {
   connectCalendar,
   isCalendarConnected,
@@ -220,8 +221,33 @@ export function TimetableWidget({ widget, variant }) {
     [notes, activeModeId],
   )
 
+  // Open items counter for header (P11)
+  // TODO(AI): realistic-timeline suggestions
+  const itemCounts = useMemo(
+    () => openItemCounts({ todos: activeTodos, events: eventTodos, date: new Date() }),
+    [activeTodos, eventTodos],
+  )
+
   const headerActions = (
     <div className="flex items-center gap-1.5">
+      {/* Clickable open items counter pill (P11) */}
+      <button
+        type="button"
+        onClick={() => handleSetViewMode('day')}
+        className="flex items-center gap-1 rounded-xl border border-white/10 bg-surface-2/40 px-2 py-1 text-[10px] font-medium text-muted hover:text-ink hover:border-accent/40 transition-all backdrop-blur-md"
+        title="Click to view day agenda"
+      >
+        <span className="font-semibold text-accent">{itemCounts.openTodos} open</span>
+        <span>·</span>
+        <span>{itemCounts.eventsToday} today</span>
+        {itemCounts.overdue > 0 && (
+          <>
+            <span>·</span>
+            <span className="font-semibold text-rose-400">{itemCounts.overdue} overdue</span>
+          </>
+        )}
+      </button>
+
       {/* View switcher: Day vs Week calendar */}
       {!isHero && (
         <div className="flex items-center rounded-xl border border-white/10 bg-surface-2/40 p-0.5 text-[11px] font-medium backdrop-blur-md">

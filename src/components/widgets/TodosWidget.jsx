@@ -680,6 +680,7 @@ function KanbanColumn({
   onStartFocus,
   onDeadlineClick,
   onPushBack,
+  onFocusAdd,
   style,
 }) {
   const col = COLS[colId]
@@ -698,13 +699,29 @@ function KanbanColumn({
       <div className={cn('flex shrink-0 items-center gap-2 px-3.5 py-2.5 text-xs font-semibold', col.headerClass)}>
         <col.Icon className="h-3.5 w-3.5" />
         {col.label}
-        <span className="ml-auto rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-mono text-muted">
+        <button
+          type="button"
+          onClick={() => onFocusAdd?.(colId)}
+          className="ml-auto flex items-center gap-0.5 rounded-lg border border-line/60 bg-surface-2/40 px-1.5 py-0.5 text-[9px] font-medium text-muted hover:text-ink hover:border-accent/40 transition-colors"
+          title={`Add task to ${col.label}`}
+        >
+          <Plus className="h-2.5 w-2.5" /> Add
+        </button>
+        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-mono text-muted">
           {todos.length}
         </span>
       </div>
 
       <SortableContext items={todos.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-        <div ref={setDropRef} className="flex min-h-[56px] flex-1 flex-col gap-2 overflow-y-auto px-2.5 pb-2.5">
+        <div
+          ref={setDropRef}
+          onDoubleClick={(e) => {
+            if (e.target === e.currentTarget || e.target.closest('.empty-column-trigger')) {
+              onFocusAdd?.(colId)
+            }
+          }}
+          className="flex min-h-[56px] flex-1 flex-col gap-2 overflow-y-auto px-2.5 pb-2.5"
+        >
           {todos.map((t) => (
             <KanbanCard
               key={t.id}
@@ -722,9 +739,10 @@ function KanbanColumn({
           {todos.length === 0 && (
             <div
               className={cn(
-                'flex flex-1 items-center justify-center rounded-2xl border-2 border-dashed border-white/5 py-6 text-center text-xs font-medium text-muted/50 transition-colors m-0.5',
+                'empty-column-trigger flex flex-1 items-center justify-center rounded-2xl border-2 border-dashed border-white/5 py-6 text-center text-xs font-medium text-muted/50 transition-colors m-0.5 cursor-pointer hover:border-accent/30',
                 isOver && 'border-accent/40 bg-accent/5 text-accent',
               )}
+              title="Double-click to add task"
             >
               {col.emptyHint}
             </div>
@@ -748,6 +766,13 @@ export function TodosWidget({ widget, variant }) {
   const [focusReadyId, setFocusReadyId] = useState(null)
   const [activeId, setActiveId] = useState(null)
   const [deadlinePicker, setDeadlinePicker] = useState(null)
+  const [targetColumn, setTargetColumn] = useState('backlog')
+  const inputRef = useRef(null)
+
+  const handleFocusColumn = (colId) => {
+    setTargetColumn(colId)
+    inputRef.current?.focus()
+  }
 
   const parsed = useMemo(() => parseCapture(text), [text])
   const effectiveDeadline = pendingDueAt || parsed.date
@@ -806,7 +831,7 @@ export function TodosWidget({ widget, variant }) {
       await addTodo(user.uid, {
         text: taskText,
         modeId: activeModeId === 'all' ? null : activeModeId,
-        column: 'backlog',
+        column: targetColumn || 'backlog',
         dueAt: dueAt || null,
       })
       if (dueAt) {
@@ -1048,9 +1073,10 @@ export function TodosWidget({ widget, variant }) {
         <form onSubmit={(e) => { e.preventDefault(); submit() }} className="flex flex-col gap-2">
           <div className="group/capsule flex items-center gap-2 rounded-2xl border border-white/10 bg-surface-2/40 px-3 py-1.5 shadow-inner-sm backdrop-blur-md transition-all focus-within:border-accent/50 focus-within:bg-surface-2/70 focus-within:ring-2 focus-within:ring-accent/20">
             <input
+              ref={inputRef}
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="Add a task… (e.g. 'Math test tomorrow 10am')"
+              placeholder={targetColumn === 'doing' ? "Add to Doing… (e.g. 'Math test 10am')" : "Add a task… (e.g. 'Math test tomorrow 10am')"}
               className="min-w-0 flex-1 bg-transparent text-xs sm:text-sm text-ink placeholder:text-muted/60 outline-none"
             />
             <button
@@ -1151,6 +1177,7 @@ export function TodosWidget({ widget, variant }) {
                 todos={columns.backlog}
                 focusReadyId={focusReadyId}
                 onDoubleClick={onDoubleClick}
+                onFocusAdd={handleFocusColumn}
                 onToggle={onToggle}
                 onUpdate={onUpdate}
                 onDelete={onDelete}
@@ -1164,6 +1191,7 @@ export function TodosWidget({ widget, variant }) {
                 todos={columns.doing}
                 focusReadyId={focusReadyId}
                 onDoubleClick={onDoubleClick}
+                onFocusAdd={handleFocusColumn}
                 onToggle={onToggle}
                 onUpdate={onUpdate}
                 onDelete={onDelete}
