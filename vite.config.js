@@ -28,7 +28,13 @@ const withElectron = process.env.ELECTRON === 'true'
 const APP_CSP = [
   "default-src 'self'",
   // unsafe-inline/eval: Vite inline bootstrap + Firebase SDK internals.
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  // https://apis.google.com: Firebase's popup-based Google Sign-In
+  // (browserPopupRedirectResolver) dynamically injects <script src=
+  // ".../js/api.js"> into the OPENER window (our own app) to load gapi's
+  // iframe/messaging bridge that coordinates the popup handshake — without
+  // this host allowed, the load is CSP-blocked and Firebase surfaces the
+  // generic `auth/internal-error` with no indication it was a CSP issue.
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "img-src 'self' data: https: blob:",
   "font-src 'self' data: https://fonts.gstatic.com",
@@ -36,8 +42,11 @@ const APP_CSP = [
     ' wss://*.firebaseio.com https://*.firebaseio.com' +
     ' https://api.openai.com https://api.anthropic.com' +
     ' https://api.deepseek.com https://api.elevenlabs.io',
+  // apis.google.com also needs frame-src: gapi's cross-window relay opens its
+  // own postMessage iframe from that origin, separate from the OAuth popup
+  // window itself (which Chromium doesn't gate through frame-src at all).
   'frame-src https://www.youtube.com https://www.youtube-nocookie.com' +
-    ' https://*.firebaseapp.com https://accounts.google.com',
+    ' https://*.firebaseapp.com https://accounts.google.com https://apis.google.com',
   "media-src 'self' blob: mediastream: https://www.youtube.com" +
     ' https://www.youtube-nocookie.com https://*.googlevideo.com',
   "worker-src 'self' blob:",
