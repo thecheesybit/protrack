@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.1.2 — 2026-09-07
+
+### Changed
+- **Habit reminders no longer dogpile.** Only one habit cue can hold the center-blur prompt at a time — if one is already open (or queued), further cues land in the Dynamic Island only instead of stacking behind it, so you never grind through 7–10 pop-ups in a row. A cue that keeps re-firing on its interval now folds onto its own prompt (`promptSlice` gained a pure `coalesceKey`) rather than enqueuing duplicates.
+- **One snooze per habit cue per day, and it's 5 minutes** (was unlimited, 10). After the single snooze the button disables to "Snoozed once".
+- **Skipped cues auto-mark missed.** Each cue carries a window (`habitCueExpiry` — next interval tick capped at 60 min, or ~3 h for a fixed morning/afternoon/evening cue); if it's still unanswered when the window closes it dismisses itself and the ping is counted by the existing `missedToday` backlog. The prompt shows "Auto-marks missed at H:MM". No new Firestore reads or writes.
+
 ## v2.1.1 — 2026-09-07
 
 ### Added

@@ -17,29 +17,57 @@
  *                                  hook owns the actual snooze write; this is
  *                                  just carried through for it to read.
  * @property {boolean} dismissible  Whether Esc/✕ may close it (default true).
+ * @property {?string} coalesceKey  When set, a later push with the same key
+ *                                  folds onto the prompt already active/queued
+ *                                  (refreshing its payload) instead of stacking
+ *                                  a duplicate. Used so one habit re-firing on
+ *                                  its interval never dogpiles the queue.
  */
 
 // Module-scoped counter keeps ids stable without Date.now()/Math.random().
 let _promptId = 0
 const nextPromptId = () => (_promptId += 1)
 
-export const createPromptSlice = (set) => ({
+export const createPromptSlice = (set, get) => ({
   activePrompt: null, // Prompt | null
   promptQueue: [], // Prompt[]
 
   /**
    * Enqueue a prompt. Becomes active immediately when nothing is showing,
-   * otherwise waits its turn behind the current one.
+   * otherwise waits its turn behind the current one. A `coalesceKey` folds a
+   * repeat push from the same source onto the prompt already active/queued
+   * (refreshing payload/snoozeMs) rather than stacking a duplicate.
    * @param {Partial<Prompt>} prompt
-   * @returns {number} the assigned id
+   * @returns {number} the id of the active/queued prompt for this push
    */
   pushPrompt: (prompt) => {
+    const coalesceKey = prompt.coalesceKey ?? null
+    if (coalesceKey) {
+      const { activePrompt, promptQueue } = get()
+      if (activePrompt?.coalesceKey === coalesceKey) return activePrompt.id
+      const queued = promptQueue.find((p) => p.coalesceKey === coalesceKey)
+      if (queued) {
+        const merged = {
+          ...queued,
+          payload: prompt.payload ?? queued.payload,
+          snoozeMs:
+            typeof prompt.snoozeMs === 'number' ? prompt.snoozeMs : queued.snoozeMs,
+        }
+        set((s) => ({
+          promptQueue: s.promptQueue.map((p) =>
+            p.coalesceKey === coalesceKey ? merged : p,
+          ),
+        }))
+        return merged.id
+      }
+    }
     const item = {
       id: nextPromptId(),
       type: prompt.type || 'checkin',
       payload: prompt.payload ?? null,
       snoozeMs: typeof prompt.snoozeMs === 'number' ? prompt.snoozeMs : null,
       dismissible: prompt.dismissible !== false,
+      coalesceKey,
     }
     set((s) =>
       s.activePrompt

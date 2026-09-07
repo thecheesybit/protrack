@@ -21,7 +21,13 @@ vi.mock('@/services/habitService', () => ({
   toggleHabitToday: vi.fn(() => Promise.resolve()),
 }))
 
-import { missedToday } from '../useHabitReminders.js'
+import {
+  missedToday,
+  habitCueExpiry,
+  snoozeHabitCue,
+  habitSnoozeUsed,
+  __resetHabitSnooze,
+} from '../useHabitReminders.js'
 import { ymd } from '../../lib/dates.js'
 
 // ---------------------------------------------------------------------------
@@ -169,6 +175,79 @@ describe('missedToday', () => {
       doneDates: [],
     }
     expect(missedToday(habit, june15(11))).toBe(2)
+  })
+})
+
+describe('habitCueExpiry', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(june15(12))
+  })
+  afterEach(() => vi.useRealTimers())
+
+  it('cadence cue expires one interval later', () => {
+    expect(habitCueExpiry({ interval: 'every-30m' }, june15(12))).toBe(june15(12, 30).getTime())
+  })
+
+  it('caps a long cadence at 60 minutes', () => {
+    expect(habitCueExpiry({ interval: 'every-2h' }, june15(12))).toBe(june15(13).getTime())
+    expect(habitCueExpiry({ interval: 'every-8h' }, june15(12))).toBe(june15(13).getTime())
+  })
+
+  it('honours customIntervalMin', () => {
+    expect(habitCueExpiry({ interval: 'custom', customIntervalMin: 20 }, june15(12))).toBe(
+      june15(12, 20).getTime(),
+    )
+  })
+
+  it('fixed evening cue expires ~3h after its 7pm band start', () => {
+    expect(habitCueExpiry({ interval: 'evening' }, june15(12))).toBe(june15(22).getTime())
+  })
+
+  it('never expires sooner than 10 minutes from now', () => {
+    // morning band ends 12:00; "now" is also 12:00 → floor to now + 10 min.
+    expect(habitCueExpiry({ interval: 'morning' }, june15(12))).toBe(june15(12, 10).getTime())
+  })
+
+  it('falls back to a 30-minute window for an unknown interval', () => {
+    expect(habitCueExpiry({ interval: 'none' }, june15(12))).toBe(june15(12, 30).getTime())
+  })
+})
+
+describe('snoozeHabitCue — one snooze per habit per day', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(june15(12))
+    __resetHabitSnooze()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    __resetHabitSnooze()
+  })
+
+  it('arms exactly one re-fire, then no-ops', () => {
+    const habit = { id: 'h1', name: 'Water', interval: 'every-1h' }
+    expect(habitSnoozeUsed('h1')).toBe(false)
+
+    snoozeHabitCue('u1', habit)
+    expect(habitSnoozeUsed('h1')).toBe(true)
+    expect(vi.getTimerCount()).toBe(1)
+
+    snoozeHabitCue('u1', habit) // capped — must not arm a second timer
+    expect(vi.getTimerCount()).toBe(1)
+  })
+
+  it('is a no-op without a uid or habit', () => {
+    snoozeHabitCue(null, { id: 'h2' })
+    snoozeHabitCue('u1', null)
+    expect(habitSnoozeUsed('h2')).toBe(false)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('tracks each habit independently', () => {
+    snoozeHabitCue('u1', { id: 'a', interval: 'every-1h' })
+    expect(habitSnoozeUsed('a')).toBe(true)
+    expect(habitSnoozeUsed('b')).toBe(false)
   })
 })
 
