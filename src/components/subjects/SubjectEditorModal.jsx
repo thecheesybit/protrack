@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
+import { useStore } from '@/store/useStore'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { MODE_PALETTE } from '@/lib/constants'
@@ -10,13 +11,18 @@ import { cn } from '@/utils/cn'
 
 export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject, order, onDeleted }) {
   const { user } = useAuth()
-  const modeId = subject?._modeId || propModeId
+  const modes = useStore((s) => s.modes)
   const isEdit = Boolean(subject?.id)
+  const isGlobalScope = (propModeId === 'all' || !propModeId) && !isEdit
+  const initialModeId = subject?._modeId || (propModeId && propModeId !== 'all' ? propModeId : modes[0]?.id)
+  const [selectedModeId, setSelectedModeId] = useState(initialModeId)
   const [draft, setDraft] = useState({ name: '', color: MODE_PALETTE[0], targetHours: 0 })
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (!open) return
+    const mode = subject?._modeId || (propModeId && propModeId !== 'all' ? propModeId : modes[0]?.id)
+    setSelectedModeId(mode)
     setDraft(
       subject
         ? {
@@ -26,21 +32,26 @@ export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject,
           }
         : { name: '', color: MODE_PALETTE[(order || 0) % MODE_PALETTE.length], targetHours: 0 },
     )
-  }, [open, subject, order])
+  }, [open, subject, order, propModeId, modes])
 
   const save = async () => {
     const name = draft.name.trim()
     if (!name) return toast.error('Name your subject')
+    const targetModeId = isEdit ? (subject?._modeId || propModeId) : (isGlobalScope ? selectedModeId : (propModeId || modes[0]?.id))
+    if (!targetModeId || targetModeId === 'all') {
+      return toast.error('Please select a mode for this subject')
+    }
+
     setSaving(true)
     try {
       if (isEdit) {
-        await updateSubject(user.uid, modeId, subject.id, {
+        await updateSubject(user.uid, targetModeId, subject.id, {
           name,
           color: draft.color,
           targetHours: Number(draft.targetHours) || 0,
         })
       } else {
-        await addSubject(user.uid, modeId, {
+        await addSubject(user.uid, targetModeId, {
           name,
           color: draft.color,
           targetHours: Number(draft.targetHours) || 0,
@@ -57,9 +68,10 @@ export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject,
   }
 
   const remove = async () => {
+    const targetModeId = subject?._modeId || propModeId
     setSaving(true)
     try {
-      await deleteSubject(user.uid, modeId, subject.id)
+      await deleteSubject(user.uid, targetModeId, subject.id)
       onDeleted?.(subject.id)
       onClose()
     } catch (err) {
@@ -97,6 +109,33 @@ export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject,
         </>
       }
     >
+      {isGlobalScope && modes?.length > 0 && (
+        <div className="mb-4">
+          <label className="mb-1.5 block text-xs font-medium text-muted">Mode</label>
+          <div className="flex flex-wrap gap-2">
+            {modes.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => setSelectedModeId(m.id)}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all',
+                  selectedModeId === m.id
+                    ? 'border-accent bg-accent/15 text-accent shadow-xs'
+                    : 'border-line bg-surface-2/40 text-muted hover:text-ink',
+                )}
+              >
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ backgroundColor: m.accentColor || '#6366f1' }}
+                />
+                {m.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <label className="mb-1.5 block text-xs font-medium text-muted">Name</label>
       <input
         autoFocus
