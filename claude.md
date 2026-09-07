@@ -43,7 +43,8 @@ src/
 ├─ desktop/               isDesktop, TitleBar
 └─ lib/                   firebase, color, nlParse, time, icons, constants,
                           deadlines (pure helpers), priority (taxonomy),
-                          dates (ymd/streak/lastNDays),
+                          dates (ymd/streak/lastNDays), counts (openItemCounts),
+                          bulkParse (pure range and list parser),
                           dayAgenda (pure day-timeline aggregator: buildDayTimeline/summarizeDay),
                           sound (unified 7-tone bank: playSound(name)/chimeForIslandKind; audioFX is a shim)
 electron/                 main.js, preload.js, (auto-update inline in main)
@@ -141,9 +142,9 @@ Rules (`firestore.rules`): everything under `users/{uid}/**` is owner-only. Hand
 
 ### Gemini function-calling (write access)
 - `src/services/geminiTools.js` exports `TOOL_DECLARATIONS` (Gemini schema) and an `executeTool(name, args, ctx)` dispatcher. Tools call the per-domain services — they never write Firestore directly.
-- Tools: `complete_task`, `set_subject_progress`, `add_subject`, `add_task`, `add_todo`, `mark_todo_done`, `add_timetable_slot`, `toggle_habit_today`, `add_habit`, `set_todo_due`.
+- Tools: `complete_task`, `set_subject_progress`, `add_subject`, `add_task`, `add_tasks_bulk`, `add_todo`, `mark_todo_done`, `add_timetable_slot`, `toggle_habit_today`, `add_habit`, `set_todo_due`.
 - `chatWithGemini(history, contextText, ctx)` loops up to 4 hops, executing tool calls and feeding `functionResponse` back to the model. Returns `{ text, toolEvents }`; `ChatTab` renders the tool events as inline chips below the assistant bubble.
-- **Slash commands** bypass the model entirely: `/done <title> [@subject]`, `/todo <text>`, `/progress <subject> <pct>`, `/habit <name>`, `/task <title> @<subject>`. See `ChatTab.jsx → SLASH_PATTERNS`.
+- **Slash commands** bypass the model entirely: `/done <title> [@subject]`, `/todo <text>`, `/progress <subject> <pct>`, `/habit <name>`, `/task <title> @<subject>`, `/tasks <range/list> @<subject>`. See `ChatTab.jsx → SLASH_PATTERNS`.
 - Adding a tool: declare it in `TOOL_DECLARATIONS`, add a case to `executeTool`, no other changes needed.
 
 ### Intelligent Habit Engine

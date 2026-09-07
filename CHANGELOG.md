@@ -1,5 +1,34 @@
 # Changelog
 
+## v2.2.0 — 2026-09-08
+
+### Added
+- **Per-Subject AI & Voice Bulk Task Entry (P12):**
+  - Interactive `<SubjectQuickAdd />` mounted in `SubjectDetail` above MicroKanban with text input and speech recognition mic button (`useSpeechRecognition`).
+  - Pure deterministic range & list parser (`src/lib/bulkParse.js`): instantly extracts "lesson 18 to 36", "1-5", "chapters 3, 5, 7", "lectures 10-12", or comma/multiline lists into formatted titles.
+  - Single-shot Gemini AI fallback for freeform natural language study prompts when a Gemini key is configured.
+  - Safe confirmation preview modal displaying total task count and removable item chips before committing to Firestore.
+  - Chunked batched creation `addTasksBulk` in `subjectService.js` (chunk size <= 400, single progress recalculation, single ledger entry).
+  - Gemini function-calling tool `add_tasks_bulk` in `geminiTools.js` and `/tasks <spec> @<subject>` slash command in `ChatTab.jsx`.
+- **Raster Forest Sprites on Calendar (P13):**
+  - 9 transparent tree sprites and 3 shrub sprites cropped and downscaled from source sheets with automated script (`scripts/crop_forest_sprites.py`).
+  - High-performance sprite renderer (`ForestSprites.jsx`) with Framer Motion spring pop-in physics.
+  - Integrated into `CalendarForest.jsx` `DayGrove` dynamically mapping to daily completed focus sessions.
+- **Frictionless Quick-Add & Live Open-Items Counter (P11):**
+  - Pure item counter `openItemCounts` (`src/lib/counts.js`) aggregating open to-dos, today's events, and overdue items.
+  - Clickable live counter pill in `TimetableWidget` header jumping directly to day view.
+  - Double-click on empty todo column body or persistent "+ tile" to focus task creation pre-targeted to that column.
+- **Timetable To-Dos & Carry-Forward (P10):**
+  - Compact numbered markers replacing cramped shelf lines in week and day views.
+  - Rich floating `ItemDetailPopover` in the timetable gutter on hover/focus with quick actions.
+  - Display-only carry-forward of overdue incomplete items onto today's view without mutating `dueAt`.
+  - Double-click empty cells in timetable grid to create events at that time slot.
+- **Subjects UX & Add-Anywhere (P9):**
+  - Exhaustive scrollable compact list (no 5-item cap).
+  - Add subject from anywhere with global scope mode picker (`SubjectEditorModal`).
+  - Persistent collapsible two-pane rail in hero view.
+  - Double-click on empty subjects container to add.
+
 ## v2.1.1 — 2026-09-07
 
 ### Added
