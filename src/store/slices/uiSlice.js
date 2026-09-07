@@ -36,6 +36,7 @@ export const createUiSlice = (set) => ({
   aiOpen: false,
   supportOpen: false,
   fullscreen: false,
+  clockCentered: false,
   focusContext: null, // { title, color, subjectId?, slotId? } | null
   fontScale: readInitialFontScale(),
   fontFamily: readInitialFontFamily(),
@@ -46,6 +47,9 @@ export const createUiSlice = (set) => ({
     set((s) => ({
       maximizedWidgetId: s.maximizedWidgetId === id ? null : id,
     })),
+
+  setClockCentered: (clockCentered) => set({ clockCentered }),
+  toggleClockCentered: () => set((s) => ({ clockCentered: !s.clockCentered })),
 
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setAiOpen: (aiOpen) => set({ aiOpen }),

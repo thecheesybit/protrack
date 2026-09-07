@@ -1,0 +1,84 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import {
+  getGeminiKey,
+  setGeminiKey,
+  getApiKey,
+  setApiKey,
+  isRetryableGeminiError,
+  executeGeminiWithModelFallback,
+  GEMINI_MODELS,
+} from '../geminiService'
+
+const storageMock = (() => {
+  let store = {}
+  return {
+    getItem: (key) => store[key] ?? null,
+    setItem: (key, value) => {
+      store[key] = String(value)
+    },
+    removeItem: (key) => {
+      delete store[key]
+    },
+    clear: () => {
+      store = {}
+    },
+  }
+})()
+
+if (typeof globalThis.localStorage === 'undefined') {
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: storageMock,
+    writable: true,
+  })
+}
+
+describe('geminiService Key Persistence & Resilience', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    setGeminiKey('')
+  })
+
+  it('persists Gemini key in localStorage and in-memory cache', () => {
+    setGeminiKey('AIzaSyTestKey123456789')
+    expect(getGeminiKey()).toBe('AIzaSyTestKey123456789')
+    expect(localStorage.getItem('protrack:persistent_gemini_key')).toBe('AIzaSyTestKey123456789')
+
+    // Manually clearing an empty string should clear it
+    setGeminiKey('')
+    expect(getGeminiKey()).toBe('')
+    expect(localStorage.getItem('protrack:persistent_gemini_key')).toBeNull()
+  })
+
+  it('correctly classifies retryable transient Gemini errors', () => {
+    expect(isRetryableGeminiError(new Error('[503] This model is currently experiencing high demand.'))).toBe(true)
+    expect(isRetryableGeminiError({ status: 503, message: 'Service Unavailable' })).toBe(true)
+    expect(isRetryableGeminiError(new Error('Resource has been exhausted (e.g. check quota).'))).toBe(true)
+    expect(isRetryableGeminiError(new Error('404 Not Found'))).toBe(true)
+    expect(isRetryableGeminiError(new Error('Invalid API key'))).toBe(false)
+  })
+
+  it('falls back to alternate model when primary model hits 503 high demand', async () => {
+    setGeminiKey('AIzaSyMockKey')
+
+    const attemptedModels = []
+    const mockTask = vi.fn(async (ai, modelName) => {
+      attemptedModels.push(modelName)
+      if (modelName === 'gemini-2.0-flash') {
+        const err = new Error('[503] This model is currently experiencing high demand.')
+        err.status = 503
+        throw err
+      }
+      return `Success with ${modelName}`
+    })
+
+    const result = await executeGeminiWithModelFallback('AIzaSyMockKey', mockTask)
+    expect(result).toBe('Success with gemini-2.0-flash-lite')
+    expect(attemptedModels[0]).toBe('gemini-2.0-flash')
+    expect(attemptedModels[1]).toBe('gemini-2.0-flash-lite')
+  })
+
+  it('ensures deprecated/overloaded gemini-flash-latest is never in model list', () => {
+    expect(GEMINI_MODELS).not.toContain('gemini-flash-latest')
+    expect(GEMINI_MODELS[0]).toBe('gemini-2.0-flash')
+  })
+})

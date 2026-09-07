@@ -34,12 +34,19 @@ export function FirestoreSyncProvider({ children }) {
   // never on snapshot echoes and never right after a local disable. Seeded per
   // user from the current (localStorage-derived) state inside the effect.
   const prevRemoteLockEnabledRef = useRef(false)
+  const hasInitializedLaunchScopeRef = useRef(false)
 
   useEffect(() => {
     if (!user) return undefined
 
     // Clear any previous sync error when starting new listeners
     setSyncError(null)
+
+    // Launch default: always start in 'all' scope on application launch
+    if (!hasInitializedLaunchScopeRef.current) {
+      hasInitializedLaunchScopeRef.current = true
+      setActiveModeId('all')
+    }
 
     prevRemoteLockEnabledRef.current = Boolean(useStore.getState().lockConfig?.enabled)
 
@@ -52,11 +59,7 @@ export function FirestoreSyncProvider({ children }) {
           // 'all' is the special merged-scope pseudo-mode — always valid.
           const exists = currentActive === 'all' || modes.some((m) => m.id === currentActive)
           if (!currentActive || !exists) {
-            const fallbackId = modes[0].id
-            setActiveModeId(fallbackId)
-            updateActiveMode(user.uid, fallbackId).catch((err) =>
-              console.error('[sync] failed to set active mode fallback', err),
-            )
+            setActiveModeId('all')
           }
         } else {
           if (currentActive !== 'all') {
@@ -71,26 +74,7 @@ export function FirestoreSyncProvider({ children }) {
       user.uid,
       (data) => {
         setUserDoc(data)
-        const saved = data?.settings?.activeModeId
-        if (saved) {
-          const currentModes = useStore.getState().modes
-          // 'all' is the merged-scope pseudo-mode — accept it verbatim.
-          if (saved === 'all') {
-            setActiveModeId('all')
-          } else if (currentModes.length > 0) {
-            if (currentModes.some((m) => m.id === saved)) {
-              setActiveModeId(saved)
-            } else {
-              const fallbackId = currentModes[0].id
-              setActiveModeId(fallbackId)
-              updateActiveMode(user.uid, fallbackId).catch((err) =>
-                console.error('[sync] failed to fallback active mode', err),
-              )
-            }
-          } else {
-            setActiveModeId(saved)
-          }
-        }
+        // Note: launch scope defaults to 'all'; user can switch during active session.
 
         // Account-bound App Lock synchronization from Firestore.
         const hasAppLockField = Boolean(data?.settings && 'appLock' in data.settings)

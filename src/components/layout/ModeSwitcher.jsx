@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Plus, Settings2, Sun, Moon, Settings, LogOut, Heart, Minimize2 } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Plus, Settings2, Sun, Moon, Settings, LogOut, Heart, Minimize2, ChevronRight } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '@/hooks/useAuth'
 import { useTheme } from '@/hooks/useTheme'
@@ -161,6 +161,45 @@ export function ModeSwitcher({ vertical = false }) {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [deletingMode, setDeletingMode] = useState(null)
 
+  // 5s inactivity auto-hide logic for vertical rail
+  const [isRetracted, setIsRetracted] = useState(false)
+  const hideTimerRef = useRef(null)
+
+  const clearHideTimer = () => {
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current)
+      hideTimerRef.current = null
+    }
+  }
+
+  const startHideTimer = () => {
+    clearHideTimer()
+    if (!editorOpen && !deleteModalOpen && !contextMenu.open) {
+      hideTimerRef.current = setTimeout(() => {
+        setIsRetracted(true)
+      }, 5000)
+    }
+  }
+
+  useEffect(() => {
+    if (!editorOpen && !deleteModalOpen && !contextMenu.open) {
+      startHideTimer()
+    } else {
+      clearHideTimer()
+      setIsRetracted(false)
+    }
+    return () => clearHideTimer()
+  }, [editorOpen, deleteModalOpen, contextMenu.open])
+
+  const handleRailMouseEnter = () => {
+    clearHideTimer()
+    setIsRetracted(false)
+  }
+
+  const handleRailMouseLeave = () => {
+    startHideTimer()
+  }
+
   const firstName = (user?.displayName || 'Explorer').split(' ')[0]
 
   // Modes are rendered in their persisted order (mode.order ascending)
@@ -239,77 +278,102 @@ export function ModeSwitcher({ vertical = false }) {
 
   // ── Vertical: unified sidebar rail (DESIGN_SYSTEM.md §5) ──────────────────
   // One continuous glass rail — modes on top, utilities below a hairline —
-  // instead of a stack of disconnected chips.
+  // with 5s auto-retract all the way inside after mouse inactivity.
   if (vertical) {
     const railAction =
       'flex h-12 w-12 items-center justify-center rounded-2xl text-muted transition-all duration-200 hover:scale-105 hover:bg-ink/5 hover:text-ink'
 
     return (
       <>
-        <div className="flex shrink-0 flex-col items-center gap-2 rounded-[1.75rem] border border-line/60 bg-surface/70 px-2 py-3 shadow-premium-md backdrop-blur-xl">
-          <VerticalModePill
-            key="all"
-            mode={allMode}
-            active={activeModeId === 'all'}
-            onSelect={() => selectMode('all')}
-            onEdit={() => openEdit(allMode)}
-          />
+        {/* Invisible edge trigger: hovering near the left screen edge immediately reveals the rail */}
+        {isRetracted && (
+          <div
+            onMouseEnter={handleRailMouseEnter}
+            className="fixed left-0 top-1/4 bottom-1/4 z-30 w-5 flex items-center cursor-pointer group"
+            title="Hover to reveal mode switcher"
+          >
+            <div className="h-20 w-1 rounded-r-full bg-accent/40 transition-all duration-200 group-hover:w-2 group-hover:bg-accent group-hover:shadow-glow-sm" />
+          </div>
+        )}
 
-          {sortedModes.map((mode) => (
+        <div
+          onMouseEnter={handleRailMouseEnter}
+          onMouseLeave={handleRailMouseLeave}
+          className="relative select-none"
+        >
+          <motion.div
+            animate={{
+              x: isRetracted ? -90 : 0,
+              opacity: isRetracted ? 0 : 1,
+              pointerEvents: isRetracted ? 'none' : 'auto',
+            }}
+            transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+            className="relative flex shrink-0 flex-col items-center gap-2 rounded-[1.75rem] border border-line/60 bg-surface/80 px-2 py-3 shadow-premium-md backdrop-blur-xl transition-shadow duration-300"
+          >
             <VerticalModePill
-              key={mode.id}
-              mode={mode}
-              active={mode.id === activeModeId}
-              onSelect={() => selectMode(mode.id)}
-              onEdit={() => openEdit(mode)}
-              onContextMenu={handleContextMenu}
+              key="all"
+              mode={allMode}
+              active={activeModeId === 'all'}
+              onSelect={() => selectMode('all')}
+              onEdit={() => openEdit(allMode)}
             />
-          ))}
 
-          <button onClick={openCreate} title="New mode" className={railAction}>
-            <Plus className="h-6 w-6" />
-          </button>
+            {sortedModes.map((mode) => (
+              <VerticalModePill
+                key={mode.id}
+                mode={mode}
+                active={mode.id === activeModeId}
+                onSelect={() => selectMode(mode.id)}
+                onEdit={() => openEdit(mode)}
+                onContextMenu={handleContextMenu}
+              />
+            ))}
 
-          {/* Hairline between modes and utilities */}
-          <div className="my-1 h-[1px] w-6 bg-line/60" />
-
-          {fullscreen && (
-            <button
-              onClick={() => window.protrack?.window?.toggleFullScreen?.()}
-              title="Exit Full Screen"
-              className="flex h-10 w-10 items-center justify-center rounded-xl text-amber-400 transition-all duration-200 hover:scale-105 hover:bg-amber-500/10 hover:text-amber-500"
-            >
-              <Minimize2 className="h-6 w-6" />
+            <button onClick={openCreate} title="New mode" className={railAction}>
+              <Plus className="h-6 w-6" />
             </button>
-          )}
 
-          <button
-            onClick={toggleTheme}
-            title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
-            className={railAction}
-          >
-            {theme === 'dark' ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
-          </button>
+            {/* Hairline between modes and utilities */}
+            <div className="my-1 h-[1px] w-6 bg-line/60" />
 
-          <button onClick={() => setSettingsOpen(true)} title="Settings" className={railAction}>
-            <Settings className="h-6 w-6" />
-          </button>
+            {fullscreen && (
+              <button
+                onClick={() => window.protrack?.window?.toggleFullScreen?.()}
+                title="Exit Full Screen"
+                className="flex h-10 w-10 items-center justify-center rounded-xl text-amber-400 transition-all duration-200 hover:scale-105 hover:bg-amber-500/10 hover:text-amber-500"
+              >
+                <Minimize2 className="h-6 w-6" />
+              </button>
+            )}
 
-          <button
-            onClick={() => setSupportOpen(true)}
-            title="Support Corner"
-            className="flex h-10 w-10 items-center justify-center rounded-xl text-rose-400 transition-all duration-200 hover:scale-105 hover:bg-rose-500/10 hover:text-rose-500"
-          >
-            <Heart className="h-6 w-6 fill-rose-400/20" />
-          </button>
+            <button
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+              className={railAction}
+            >
+              {theme === 'dark' ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
+            </button>
 
-          <button
-            onClick={signOut}
-            title="Sign out"
-            className="flex h-10 w-10 items-center justify-center rounded-xl text-muted transition-all duration-200 hover:scale-105 hover:bg-red-500/10 hover:text-red-500"
-          >
-            <LogOut className="h-6 w-6" />
-          </button>
+            <button onClick={() => setSettingsOpen(true)} title="Settings" className={railAction}>
+              <Settings className="h-6 w-6" />
+            </button>
+
+            <button
+              onClick={() => setSupportOpen(true)}
+              title="Support Corner"
+              className="flex h-10 w-10 items-center justify-center rounded-xl text-rose-400 transition-all duration-200 hover:scale-105 hover:bg-rose-500/10 hover:text-rose-500"
+            >
+              <Heart className="h-6 w-6 fill-rose-400/20" />
+            </button>
+
+            <button
+              onClick={signOut}
+              title="Sign out"
+              className="flex h-10 w-10 items-center justify-center rounded-xl text-muted transition-all duration-200 hover:scale-105 hover:bg-red-500/10 hover:text-red-500"
+            >
+              <LogOut className="h-6 w-6" />
+            </button>
+          </motion.div>
         </div>
 
         {sharedDialogs}

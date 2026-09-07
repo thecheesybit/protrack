@@ -60,14 +60,13 @@ export function AnalyticsWidget({ widget, variant }) {
 
   const totalHours = Math.round(((stats?.totalFocusMin || 0) / 60) * 10) / 10
 
-  // Hero mode earns the full-bleed gradient KPI cards; the grid stays compact.
-  const statVariant = isHero ? 'hero' : 'compact'
+  // Both normal and hero mode now feature vibrant gradient KPI cards
   const cards = (
     <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-      <StatCard variant={statVariant} tone="rose" icon={<Flame className="h-4 w-4" />} label="Current streak" value={`${stats?.currentStreak || 0}d`} />
-      <StatCard variant={statVariant} tone="sky" icon={<CalendarCheck className="h-4 w-4" />} label="Active days" value={stats?.activeDays?.length || 0} />
-      <StatCard variant={statVariant} tone="violet" icon={<Clock className="h-4 w-4" />} label="Total focus" value={`${totalHours}h`} />
-      <StatCard variant={statVariant} tone="amber" icon={<Trophy className="h-4 w-4" />} label="Longest session" value={`${stats?.longestSessionMin || 0}m`} />
+      <StatCard variant="hero" tone="rose" icon={<Flame className="h-4 w-4" />} label="Current streak" value={`${stats?.currentStreak || 0}d`} />
+      <StatCard variant="hero" tone="sky" icon={<CalendarCheck className="h-4 w-4" />} label="Active days" value={stats?.activeDays?.length || 0} />
+      <StatCard variant="hero" tone="violet" icon={<Clock className="h-4 w-4" />} label="Total focus" value={`${totalHours}h`} />
+      <StatCard variant="hero" tone="amber" icon={<Trophy className="h-4 w-4" />} label="Longest session" value={`${stats?.longestSessionMin || 0}m`} />
     </div>
   )
 
@@ -77,25 +76,24 @@ export function AnalyticsWidget({ widget, variant }) {
       variant={variant}
       subtitle={`${stats?.activeDays?.length || 0} active days`}
     >
-      {isHero ? (
-        <div className="flex h-full flex-col gap-4">
-          {cards}
-          <Suspense
-            fallback={
-              <div className="flex flex-1 items-center justify-center">
-                <Spinner className="h-6 w-6" />
-              </div>
-            }
-          >
-            <AnalyticsCharts perDay={perDay} perHour={perHour} today={today} stats={stats} />
-          </Suspense>
-        </div>
-      ) : (
-        <div className="flex flex-1 flex-col gap-2">
-          {cards}
-          <p className="mt-auto text-center text-[10px] text-muted/70">Maximize for charts</p>
-        </div>
-      )}
+      <div className="flex h-full min-h-0 flex-1 flex-col gap-3">
+        {cards}
+        <Suspense
+          fallback={
+            <div className="flex flex-1 items-center justify-center">
+              <Spinner className="h-6 w-6" />
+            </div>
+          }
+        >
+          <AnalyticsCharts
+            perDay={perDay}
+            perHour={perHour}
+            today={today}
+            stats={stats}
+            compact={!isHero}
+          />
+        </Suspense>
+      </div>
     </WidgetFrame>
   )
 }

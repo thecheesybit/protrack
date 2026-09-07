@@ -17,9 +17,12 @@ import { ZenOverlay } from '@/components/common/ZenOverlay'
 import { DynamicIsland } from '@/components/island/DynamicIsland'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { Spinner } from '@/components/ui/Spinner'
-import { Sparkles } from 'lucide-react'
+import { Sparkles, Layers, ChevronDown } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
 import { Logo } from '@/components/common/Logo'
+import { getIcon } from '@/lib/icons'
+import { updateActiveMode } from '@/services/userService'
 import { ModeSwitcher } from './ModeSwitcher'
 import { BoardCanvas } from './BoardCanvas'
 import { FocusPanel } from '@/components/focus/FocusPanel'
@@ -69,6 +72,7 @@ export function Dashboard() {
   const setHandsFreeActive = useStore((s) => s.setHandsFreeActive)
   const handsFreeStatus = useStore((s) => s.handsFreeStatus)
   const handsFreeFeedback = useStore((s) => s.handsFreeFeedback)
+  const clockCentered = useStore((s) => s.clockCentered)
 
   const clickCountRef = useRef(0)
   const clickTimerRef = useRef(null)
@@ -133,12 +137,24 @@ export function Dashboard() {
       }
 
       if (e.key === 'Escape') {
-        if (st.focusContext) st.closeFocus()
+        if (st.clockCentered) st.setClockCentered(false)
+        else if (st.focusContext) st.closeFocus()
         else if (st.aiOpen) st.setAiOpen(false)
         else if (st.settingsOpen) st.setSettingsOpen(false)
         else if (st.supportOpen) st.setSupportOpen(false)
         else if (st.maximizedWidgetId) st.restoreWidgets()
         else if (st.fullscreen) window.protrack?.window?.toggleFullScreen?.()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 't') {
+        if (
+          e.target.tagName === 'INPUT' ||
+          e.target.tagName === 'TEXTAREA' ||
+          e.target.isContentEditable
+        ) {
+          return
+        }
+        e.preventDefault()
+        useStore.getState().toggleClockCentered()
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
@@ -188,21 +204,38 @@ export function Dashboard() {
       {!focusLocked && (
         <>
           <div className={cn(
-            "mx-auto flex h-full w-full flex-col transition-all duration-300",
-            fullscreen ? "max-w-7xl px-6 py-4" : "max-w-7xl px-4 py-4 sm:px-6"
+            "flex h-full w-full flex-col transition-all duration-300",
+            fullscreen ? "px-5 py-3.5" : "px-3.5 py-3 sm:px-4 lg:px-5"
           )}>
-            {/* User Profile / Welcome Section — fixed on the top left */}
-            <div className="fixed left-3.5 top-3.5 z-20 flex items-center gap-3 select-none">
-              <Logo className="h-10 w-10 shrink-0 drop-shadow-sm" />
-              <DynamicBranding firstName={firstName} displayName={user?.displayName} />
+            {/* User Profile / Welcome Section & Selected Scope — fixed on the top left */}
+            <div className={cn(
+              "fixed left-3.5 top-3.5 z-20 flex flex-col gap-1.5 select-none transition-opacity duration-300",
+              clockCentered && "opacity-30 pointer-events-none"
+            )}>
+              <div className="flex items-center gap-3">
+                <Logo className="h-10 w-10 shrink-0 drop-shadow-sm" />
+                <DynamicBranding firstName={firstName} displayName={user?.displayName} />
+              </div>
+              <div className="pl-[52px]">
+                <SelectedScopeIndicator />
+              </div>
             </div>
 
             {/* Floating scope switcher — fixed on the far left, vertically centered */}
-            <div className="fixed left-3 top-1/2 z-20 -translate-y-1/2">
+            <div className={cn(
+              "fixed left-3 top-1/2 z-20 -translate-y-1/2 transition-opacity duration-300",
+              clockCentered && "opacity-20 pointer-events-none"
+            )}>
               <ModeSwitcher vertical />
             </div>
 
-            <main className="min-h-0 flex-1 pl-16">
+            {/* Main workspace containers A (Timetable, To-dos, Bottom Dock) — disappears on Ctrl+T */}
+            <main
+              className={cn(
+                "min-h-0 flex-1 pl-16 sm:pl-64 lg:pl-[272px] pr-8 sm:pr-14 lg:pr-[6%] transition-all duration-500 ease-out",
+                clockCentered && "pointer-events-none opacity-0 scale-[0.97]"
+              )}
+            >
               {modesLoading ? (
                 <div className="flex h-full items-center justify-center">
                   <Spinner className="h-8 w-8" />
@@ -215,12 +248,13 @@ export function Dashboard() {
             </main>
           </div>
 
-          {/* Floating AI companion — recedes into a minimal trigger during focus */}
+          {/* Floating AI companion — recedes into a minimal trigger during focus or clock mode */}
           <motion.button
             onClick={handleAiButtonClick}
             animate={{
-              scale: immersive ? 0.82 : 1,
-              opacity: immersive ? 0.45 : 1,
+              scale: clockCentered ? 0.7 : (immersive ? 0.82 : 1),
+              opacity: clockCentered ? 0 : (immersive ? 0.45 : 1),
+              pointerEvents: clockCentered ? 'none' : 'auto',
             }}
             whileHover={{ scale: immersive ? 0.95 : 1.05, opacity: 1 }}
             whileTap={{ scale: 0.92 }}
@@ -433,6 +467,170 @@ function DynamicBranding({ firstName, displayName }) {
       <p className="text-[10px] font-semibold text-muted uppercase tracking-widest leading-none mt-1 min-h-[10px]">
         Workspace
       </p>
+    </div>
+  )
+}
+
+/**
+ * Prominently displays the currently selected execution scope (mode)
+ * on the dashboard with a live indicator, mode accent tint, and quick switcher dropdown.
+ */
+function SelectedScopeIndicator() {
+  const modes = useStore((s) => s.modes)
+  const activeModeId = useStore((s) => s.activeModeId)
+  const setActiveModeId = useStore((s) => s.setActiveModeId)
+  const { user } = useAuth()
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const dropdownRef = useRef(null)
+
+  const activeMode = modes.find((m) => m.id === activeModeId) || 
+    (activeModeId === 'all' ? { id: 'all', name: 'All Scopes', icon: 'Layers', accentColor: '#6366f1' } : null)
+
+  const scopeName = activeMode ? activeMode.name : 'No Scope'
+  const accentColor = activeMode?.accentColor || 'rgb(var(--accent))'
+  const Icon = activeMode ? getIcon(activeMode.icon) : Layers
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setDropdownOpen(false)
+      }
+    }
+    if (dropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [dropdownOpen])
+
+  const handleSelectScope = async (mode) => {
+    setDropdownOpen(false)
+    if (mode.id === activeModeId) return
+    if (user?.uid) {
+      try {
+        await updateActiveMode(user.uid, mode.id)
+      } catch (err) {
+        console.warn('[scope] update active mode failed:', err)
+      }
+    }
+    setActiveModeId(mode.id)
+    toast.success(`Switched scope to ${mode.name}`, { icon: '🎯' })
+  }
+
+  return (
+    <div ref={dropdownRef} className="relative">
+      {/* Scope Pill */}
+      <button
+        type="button"
+        onClick={() => setDropdownOpen((prev) => !prev)}
+        className="flex items-center gap-2 rounded-2xl border border-line/70 bg-surface/85 px-3 py-1.5 shadow-glass backdrop-blur-xl transition-all duration-200 hover:scale-[1.02] hover:border-accent/50 hover:bg-surface group cursor-pointer text-left select-none"
+        title={`Current Scope: ${scopeName} · Click to switch`}
+        aria-label={`Current execution scope: ${scopeName}`}
+      >
+        <div
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-110 shadow-sm"
+          style={{ backgroundColor: `${accentColor}26`, color: accentColor }}
+        >
+          <Icon className="h-3.5 w-3.5" />
+        </div>
+        <div className="flex flex-col min-w-0 pr-0.5">
+          <div className="flex items-center gap-1.5">
+            <span
+              className="h-1.5 w-1.5 rounded-full animate-pulse shrink-0"
+              style={{ backgroundColor: accentColor }}
+            />
+            <span className="text-[9px] font-extrabold uppercase tracking-widest text-muted/80 leading-none">
+              Selected Scope
+            </span>
+          </div>
+          <span
+            className="text-xs font-bold leading-tight truncate max-w-[140px]"
+            style={{ color: accentColor }}
+          >
+            {scopeName}
+          </span>
+        </div>
+        <ChevronDown
+          className={cn(
+            'h-3.5 w-3.5 text-muted/70 transition-transform duration-200 group-hover:text-ink',
+            dropdownOpen && 'rotate-180 text-accent'
+          )}
+        />
+      </button>
+
+      {/* Dropdown Menu */}
+      <AnimatePresence>
+        {dropdownOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 6, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 4, scale: 0.95 }}
+            transition={{ duration: 0.15 }}
+            className="absolute left-0 top-full mt-2 z-50 w-56 rounded-2xl border border-line/70 bg-surface/95 p-1.5 shadow-glass backdrop-blur-2xl"
+          >
+            <div className="px-2.5 py-1.5 border-b border-line/40 mb-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted">
+                Switch Execution Scope
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-1 max-h-60 overflow-y-auto pr-0.5">
+              <button
+                type="button"
+                onClick={() => handleSelectScope({ id: 'all', name: 'All Scopes' })}
+                className={cn(
+                  'flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs font-medium transition-all text-left w-full',
+                  activeModeId === 'all'
+                    ? 'bg-accent/15 text-accent font-bold'
+                    : 'text-ink/80 hover:bg-surface-2 hover:text-ink'
+                )}
+              >
+                <div className="flex h-5 w-5 items-center justify-center rounded-lg bg-indigo-500/20 text-indigo-400">
+                  <Layers className="h-3 w-3" />
+                </div>
+                <span className="truncate flex-1">All Scopes</span>
+                {activeModeId === 'all' && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                )}
+              </button>
+
+              {modes.map((mode) => {
+                const ModeIcon = getIcon(mode.icon)
+                const isCurrent = mode.id === activeModeId
+                return (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    onClick={() => handleSelectScope(mode)}
+                    className={cn(
+                      'flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs font-medium transition-all text-left w-full',
+                      isCurrent
+                        ? 'bg-accent/15 text-accent font-bold'
+                        : 'text-ink/80 hover:bg-surface-2 hover:text-ink'
+                    )}
+                  >
+                    <div
+                      className="flex h-5 w-5 items-center justify-center rounded-lg"
+                      style={{
+                        backgroundColor: `${mode.accentColor || '#6366f1'}20`,
+                        color: mode.accentColor || '#6366f1',
+                      }}
+                    >
+                      <ModeIcon className="h-3 w-3" />
+                    </div>
+                    <span className="truncate flex-1">{mode.name}</span>
+                    {isCurrent && (
+                      <span
+                        className="h-1.5 w-1.5 rounded-full"
+                        style={{ backgroundColor: mode.accentColor || 'var(--accent)' }}
+                      />
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

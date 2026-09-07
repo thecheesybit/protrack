@@ -13,7 +13,7 @@ import { cn } from '@/utils/cn'
  * makes the transform a containing block and crushes the modal into that
  * element's box — the bug that squished the mode editor into a left-edge strip.
  */
-export function Modal({ open, onClose, title, children, className, footer }) {
+export function Modal({ open, onClose, title, children, className, footer, headerExtra }) {
   if (typeof document === 'undefined') return null
   return createPortal(
     <AnimatePresence>
@@ -41,13 +41,16 @@ export function Modal({ open, onClose, title, children, className, footer }) {
             {title && (
               <div className="flex items-center justify-between border-b border-line/60 px-5 py-4">
                 <h3 className="font-semibold">{title}</h3>
-                <button
-                  onClick={onClose}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-ink"
-                  aria-label="Close"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  {headerExtra}
+                  <button
+                    onClick={onClose}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+                    aria-label="Close"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             )}
             <div className="p-5">{children}</div>

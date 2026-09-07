@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { GripHorizontal } from 'lucide-react'
 import { useStore } from '@/store/useStore'
+import { cn } from '@/utils/cn'
 
 /**
  * Floating flip-card clock — draggable, resizable, visible on ALL screen sizes.
@@ -41,6 +42,19 @@ export function getDefaultPos(currentScale = DEFAULT_SCALE) {
   // Aligned with the sidebar icons rail (left-6 = 24px)
   const defaultX = 24
   return { x: defaultX, y: defaultY }
+}
+
+export const CENTERED_SCALE = 3.5
+
+export function getCenteredPos(currentScale = CENTERED_SCALE) {
+  const scaledWidth = BASE_CLOCK_WIDTH * currentScale
+  const scaledHeight = BASE_CLOCK_HEIGHT * currentScale
+  const winW = typeof window !== 'undefined' ? window.innerWidth : 1200
+  const winH = typeof window !== 'undefined' ? window.innerHeight : 800
+  return {
+    x: Math.max(0, (winW - scaledWidth) / 2),
+    y: Math.max(0, (winH - scaledHeight) / 2),
+  }
 }
 
 export function readInitialMode() {
@@ -146,6 +160,25 @@ export function FlipClock() {
   const fullscreen = useStore((s) => s.fullscreen)
   const focusRunning = useStore((s) => s.status === 'running')
   const focusLocked = useStore((s) => s.focusLocked)
+  const clockCentered = useStore((s) => s.clockCentered)
+  const toggleClockCentered = useStore((s) => s.toggleClockCentered)
+
+  // Track window dimensions for dynamic centering
+  const [winSize, setWinSize] = useState(() => ({
+    w: typeof window !== 'undefined' ? window.innerWidth : 1200,
+    h: typeof window !== 'undefined' ? window.innerHeight : 800,
+  }))
+
+  useEffect(() => {
+    const onResize = () => {
+      setWinSize({
+        w: window.innerWidth,
+        h: window.innerHeight,
+      })
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   // Keep refs in sync for handlers to prevent stale closure issues
   const posRef   = useRef(pos)
@@ -160,6 +193,18 @@ export function FlipClock() {
   const resizeStart = useRef({ px: 0, py: 0, os: 1, pressed: false })
   const clockRef    = useRef(null)
   const gripRef     = useRef(null)
+
+  // Base clock layout dimensions for pixel-perfect centering
+  const baseW = clockRef.current?.offsetWidth || 180
+  const baseH = clockRef.current?.offsetHeight || 92
+
+  // Calculate centered coordinates
+  const centeredX = Math.max(0, (winSize.w - baseW * CENTERED_SCALE) / 2)
+  const centeredY = Math.max(0, (winSize.h - baseH * CENTERED_SCALE) / 2)
+
+  const targetX = clockCentered ? centeredX : pos.x
+  const targetY = clockCentered ? centeredY : pos.y
+  const targetScale = clockCentered ? CENTERED_SCALE : scale
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -212,6 +257,7 @@ export function FlipClock() {
   /* ── Body drag (move) ──────────────────────────────── */
 
   const handlePointerDown = useCallback((e) => {
+    if (clockCentered) return
     if (e.button !== 0) return
     // Don't start a body drag if the grip is initiating a resize
     if (resizing.current) return
@@ -219,7 +265,7 @@ export function FlipClock() {
     dragStart.current = { px: e.clientX, py: e.clientY, ox: posRef.current.x, oy: posRef.current.y, pressed: true }
     const el = clockRef.current
     if (el) el.setPointerCapture(e.pointerId)
-  }, [])
+  }, [clockCentered])
 
   const handlePointerMove = useCallback((e) => {
     const ds = dragStart.current
@@ -251,6 +297,7 @@ export function FlipClock() {
   /* ── Grip resize (scale) ───────────────────────────── */
 
   const handleGripPointerDown = useCallback((e) => {
+    if (clockCentered) return
     if (e.button !== 0) return
     e.stopPropagation() // prevent body drag from starting
     resizing.current = true
@@ -262,7 +309,7 @@ export function FlipClock() {
     }
     const el = gripRef.current
     if (el) el.setPointerCapture(e.pointerId)
-  }, [])
+  }, [clockCentered])
 
   const handleGripPointerMove = useCallback((e) => {
     const rs = resizeStart.current
@@ -288,6 +335,7 @@ export function FlipClock() {
   /* ── Wheel resize ──────────────────────────── */
 
   const handleWheel = useCallback((e) => {
+    if (clockCentered) return
     setScale((prev) => {
       // Flipped: scroll down (deltaY > 0) zooms in, scroll up (deltaY < 0) zooms out
       const ds = e.deltaY > 0 ? 0.05 : -0.05
@@ -296,12 +344,16 @@ export function FlipClock() {
       try { localStorage.setItem(SCALE_KEY, next.toString()) } catch { /* private mode */ }
       return next
     })
-  }, [])
+  }, [clockCentered])
 
-  /* ── Double-click: toggle pin / auto-hide ─────────── */
+  /* ── Double-click: toggle pin / auto-hide or return from centered ─── */
 
-  const toggleMode = useCallback(() => {
+  const handleDoubleClick = useCallback(() => {
     if (dragging.current) return // was a drag, not a dbl-click
+    if (clockCentered) {
+      toggleClockCentered()
+      return
+    }
     setMode((prev) => {
       const next = prev === 'pinned' ? 'auto' : 'pinned'
       try { localStorage.setItem(MODE_KEY, next) } catch { /* private mode */ }
@@ -312,43 +364,56 @@ export function FlipClock() {
       )
       return next
     })
-  }, [])
+  }, [clockCentered, toggleClockCentered])
 
   /* ── Visibility ────────────────────────────────────── */
 
-  const hiddenByAuto = mode === 'auto' && !focusLocked && (chromeHidden || fullscreen || focusRunning)
+  const hiddenByAuto = !clockCentered && mode === 'auto' && !focusLocked && (chromeHidden || fullscreen || focusRunning)
 
   return (
-    <AnimatePresence>
+    <>
+      <AnimatePresence>
       {!hiddenByAuto && (
         <motion.div
           ref={clockRef}
           key="flip-clock"
           initial={{ opacity: 0, scale: 0.9 * scale }}
-          animate={{ opacity: 1, scale }}
+          animate={{
+            opacity: 1,
+            scale: targetScale,
+            left: targetX,
+            top: targetY,
+          }}
           exit={{ opacity: 0, scale: 0.9 * scale }}
           transition={{
             opacity: { duration: 0.35, ease: [0.2, 0, 0, 1] },
-            scale: { type: 'spring', stiffness: 480, damping: 38 },
+            scale: { type: 'spring', stiffness: 320, damping: 28 },
+            left: { type: 'spring', stiffness: 320, damping: 28 },
+            top: { type: 'spring', stiffness: 320, damping: 28 },
           }}
-          onDoubleClick={toggleMode}
+          onDoubleClick={handleDoubleClick}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
           onWheel={handleWheel}
           title={
-            mode === 'pinned'
-              ? 'Double-click to enable auto-hide · Drag to move · Drag grip or scroll to resize'
-              : 'Double-click to pin clock · Drag to move · Drag grip or scroll to resize'
+            clockCentered
+              ? 'Desk Clock Mode · Press Ctrl+T, Esc, or double-click to return'
+              : mode === 'pinned'
+              ? 'Double-click to enable auto-hide · Drag to move · Scroll/grip to resize · Ctrl+T to center'
+              : 'Double-click to pin clock · Drag to move · Scroll/grip to resize · Ctrl+T to center'
           }
-          className="fixed z-[55] flex cursor-grab select-none flex-col items-center gap-2 rounded-2xl border border-line/50 bg-surface/40 px-3 py-3 shadow-glass backdrop-blur-xl transition-colors hover:border-accent/40 active:cursor-grabbing touch-none group"
+          className={cn(
+            "fixed z-[55] flex w-[180px] select-none flex-col items-center gap-2 rounded-2xl border bg-surface/80 px-3 py-3 shadow-glass backdrop-blur-xl transition-colors touch-none group",
+            clockCentered
+              ? "cursor-default border-accent/40 shadow-glow ring-1 ring-accent/25"
+              : "cursor-grab border-line/50 hover:border-accent/40 active:cursor-grabbing"
+          )}
           style={{
-            left: pos.x,
-            top: pos.y,
             transformOrigin: 'top left',
           }}
-          aria-label={`Flip clock — ${mode} mode (double-click to toggle, drag to move, drag grip to resize)`}
+          aria-label={`Flip clock — ${clockCentered ? 'Centered' : mode} mode`}
         >
           <div className="flex items-center gap-1">
             <Digit value={t.h1} />
@@ -365,29 +430,71 @@ export function FlipClock() {
             <span className="text-[11px] font-medium text-muted/90">{t.dateLabel}</span>
           </div>
 
-          {/* Mode indicator dot */}
-          <span
-            className={`absolute right-2 top-2 h-1.5 w-1.5 rounded-full ${
-              mode === 'pinned' ? 'bg-accent' : 'bg-muted/50'
-            }`}
-            title={mode === 'pinned' ? 'Pinned' : 'Auto-hide'}
-          />
+          {/* Mode indicator dot (hidden in centered mode) */}
+          {!clockCentered && (
+            <span
+              className={`absolute right-2 top-2 h-1.5 w-1.5 rounded-full ${
+                mode === 'pinned' ? 'bg-accent' : 'bg-muted/50'
+              }`}
+              title={mode === 'pinned' ? 'Pinned' : 'Auto-hide'}
+            />
+          )}
 
-          {/* Bottom-right resize grip — visible on hover */}
-          <div
-            ref={gripRef}
-            onPointerDown={handleGripPointerDown}
-            onPointerMove={handleGripPointerMove}
-            onPointerUp={handleGripPointerUp}
-            onPointerCancel={handleGripPointerUp}
-            onDoubleClick={(e) => e.stopPropagation()} // don't toggle mode from grip
-            title="Drag to resize"
-            className="absolute -bottom-2 -right-2 flex h-5 w-5 cursor-nwse-resize items-center justify-center rounded-full border border-line bg-surface-2 text-muted opacity-0 shadow-sm transition-opacity group-hover:opacity-100 hover:text-ink hover:border-accent"
-          >
-            <GripHorizontal className="h-2.5 w-2.5 rotate-45" />
-          </div>
+          {/* Bottom-right resize grip — visible on hover when not centered */}
+          {!clockCentered && (
+            <div
+              ref={gripRef}
+              onPointerDown={handleGripPointerDown}
+              onPointerMove={handleGripPointerMove}
+              onPointerUp={handleGripPointerUp}
+              onPointerCancel={handleGripPointerUp}
+              onDoubleClick={(e) => e.stopPropagation()} // don't toggle mode from grip
+              title="Drag to resize"
+              className="absolute -bottom-2 -right-2 flex h-5 w-5 cursor-nwse-resize items-center justify-center rounded-full border border-line bg-surface-2 text-muted opacity-0 shadow-sm transition-opacity group-hover:opacity-100 hover:text-ink hover:border-accent"
+            >
+              <GripHorizontal className="h-2.5 w-2.5 rotate-45" />
+            </div>
+          )}
+
         </motion.div>
       )}
     </AnimatePresence>
+
+    {/* Return hint badge — centered at the bottom of the screen */}
+    <AnimatePresence>
+      {clockCentered && (
+        <div
+          style={{
+            position: 'fixed',
+            left: 0,
+            right: 0,
+            bottom: '28px',
+            zIndex: 60,
+            display: 'flex',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+          }}
+        >
+          <motion.button
+            key="clock-centered-hint"
+            type="button"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
+            onClick={toggleClockCentered}
+            className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-white/10 bg-surface/90 px-4 py-1.5 text-[11px] font-medium tracking-wide text-muted shadow-glass backdrop-blur-xl transition-all hover:border-accent/40 hover:bg-surface hover:text-ink hover:scale-105 cursor-pointer select-none"
+            title="Click or press Ctrl+T / Esc to return to dashboard"
+          >
+            <span>Press</span>
+            <kbd className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-accent font-bold">
+              Ctrl + T
+            </kbd>
+            <span>or Esc to return</span>
+          </motion.button>
+        </div>
+      )}
+    </AnimatePresence>
+    </>
   )
 }

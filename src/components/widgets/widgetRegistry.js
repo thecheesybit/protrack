@@ -7,6 +7,7 @@ export const WIDGETS = [
   { id: 'focus', title: 'Deep Focus', icon: 'Timer', span: '' },
   { id: 'notes', title: 'Notes', icon: 'StickyNote', span: '' },
   { id: 'subjects', title: 'Subjects', icon: 'Layers', span: '' },
+  { id: 'scorecard', title: 'Scorecard', icon: 'GraduationCap', span: 'lg:col-span-2' },
   { id: 'analytics', title: 'Analytics', icon: 'BarChart3', span: 'lg:col-span-2' },
   { id: 'ledger', title: 'History', icon: 'Trophy', span: '' },
 ]

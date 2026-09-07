@@ -3,7 +3,9 @@ import {
   BASE_CLOCK_WIDTH,
   BASE_CLOCK_HEIGHT,
   DEFAULT_SCALE,
+  CENTERED_SCALE,
   getDefaultPos,
+  getCenteredPos,
   readInitialPos,
   readInitialScale,
 } from '../FlipClock'
@@ -78,5 +80,14 @@ describe('FlipClock defaults and positioning', () => {
     const scaledHeight = BASE_CLOCK_HEIGHT * DEFAULT_SCALE
     expect(scaledWidth).toBe(210)
     expect(scaledHeight).toBe(110)
+  })
+
+  it('calculates exact centered position and scale for Ctrl+T zen desk clock mode', () => {
+    expect(CENTERED_SCALE).toBe(3.5)
+    const pos = getCenteredPos(3.5)
+    // Scaled width = 168 * 3.5 = 588. Window width = 1536. (1536 - 588) / 2 = 474
+    expect(pos.x).toBeCloseTo(474, 1)
+    // Scaled height = 88 * 3.5 = 308. Window height = 825. (825 - 308) / 2 = 258.5
+    expect(pos.y).toBeCloseTo(258.5, 1)
   })
 })
