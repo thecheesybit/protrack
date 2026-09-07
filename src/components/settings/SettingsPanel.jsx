@@ -59,6 +59,7 @@ import {
   readChronoOverride,
 } from '@/hooks/useChronoTheme'
 import { ensureNotificationPermission } from '@/lib/notify'
+import { soundsEnabled, setSoundsEnabled } from '@/lib/sound'
 import { isDesktop, desktopBridge } from '@/desktop/isDesktop'
 import { CHANGELOG } from '@/content/changelog'
 import { CREATOR } from '@/lib/constants'
@@ -189,7 +190,7 @@ export function SettingsPanel() {
   const [keyInput, setKeyInput] = useState('')
   const [hydration, setHydration] = useState(60)
   const [notifOn, setNotifOn] = useState(false)
-  const [soundsOn, setSoundsOn] = useState(() => localStorage.getItem('protrack:sounds') !== 'false')
+  const [soundsOn, setSoundsOn] = useState(() => soundsEnabled())
   const [appInfo, setAppInfo] = useState(null)
 
   // Deep Focus video
@@ -439,9 +440,9 @@ export function SettingsPanel() {
   const toggleSounds = () => {
     const next = !soundsOn
     setSoundsOn(next)
-    // Save to both keys to be safe and compatible with different parts of the sound subsystem
-    localStorage.setItem('protrack:sounds', next ? 'true' : 'false')
-    localStorage.setItem('protrack:sounds_enabled', next ? 'true' : 'false')
+    // One canonical key; setSoundsEnabled mirrors the legacy flag so every
+    // part of the sound subsystem (incl. audioEngine) stays in sync.
+    setSoundsEnabled(next)
   }
 
   const handleConnectCal = async () => {
