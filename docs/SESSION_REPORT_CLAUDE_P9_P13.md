@@ -157,41 +157,54 @@ $$\text{P9} \longrightarrow \text{P10} \longrightarrow \text{P11} \longrightarro
 
 ## 4. Git History & Merge Graph
 
-The sequence was fast-forward merged cleanly into `development`:
+The sequence was merged cleanly into `development`:
 
 ```
 b86861a (origin/development)
-└── c795bc1 feat(p9): exhaustive subjects list, add-from-anywhere, persistent collapsible rail
-    └── b393d36 feat(p10): timetable to-dos — compact markers, side detail popover, carry-forward
-        └── 75deb5c feat(p11): frictionless quick-add + open-items counter
-            └── 58d9919 feat(p13): raster forest sprites on calendar day baseline
-                └── 18747ef feat(p12): per-subject AI/voice bulk task entry
-                    └── bf99655 docs(v2.1): document P9-P13 completions in roadmap, architecture blueprint, and changelog
+├── c795bc1 feat(p9): exhaustive subjects list, add-from-anywhere, persistent collapsible rail
+├── b393d36 feat(p10): timetable to-dos — compact markers, side detail popover, carry-forward
+├── 75deb5c feat(p11): frictionless quick-add + open-items counter
+├── 58d9919 feat(p13): raster forest sprites on calendar day baseline
+├── 18747ef feat(p12): per-subject AI/voice bulk task entry
+├── bf99655 docs(v2.1): document P9-P13 completions in roadmap, architecture blueprint, and changelog
+├── 7174db5 wip(scorecard): preserve exam scorecards feature work in progress (branch feat/scorecard-wip)
+├── 713734b docs(v2.1): add Claude session report for P9-P13 completions
+└── 0275011 Merge branch 'feat/scorecard-wip' into development
 ```
 
 ---
 
 ## 5. Automated Verification Results
 
-All quality gates passed with zero regressions:
+All quality gates passed on the unified `development` branch with zero regressions:
 
 | Gate | Target / Command | Result |
 |---|---|---|
-| **Lint** | `npm run lint` | **0 errors**, 73 warnings (pre-existing unused vars only) |
-| **Unit Tests** | `npm test` | **95 passed (95)**, **1712 tests passed (100% green)** |
-| **Web Build** | `npm run build` | Built in 12.78s (`dist/` packaged cleanly) |
+| **Lint** | `npm run lint` | **0 errors**, 73 warnings (zero syntax or blocking lint errors) |
+| **Unit Tests** | `npm test` | **20 test files passed (20)**, **308 unit tests passed (100% green)** |
+| **Web Build** | `npm run build` | Built in 12.38s (`dist/` packaged cleanly) |
 | **Electron Build** | `$env:ELECTRON="true"; npx vite build` | Renderer + `dist-electron/main.js` + `dist-electron/preload.cjs` succeeded |
 
 ---
 
-## 6. Scorecard WIP Context for Future Sessions
+## 6. Workspace & Exam Scorecard Integration (Ctrl + T & WIP Edits)
 
-During this session, an uncommitted work-in-progress feature related to **Exam Scorecards** (`ScorecardWidget.jsx`, `scorecardService.js`, `examService.js`, `scorecardParser.js`, etc.) was identified in the working tree. 
+Per user request to ensure no active development edits or hotkeys are missed, the working tree changes were merged into `development`:
 
-To prevent conflicts and ensure `development` remains pristine for the P9–P13 release:
-- All scorecard WIP changes and additions were safely committed to a dedicated branch:
-  `feat/scorecard-wip` (commit `7174db5: wip(scorecard): preserve exam scorecards feature work in progress`).
-- In any future session working on the Scorecards feature, Claude can simply check out or rebase `feat/scorecard-wip` onto `development`.
+1. **`Ctrl + T` Workspace Toggle (`Dashboard.jsx`):**
+   - In `src/components/layout/Dashboard.jsx:82`, a global keyboard listener catches `(e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 't'`.
+   - In hero and expanded modes, this hotkey toggles `workspaceVisible`, allowing quick toggling of the timetable and tasks container.
+2. **Exam Scorecard Suite:**
+   - Widgets & UI: `src/components/widgets/ScorecardWidget.jsx`, `ScorecardDetailModal.jsx`, `ScorecardCharts.jsx`, `ScorecardAiCoach.jsx`, `ExamEditorModal.jsx`.
+   - Services & Parsers: `src/services/scorecardService.js`, `examService.js`, `scorecardParser.js`.
+   - Tests: `src/services/__tests__/scorecardParser.test.js`, `src/services/__tests__/examService.test.js`.
+3. **Common & Canvas Enhancements:**
+   - `FlipClock.jsx` (with unit tests in `src/components/common/__tests__/FlipClock.test.js`).
+   - `HealthRings.jsx` canvas component for wellness metrics.
+   - `ModeSwitcher.jsx` and `BoardCanvas.jsx` layout refinements.
+   - Dependency: Added `html-to-image` in `package.json` for scorecard sharing/export.
+4. **Resilience Fixes:**
+   - Fixed empty catch blocks in `src/services/geminiService.js` to satisfy the ESLint `no-empty` rule.
 
 ---
 
