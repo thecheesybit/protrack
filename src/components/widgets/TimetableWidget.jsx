@@ -32,6 +32,12 @@ function toDate(ts) {
   return new Date(ts)
 }
 
+// Kanban tasks are stored per-subject with no app-wide subscription (free-tier:
+// no collectionGroup listener). The day timeline accepts a `tasks` array; a
+// future phase can feed real cards here once an aggregated source exists.
+// TODO(P8): wire aggregated kanban tasks with due dates into the day view.
+const DAY_TASKS = []
+
 function CompactStats({ sessions, stats }) {
   const todayMins = useMemo(() => {
     const key = ymd()
@@ -369,6 +375,7 @@ export function TimetableWidget({ widget, variant }) {
                 slots={slots}
                 events={eventTodos}
                 dateTasks={chipTodos}
+                tasks={DAY_TASKS}
                 noteDeadlines={noteDeadlines}
                 onOpenNote={setPeekNote}
                 allTodos={activeTodos}
