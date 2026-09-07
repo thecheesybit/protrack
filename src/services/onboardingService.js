@@ -1,4 +1,4 @@
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, setDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { createMode, deleteMode } from '@/services/modeService'
 import { LEGAL_VERSION } from '@/content/legal'
@@ -45,14 +45,22 @@ export async function completeOnboarding(uid, { selectedPresets, existingModes }
     if (!activeModeId) activeModeId = ref.id
   }
 
+  // Use client timestamps (Date.now), NOT serverTimestamp(): a serverTimestamp
+  // reads back as `null` on the optimistic local snapshot, so the Workspace gate
+  // (which flips to the dashboard on `settings.onboarding.completedAt`) would
+  // hang on "Setting up…" until the server round-trip confirms — and stalls
+  // outright if that write is slow or queued. A client timestamp is truthy the
+  // instant the write applies locally, so onboarding completes immediately.
   await setDoc(
     doc(db, 'users', uid),
     {
-      'settings.activeModeId': activeModeId || 'all',
-      'settings.onboarding': {
-        version: LEGAL_VERSION,
-        acceptedLegalAt: serverTimestamp(),
-        completedAt: serverTimestamp(),
+      settings: {
+        activeModeId: activeModeId || 'all',
+        onboarding: {
+          version: LEGAL_VERSION,
+          acceptedLegalAt: Date.now(),
+          completedAt: Date.now(),
+        },
       },
     },
     { merge: true },

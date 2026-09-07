@@ -1,5 +1,4 @@
-import React from 'react'
-import { Play, Pause, Plus, Minus, Maximize2, X, TreePine } from 'lucide-react'
+import { Play, Pause, Maximize2, X, Volume2, VolumeX } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { exitPip } from '@/lib/pip'
 
@@ -8,7 +7,7 @@ function mmss(sec) {
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 }
 
-function MiniRing({ progress, color = '#f59e0b', size = 138, children }) {
+function MiniRing({ progress, color = '#f59e0b', size = 150, children }) {
   const stroke = 6
   const r = (size - stroke * 2) / 2
   const c = 2 * Math.PI * r
@@ -26,128 +25,114 @@ function MiniRing({ progress, color = '#f59e0b', size = 138, children }) {
           strokeLinecap="round"
           strokeDasharray={c}
           strokeDashoffset={c * (1 - progress)}
-          style={{ transition: 'stroke-dashoffset 1s linear' }}
+          style={{ transition: 'stroke-dashoffset 1s linear', filter: `drop-shadow(0 0 6px ${color}77)` }}
         />
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        {children}
-      </div>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">{children}</div>
     </div>
   )
 }
 
 /**
- * Dedicated renderer view for the desktop Picture-in-Picture floating window.
- * Rendered when running in Electron with pipActive = true.
+ * Minimal Picture-in-Picture view for the desktop floating window: nothing but
+ * the timer ring by default. The whole square is a drag handle (moves the native
+ * always-on-top window); play/pause, mute, expand and close fade in only on
+ * hover, like a video PiP. Scene audio keeps playing via BackgroundAudioPlayer.
  */
 export function PipAppView() {
   const status = useStore((s) => s.status)
   const phase = useStore((s) => s.phase)
   const secondsLeft = useStore((s) => s.secondsLeft)
   const phaseTotalSec = useStore((s) => s.phaseTotalSec)
-  const session = useStore((s) => s.session)
   const pause = useStore((s) => s.pause)
   const resume = useStore((s) => s.resume)
-  const adjustSeconds = useStore((s) => s.adjustSeconds)
+  const muted = useStore((s) => s.muted)
+  const toggleMute = useStore((s) => s.toggleMute)
+  const session = useStore((s) => s.session)
 
   const isBreak = phase === 'break'
-  const accentColor = isBreak ? '#10b981' : session?.color || '#f59e0b'
+  const accent = isBreak ? '#10b981' : session?.color || '#f59e0b'
   const total = phaseTotalSec || secondsLeft || 1
   const progress = Math.min(1, Math.max(0, 1 - secondsLeft / total))
+  const running = status === 'running'
 
   return (
-    <div className="flex h-full w-full select-none flex-col justify-between bg-slate-950 p-4 font-sans text-white antialiased border border-white/10 rounded-2xl shadow-2xl">
-      {/* ── Drag Header Bar ─────────────────────────────────────────── */}
+    <div
+      className="group relative flex h-screen w-screen select-none items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-slate-950 font-sans text-white antialiased"
+      style={{ WebkitAppRegion: 'drag' }}
+    >
+      {/* Timer — the only thing shown at rest */}
+      <MiniRing progress={progress} color={accent} size={150}>
+        <span className="text-[2.6rem] font-bold leading-none tabular-nums tracking-tight text-white drop-shadow-sm">
+          {mmss(secondsLeft)}
+        </span>
+        <span
+          className="mt-1 text-[9px] font-semibold uppercase tracking-[0.2em]"
+          style={{ color: accent }}
+        >
+          {isBreak ? 'Break' : 'Focus'}
+        </span>
+      </MiniRing>
+
+      {/* Hover controls (video-PiP style) — hidden until the pointer is over */}
       <div
-        className="flex items-center justify-between border-b border-white/10 pb-2.5 cursor-move"
-        style={{ WebkitAppRegion: 'drag' }}
+        className="pointer-events-none absolute inset-0 flex flex-col justify-between bg-black/45 p-2 opacity-0 backdrop-blur-[1px] transition-opacity duration-200 group-hover:opacity-100"
+        style={{ WebkitAppRegion: 'no-drag' }}
       >
-        <div className="flex items-center gap-2 pointer-events-none">
-          <span
-            className="h-2.5 w-2.5 rounded-full animate-pulse shadow-sm"
-            style={{ backgroundColor: accentColor, boxShadow: `0 0 8px ${accentColor}` }}
-          />
-          <span className="text-[11px] font-bold uppercase tracking-wider text-white/90">
-            {isBreak ? 'Break' : 'Deep Focus'}
-          </span>
+        {/* Top row: mute (left) · expand + close (right) */}
+        <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={toggleMute}
+            className={`pointer-events-auto flex h-7 w-7 items-center justify-center rounded-lg border transition-all active:scale-95 ${
+              muted
+                ? 'border-rose-400/40 bg-rose-500/20 text-rose-300'
+                : 'border-white/15 bg-white/10 text-white/85 hover:bg-white/20'
+            }`}
+            title={muted ? 'Unmute scene audio' : 'Mute scene audio'}
+            aria-label={muted ? 'Unmute' : 'Mute'}
+          >
+            {muted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+          </button>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={exitPip}
+              className="pointer-events-auto flex h-7 w-7 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white/85 transition-all hover:bg-white/20 active:scale-95"
+              title="Expand — back to full screen"
+              aria-label="Expand"
+            >
+              <Maximize2 className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={exitPip}
+              className="pointer-events-auto flex h-7 w-7 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white/85 transition-all hover:bg-red-500 hover:text-white active:scale-95"
+              title="Close PiP"
+              aria-label="Close"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-1.5" style={{ WebkitAppRegion: 'no-drag' }}>
+        {/* Center: play / pause */}
+        <div className="flex items-center justify-center">
           <button
             type="button"
-            onClick={exitPip}
-            className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white/80 hover:bg-white/20 hover:text-white transition-all active:scale-95"
-            title="Expand to full screen"
-            aria-label="Expand"
+            onClick={() => (running ? pause() : resume())}
+            className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full text-white shadow-lg transition-transform hover:scale-105 active:scale-95"
+            style={{ backgroundColor: accent, boxShadow: `0 0 18px ${accent}66` }}
+            title={running ? 'Pause' : 'Resume'}
+            aria-label={running ? 'Pause' : 'Resume'}
           >
-            <Maximize2 className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={exitPip}
-            className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white/80 hover:bg-red-500 hover:text-white transition-all active:scale-95"
-            title="Return to app"
-            aria-label="Close"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
-
-      {/* ── Circular Progress Ring ──────────────────────────────────── */}
-      <div className="flex flex-col items-center justify-center py-1">
-        <MiniRing progress={progress} color={accentColor} size={140}>
-          <span className="text-3xl font-bold tabular-nums tracking-tight text-white drop-shadow-sm">
-            {mmss(secondsLeft)}
-          </span>
-          {session?.label && (
-            <span className="max-w-[120px] truncate text-[11px] font-medium text-white/70 mt-0.5 text-center px-1">
-              {session.label}
-            </span>
-          )}
-        </MiniRing>
-      </div>
-
-      {/* ── Timer Controls & Tree Status ────────────────────────────── */}
-      <div className="flex flex-col gap-2.5" style={{ WebkitAppRegion: 'no-drag' }}>
-        <div className="flex items-center justify-center gap-2">
-          <button
-            type="button"
-            onClick={() => adjustSeconds(-60)}
-            className="flex items-center gap-0.5 rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-white/80 hover:bg-white/15 hover:text-white active:scale-95 transition-all"
-            title="Subtract 1 minute"
-          >
-            <Minus className="h-3 w-3" /> 1m
-          </button>
-
-          <button
-            type="button"
-            onClick={() => (status === 'running' ? pause() : resume())}
-            className="flex h-11 w-11 items-center justify-center rounded-full text-white shadow-lg transition-transform hover:scale-105 active:scale-95"
-            style={{ backgroundColor: accentColor, boxShadow: `0 0 16px ${accentColor}55` }}
-            title={status === 'running' ? 'Pause' : 'Resume'}
-          >
-            {status === 'running' ? (
-              <Pause className="h-4.5 w-4.5 fill-current" />
-            ) : (
-              <Play className="h-4.5 w-4.5 fill-current ml-0.5" />
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => adjustSeconds(60)}
-            className="flex items-center gap-0.5 rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-white/80 hover:bg-white/15 hover:text-white active:scale-95 transition-all"
-            title="Add 1 minute"
-          >
-            <Plus className="h-3 w-3" /> 1m
+            {running ? <Pause className="h-5 w-5 fill-current" /> : <Play className="h-5 w-5 fill-current ml-0.5" />}
           </button>
         </div>
 
-        <div className="flex items-center justify-center gap-1.5 pt-0.5 text-[10px] text-emerald-400 font-medium">
-          <TreePine className="h-3.5 w-3.5" />
-          <span>Growing a tree for your focus stats</span>
-        </div>
+        {/* Bottom spacer keeps the play button vertically centered */}
+        <div className="h-7" />
       </div>
     </div>
   )

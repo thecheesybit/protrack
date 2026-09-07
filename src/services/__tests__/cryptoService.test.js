@@ -6,6 +6,7 @@ import {
   decryptValue,
   encryptObject,
   decryptObject,
+  getContentKey,
   initSessionFromAccount,
   clearSessionCrypto,
   hasActivePinSession,
@@ -112,6 +113,37 @@ describe('cryptoService', () => {
       const decrypted = await decryptObject(encrypted, ['content', 'summary'], key)
       expect(decrypted.content).toBe('Top secret strategy')
       expect(decrypted.summary).toBe('Executive summary')
+    })
+
+    it('content encrypted with the account key stays readable across PIN changes', async () => {
+      // Services thread the uid → a stable account content key (no PIN).
+      const key = await getContentKey('user-x')
+      const todo = { text: 'Buy milk', notes: 'from the corner shop' }
+      const enc = await encryptObject(todo, ['text', 'notes'], key)
+      expect(enc.text).toMatch(/^ENC:v1:/)
+
+      // Enabling a PIN swaps the ACTIVE session key…
+      await initSessionFromAccount('user-x', '3333333', '1234')
+      // …but content still decrypts because it is keyed to the account, not the PIN.
+      const dec1 = await decryptObject(enc, ['text', 'notes'], key)
+      expect(dec1.text).toBe('Buy milk')
+      expect(dec1.notes).toBe('from the corner shop')
+
+      // Disabling the PIN (session back to no-PIN) — content still reads.
+      await initSessionFromAccount('user-x', '3333333', null)
+      const dec2 = await decryptObject(enc, ['text', 'notes'], key)
+      expect(dec2.text).toBe('Buy milk')
+    })
+
+    it('falls back to the active session key for legacy PIN-encrypted content', async () => {
+      // Simulate legacy data encrypted under the active PIN session key.
+      await initSessionFromAccount('legacy-user', '4444444', '9999')
+      const legacyCipher = await encryptValue('legacy secret') // uses active PIN key
+      const obj = { text: legacyCipher }
+      // decryptObject prefers the content key (which fails here) then falls back
+      // to the active session key — so it still recovers the plaintext.
+      const dec = await decryptObject(obj, ['text'])
+      expect(dec.text).toBe('legacy secret')
     })
 
     it('initializes active session key and decrypts transparently', async () => {

@@ -3,6 +3,8 @@ import {
   getDoc,
   setDoc,
   deleteDoc,
+  updateDoc,
+  deleteField,
   getDocs,
   writeBatch,
   onSnapshot,
@@ -99,31 +101,44 @@ export function subscribeToUserDoc(uid, callback, onError) {
 /** Persist the active mode so the app resumes exactly where the user left off. */
 export async function updateActiveMode(uid, modeId) {
   if (!uid) return
-  await setDoc(
-    doc(db, 'users', uid),
-    { 'settings.activeModeId': modeId },
-    { merge: true },
-  )
+  // A nested object with { merge: true } deep-merges into `settings` and
+  // preserves sibling keys. NOTE: `setDoc` does NOT treat dotted string keys
+  // ("settings.activeModeId") as field paths — that only works with updateDoc —
+  // so the dotted form silently wrote a junk top-level field and never updated
+  // the nested value the app actually reads.
+  await setDoc(doc(db, 'users', uid), { settings: { activeModeId: modeId } }, { merge: true })
 }
 
-/** Merge a partial settings patch onto the user doc using dot notation to preserve nested fields. */
+/**
+ * Merge a partial settings patch onto the user doc. Uses a nested object with
+ * `{ merge: true }` (deep-merges `settings`, preserving other keys) — the dotted
+ * `setDoc` form does NOT persist nested fields, which previously broke settings
+ * that are only read back through the Firestore snapshot (e.g. focus scene).
+ */
 export async function updateSettings(uid, patch) {
   if (!uid || !patch) return
-  const updateData = {}
-  for (const [key, value] of Object.entries(patch)) {
-    updateData[`settings.${key}`] = value
-  }
-  await setDoc(doc(db, 'users', uid), updateData, { merge: true })
+  await setDoc(doc(db, 'users', uid), { settings: patch }, { merge: true })
 }
 
-/** Merge a partial profile patch onto the user doc using dot notation to preserve nested fields. */
+/**
+ * Fully remove the App Lock config from Firestore (used on disable). Uses
+ * updateDoc + deleteField so the nested `settings.appLock` field is truly
+ * deleted — writing `null` would leave the key present, and any snapshot that
+ * still carried an enabled config could otherwise re-lock the workspace.
+ */
+export async function clearAppLock(uid) {
+  if (!uid) return
+  try {
+    await updateDoc(doc(db, 'users', uid), { 'settings.appLock': deleteField() })
+  } catch (err) {
+    console.warn('[userService] clearAppLock failed (ignorable offline)', err)
+  }
+}
+
+/** Merge a partial profile patch onto the user doc (deep-merges `profile`). */
 export async function updateProfile(uid, patch) {
   if (!uid || !patch) return
-  const updateData = {}
-  for (const [key, value] of Object.entries(patch)) {
-    updateData[`profile.${key}`] = value
-  }
-  await setDoc(doc(db, 'users', uid), updateData, { merge: true })
+  await setDoc(doc(db, 'users', uid), { profile: patch }, { merge: true })
 }
 
 /** Helper to delete all documents in a collection in batched commits (up to 400 per batch). */

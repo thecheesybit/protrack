@@ -1,5 +1,5 @@
 import { auth } from '@/lib/firebase'
-import { updateSettings } from '@/services/userService'
+import { updateSettings, clearAppLock } from '@/services/userService'
 
 export const LOCK_STORAGE_KEY = 'protrack:app_lock'
 export const LOCKOUT_STORAGE_KEY = 'protrack:lock_attempts'
@@ -173,20 +173,23 @@ export async function persistLockConfig(config, userUid = null) {
   try {
     const uid = userUid || auth?.currentUser?.uid
     if (uid && (!auth?.currentUser || !auth.currentUser.isAnonymous)) {
-      await updateSettings(uid, {
-        appLock: config
-          ? {
-              enabled: Boolean(config.enabled),
-              pinHash: config.pinHash,
-              salt: config.salt,
-              hint: config.hint || '',
-              pinLength: config.pinLength || 4,
-              lockOnMinimize: config.lockOnMinimize ?? true,
-              lockOnClose: config.lockOnClose ?? true,
-              updatedAt: config.updatedAt || Date.now(),
-            }
-          : null,
-      })
+      if (config) {
+        await updateSettings(uid, {
+          appLock: {
+            enabled: Boolean(config.enabled),
+            pinHash: config.pinHash,
+            salt: config.salt,
+            hint: config.hint || '',
+            pinLength: config.pinLength || 4,
+            lockOnMinimize: config.lockOnMinimize ?? true,
+            lockOnClose: config.lockOnClose ?? true,
+            updatedAt: config.updatedAt || Date.now(),
+          },
+        })
+      } else {
+        // Disable: fully delete the field so no snapshot can re-hydrate the lock.
+        await clearAppLock(uid)
+      }
     }
   } catch (err) {
     console.warn('[lockService] firestore sync failed (ignorable offline)', err)
@@ -203,12 +206,16 @@ export function syncRemoteLockConfig(remoteLock, onSync) {
     const localConfig = getLockConfig()
 
     if (remoteLock && remoteLock.enabled && remoteLock.pinHash && remoteLock.salt) {
-      // Remote has an active lock. Check if remote is newer or local is missing/disabled
+      // Apply only when the remote config genuinely differs from what we already
+      // hold locally. Re-applying identical configs on every user-doc snapshot
+      // (an "echo") churns localStorage and re-runs downstream lock effects for
+      // no reason — an important part of not re-locking the app after unlock.
       const shouldApply =
         !localConfig ||
         !localConfig.enabled ||
-        !localConfig.updatedAt ||
-        (remoteLock.updatedAt && remoteLock.updatedAt >= localConfig.updatedAt)
+        localConfig.pinHash !== remoteLock.pinHash ||
+        localConfig.salt !== remoteLock.salt ||
+        (Number(remoteLock.updatedAt) || 0) > (Number(localConfig.updatedAt) || 0)
 
       if (shouldApply) {
         if (typeof localStorage !== 'undefined') {

@@ -25,6 +25,7 @@ export function useFocusEngine() {
   const muted = useStore((s) => s.muted)
   const volume = useStore((s) => s.volume)
   const focusLocked = useStore((s) => s.focusLocked)
+  const pipActive = useStore((s) => s.pipActive)
   const intervalRef = useRef(null)
   const mixerRef = useRef(null)
   const completingRef = useRef(false)
@@ -38,13 +39,17 @@ export function useFocusEngine() {
   }, [])
 
   // ── Fullscreen: only during focus phase, exit on break/idle ──
+  // Skipped entirely while floating in PiP — the PiP window owns its own tiny
+  // bounds, so forcing fullscreen here (e.g. when the user hits resume inside
+  // the mini window) would blow the floating widget up to full screen.
   useEffect(() => {
+    if (pipActive) return
     if (status === 'running' && phase === 'focus') {
       window.protrack?.window?.setFullScreen?.(true)
     } else if (status === 'idle' || phase === 'break') {
       window.protrack?.window?.setFullScreen?.(false)
     }
-  }, [status, phase])
+  }, [status, phase, pipActive])
 
   // ── Always-on-top: engage when locked, disengage on unlock ──
   useEffect(() => {

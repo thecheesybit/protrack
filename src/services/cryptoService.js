@@ -45,6 +45,49 @@ let activeCryptoKey = null
 let activeContext = { uid: null, uniqueCode: null, hasPin: false }
 const inMemorySecureCache = new Map()
 
+// Stable, account-derived key for USER CONTENT (todos, notes). Deliberately
+// independent of the app-lock PIN: the PIN is an access gate, not the data's
+// encryption boundary, so content stays readable no matter how the PIN is later
+// enabled, changed, or disabled. Cached per uid.
+let contentCryptoKey = null
+let contentCryptoUid = null
+
+/**
+ * Returns (and caches) the account content key — derived from the account's
+ * unique code + uid, with NO PIN. Same inputs → same key every session.
+ * @param {string} [uid]
+ * @returns {Promise<CryptoKey>}
+ */
+export async function getContentKey(uid) {
+  const realUid = uid || auth?.currentUser?.uid || activeContext.uid || ''
+  if (contentCryptoKey && contentCryptoUid === realUid) return contentCryptoKey
+  const code = deriveUniqueCode(realUid)
+  contentCryptoKey = await deriveEncryptionKey(code, null, realUid)
+  contentCryptoUid = realUid
+  return contentCryptoKey
+}
+
+/**
+ * Decrypt a single content field. Prefers the stable account content key; falls
+ * back to the active (possibly PIN-derived) session key so legacy data encrypted
+ * under the old PIN-tied scheme still reads while that session is live. Returns
+ * the original ciphertext only when nothing can decrypt it.
+ * @param {string} cipher
+ * @param {CryptoKey|null} [explicitKey]
+ * @returns {Promise<string>}
+ */
+async function decryptContentField(cipher, explicitKey = null) {
+  const primary = explicitKey || (await getContentKey())
+  let out = await decryptValue(cipher, primary)
+  if (!out.startsWith(CIPHER_PREFIX)) return out
+  // Legacy fallback: data encrypted with the active session (PIN) key.
+  if (activeCryptoKey && activeCryptoKey !== primary) {
+    out = await decryptValue(cipher, activeCryptoKey)
+    if (!out.startsWith(CIPHER_PREFIX)) return out
+  }
+  return cipher
+}
+
 /**
  * Derives an AES-256-GCM encryption key using PBKDF2-HMAC-SHA256
  * from Account Unique Code, optional PIN, and app inherent salt.
@@ -169,6 +212,8 @@ export async function initSessionFromAccount(uid, uniqueCode, pin = null) {
 export function clearSessionCrypto() {
   activeCryptoKey = null
   activeContext = { uid: null, uniqueCode: null, hasPin: false }
+  contentCryptoKey = null
+  contentCryptoUid = null
   inMemorySecureCache.clear()
 }
 
@@ -243,10 +288,13 @@ export async function decryptValue(ciphertext, key = null) {
  */
 export async function encryptObject(obj, fields, key = null) {
   if (!obj || typeof obj !== 'object') return obj
+  // Default to the stable account content key so writes never become
+  // PIN-locked; callers may still pass an explicit key (e.g. tests).
+  const cipherKey = key || (await getContentKey())
   const result = { ...obj }
   for (const f of fields) {
     if (result[f] !== undefined && result[f] !== null) {
-      result[f] = await encryptValue(result[f], key)
+      result[f] = await encryptValue(result[f], cipherKey)
     }
   }
   return result
@@ -264,7 +312,7 @@ export async function decryptObject(obj, fields, key = null) {
   const result = { ...obj }
   for (const f of fields) {
     if (typeof result[f] === 'string' && result[f].startsWith(CIPHER_PREFIX)) {
-      result[f] = await decryptValue(result[f], key)
+      result[f] = await decryptContentField(result[f], key)
     }
   }
   return result

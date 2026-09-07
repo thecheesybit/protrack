@@ -8,6 +8,7 @@ import { useChronoTheme } from '@/hooks/useChronoTheme'
 import { useDesktopIntegration } from '@/hooks/useDesktopIntegration'
 import { useHabitReminders } from '@/hooks/useHabitReminders'
 import { useDeadlines } from '@/hooks/useDeadlines'
+import { useNoteReminders } from '@/hooks/useNoteReminders'
 import { useCheckIns } from '@/hooks/useCheckIns'
 import { AuroraBackground } from '@/components/common/AuroraBackground'
 import { TimeHud } from '@/components/common/TimeHud'
@@ -102,6 +103,7 @@ export function Dashboard() {
   useDesktopIntegration() // desktop-only: hardware-fingerprint binding + global hotkeys
   useHabitReminders() // schedules per-interval reminder notifications for habits
   useDeadlines()     // fires island notifications for overdue/due-today todos
+  useNoteReminders() // fires reminders for notes with a deadline (2 days ahead)
   useCheckIns()      // offers the occasional daily check-in question (lib/checkin)
 
   // Global shortcuts: Esc unwinds overlays/maximize; ⌘/Ctrl+K opens the AI.

@@ -5,8 +5,6 @@ import {
   Search,
   Mic,
   Square,
-  Play,
-  Pause,
   Globe,
   Bookmark,
   Pin,
@@ -16,8 +14,9 @@ import {
   Check,
   Sparkles,
   FileText,
-  Volume2,
-  Clock,
+  CalendarClock,
+  Bell,
+  BellOff,
   X,
   Radio,
 } from 'lucide-react'
@@ -30,8 +29,10 @@ import {
   updateNote,
   deleteNote,
   togglePinNote,
+  setNoteDeadline,
 } from '@/services/noteService'
 import { WidgetFrame } from './WidgetFrame'
+import { VoicePlayer } from '@/components/notes/VoicePlayer'
 import { playSuccess, playPop } from '@/lib/audioFX'
 import { cn } from '@/utils/cn'
 
@@ -59,82 +60,21 @@ function extractDomain(rawUrl) {
   }
 }
 
-/**
- * Self-contained audio player component for recorded voice notes.
- */
-function VoicePlayer({ audioData, duration }) {
-  const [playing, setPlaying] = useState(false)
-  const [currentTime, setCurrentTime] = useState(0)
-  const audioRef = useRef(null)
+/** Firestore Timestamp | epoch | Date → a `datetime-local` input string (local time). */
+function toDatetimeLocal(dueAt) {
+  if (!dueAt) return ''
+  const d = dueAt?.toDate ? dueAt.toDate() : new Date(dueAt)
+  if (isNaN(d.getTime())) return ''
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
 
-  const togglePlay = (e) => {
-    e.stopPropagation()
-    if (!audioRef.current) return
-    if (playing) {
-      audioRef.current.pause()
-      setPlaying(false)
-    } else {
-      audioRef.current.play().then(() => setPlaying(true)).catch((err) => {
-        console.warn('Audio playback failed', err)
-        toast.error('Unable to play audio recording')
-      })
-    }
-  }
-
-  const onTimeUpdate = () => {
-    if (audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime)
-    }
-  }
-
-  const onEnded = () => {
-    setPlaying(false)
-    setCurrentTime(0)
-  }
-
-  const progress = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0
-
-  return (
-    <div className="flex items-center gap-2.5 rounded-xl border border-line/60 bg-surface-2/60 p-2 text-xs">
-      <audio
-        ref={audioRef}
-        src={audioData}
-        onTimeUpdate={onTimeUpdate}
-        onEnded={onEnded}
-        preload="metadata"
-      />
-      <button
-        onClick={togglePlay}
-        className={cn(
-          'flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all shadow-sm',
-          playing
-            ? 'bg-rose-500 text-white animate-pulse'
-            : 'bg-accent text-white hover:scale-105',
-        )}
-        title={playing ? 'Pause audio' : 'Play voice memo'}
-        aria-label={playing ? 'Pause' : 'Play'}
-      >
-        {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 ml-0.5" />}
-      </button>
-
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex items-center justify-between text-[10px] font-mono text-muted">
-          <span className="flex items-center gap-1 text-rose-400">
-            <Volume2 className="h-3 w-3" /> Voice Memo
-          </span>
-          <span>
-            {formatDuration(currentTime)} / {formatDuration(duration)}
-          </span>
-        </div>
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface">
-          <div
-            className="h-full bg-gradient-to-r from-accent to-rose-400 transition-all duration-100"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </div>
-    </div>
-  )
+/** Short human label for a note deadline. */
+function formatNoteDeadline(dueAt) {
+  if (!dueAt) return ''
+  const d = dueAt?.toDate ? dueAt.toDate() : new Date(dueAt)
+  if (isNaN(d.getTime())) return ''
+  return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 export function NotesWidget({ widget, variant }) {
@@ -153,6 +93,18 @@ export function NotesWidget({ widget, variant }) {
   const [dropTitle, setDropTitle] = useState('')
   const [dropUrl, setDropUrl] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+
+  // Optional deadline + reminder for the note being composed.
+  // `dropDueAt` is a native datetime-local string; `dropReminder` opts into the
+  // 2-day-ahead reminder engine (hooks/useNoteReminders).
+  const [dropDueAt, setDropDueAt] = useState('')
+  const [dropReminder, setDropReminder] = useState(false)
+
+  // Per-card deadline editor (existing notes). `editDeadlineId` holds the note
+  // whose inline datetime editor is open.
+  const [editDeadlineId, setEditDeadlineId] = useState(null)
+  const [editDueAt, setEditDueAt] = useState('')
+  const [editReminder, setEditReminder] = useState(false)
 
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false)
@@ -293,6 +245,8 @@ export function NotesWidget({ widget, variant }) {
         audioDuration: dropType === 'voice' ? recordSeconds : 0,
         transcript: dropType === 'voice' ? voiceTranscript : '',
         modeId: activeModeId === 'all' ? null : activeModeId,
+        dueAt: dropDueAt ? new Date(dropDueAt).getTime() : null,
+        reminderEnabled: Boolean(dropDueAt) && dropReminder,
       })
 
       playSuccess()
@@ -310,6 +264,8 @@ export function NotesWidget({ widget, variant }) {
       setDropText('')
       setDropTitle('')
       setDropUrl('')
+      setDropDueAt('')
+      setDropReminder(false)
       setVoiceBlob(null)
       setVoiceDataUrl(null)
       setVoiceTranscript('')
@@ -366,6 +322,40 @@ export function NotesWidget({ widget, variant }) {
     navigator.clipboard.writeText(text)
     playPop()
     toast.success(label)
+  }
+
+  // ── Per-card deadline editing ──
+  const openDeadlineEditor = (n) => {
+    setEditDeadlineId(n.id)
+    setEditDueAt(toDatetimeLocal(n.dueAt))
+    setEditReminder(Boolean(n.reminderEnabled))
+  }
+
+  const saveCardDeadline = async (noteId) => {
+    if (!user) return
+    try {
+      await setNoteDeadline(user.uid, noteId, {
+        dueAt: editDueAt ? new Date(editDueAt).getTime() : null,
+        reminderEnabled: Boolean(editDueAt) && editReminder,
+      })
+      toast.success(editDueAt ? 'Deadline set' : 'Deadline cleared')
+      setEditDeadlineId(null)
+    } catch (err) {
+      console.error('Failed to set deadline', err)
+      toast.error('Could not update deadline')
+    }
+  }
+
+  const clearCardDeadline = async (noteId) => {
+    if (!user) return
+    try {
+      await setNoteDeadline(user.uid, noteId, { dueAt: null, reminderEnabled: false })
+      toast.success('Deadline cleared')
+      setEditDeadlineId(null)
+    } catch (err) {
+      console.error('Failed to clear deadline', err)
+      toast.error('Could not clear deadline')
+    }
   }
 
   return (
@@ -573,6 +563,60 @@ export function NotesWidget({ widget, variant }) {
               </div>
             </form>
           )}
+
+          {/* ── Shared Deadline + Reminder ── */}
+          <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-line/40 pt-2">
+            <label
+              className="flex items-center gap-1.5 text-[11px] font-medium text-muted"
+              title="Give this note a deadline — it appears as a blinking chip on the timetable that day"
+            >
+              <CalendarClock className="h-3.5 w-3.5 text-accent/80" />
+              <span className="hidden sm:inline">Deadline</span>
+              <input
+                type="datetime-local"
+                value={dropDueAt}
+                onChange={(e) => {
+                  setDropDueAt(e.target.value)
+                  if (!e.target.value) setDropReminder(false)
+                }}
+                className="rounded-lg border border-line/60 bg-surface px-2 py-1 text-[11px] outline-none focus:border-accent"
+              />
+            </label>
+
+            <button
+              type="button"
+              onClick={() => dropDueAt && setDropReminder((v) => !v)}
+              disabled={!dropDueAt}
+              title={
+                dropDueAt
+                  ? 'Remind me 2 days before this deadline (notification + toast)'
+                  : 'Set a deadline first to enable reminders'
+              }
+              className={cn(
+                'flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors disabled:opacity-40',
+                dropReminder
+                  ? 'border-amber-500/40 bg-amber-500/15 text-amber-400'
+                  : 'border-line/60 bg-surface text-muted hover:text-ink',
+              )}
+            >
+              {dropReminder ? <Bell className="h-3.5 w-3.5" /> : <BellOff className="h-3.5 w-3.5" />}
+              <span>{dropReminder ? 'Reminder on' : 'Remind me'}</span>
+            </button>
+
+            {dropDueAt && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDropDueAt('')
+                  setDropReminder(false)
+                }}
+                className="text-[11px] text-muted hover:text-rose-400"
+                title="Clear deadline"
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </div>
 
         {/* ── Search & Filter Controls ── */}
@@ -766,6 +810,81 @@ export function NotesWidget({ widget, variant }) {
                     <p className="text-xs text-ink/90 whitespace-pre-wrap leading-relaxed line-clamp-4">
                       {n.content}
                     </p>
+                  )}
+
+                  {/* ── Deadline & Reminder footer ── */}
+                  {editDeadlineId === n.id ? (
+                    <div className="flex flex-col gap-2 rounded-xl border border-line/60 bg-surface-2/40 p-2">
+                      <input
+                        type="datetime-local"
+                        value={editDueAt}
+                        onChange={(e) => setEditDueAt(e.target.value)}
+                        className="w-full rounded-lg border border-line/60 bg-surface px-2 py-1 text-[11px] outline-none focus:border-accent"
+                      />
+                      <div className="flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => editDueAt && setEditReminder((v) => !v)}
+                          disabled={!editDueAt}
+                          className={cn(
+                            'flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors disabled:opacity-40',
+                            editReminder
+                              ? 'border-amber-500/40 bg-amber-500/15 text-amber-400'
+                              : 'border-line/60 bg-surface text-muted hover:text-ink',
+                          )}
+                          title="Remind me 2 days before"
+                        >
+                          {editReminder ? <Bell className="h-3 w-3" /> : <BellOff className="h-3 w-3" />}
+                          {editReminder ? 'Reminder on' : 'Remind me'}
+                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setEditDeadlineId(null)}
+                            className="rounded-lg px-2 py-1 text-[11px] text-muted hover:text-ink"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => saveCardDeadline(n.id)}
+                            className="rounded-lg bg-accent px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-accent/90"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : n.dueAt ? (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => openDeadlineEditor(n)}
+                        className="flex items-center gap-1 rounded-lg border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] font-semibold text-violet-300 transition-colors hover:bg-violet-500/20"
+                        title="Edit deadline"
+                      >
+                        <CalendarClock className="h-3 w-3" />
+                        {formatNoteDeadline(n.dueAt)}
+                        {n.reminderEnabled && <Bell className="h-2.5 w-2.5 text-amber-400" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => clearCardDeadline(n.id)}
+                        className="rounded p-0.5 text-muted opacity-0 transition-opacity hover:text-rose-400 group-hover:opacity-100"
+                        title="Clear deadline"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => openDeadlineEditor(n)}
+                      className="flex w-fit items-center gap-1 rounded-lg border border-line/50 px-2 py-0.5 text-[10px] font-medium text-muted opacity-0 transition-all hover:border-accent/40 hover:text-ink group-hover:opacity-100"
+                      title="Add a deadline & reminder"
+                    >
+                      <CalendarClock className="h-3 w-3" /> Add deadline
+                    </button>
                   )}
                 </div>
               )

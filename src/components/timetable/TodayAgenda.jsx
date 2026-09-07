@@ -5,6 +5,7 @@ import { DAYS, DAY_FULL, todayDow, minutesToLabel, durationLabel, isSlotOnDay, s
 import { getWeekDate, ymd } from '@/lib/dates'
 import { classifyDeadline } from '@/lib/deadlines'
 import { useNowMinutes } from '@/hooks/useNowMinutes'
+import { NoteDeadlineChip } from './NoteDeadlineChip'
 import { cn } from '@/utils/cn'
 
 // -------------------------------------------------------------------
@@ -60,6 +61,8 @@ export function TodayAgenda({
   slots = [],
   events = [],
   dateTasks = [],
+  noteDeadlines = [],
+  onOpenNote,
   allTodos = [],
   onOpenSlot,
   onAdd,
@@ -140,6 +143,15 @@ export function TodayAgenda({
         return da - db
       })
   }, [dateTasks, selectedDateStr])
+
+  const displayedNoteDeadlines = useMemo(() => {
+    return noteDeadlines.filter((n) => {
+      if (!n.dueAt) return false
+      const d = n.dueAt?.toDate ? n.dueAt.toDate() : new Date(n.dueAt)
+      if (isNaN(d.getTime())) return false
+      return ymd(d) === selectedDateStr
+    })
+  }, [noteDeadlines, selectedDateStr])
 
   // Track which days of the week have sessions, events, or tasks
   const daysWithItems = useMemo(() => {
@@ -713,6 +725,22 @@ export function TodayAgenda({
               )
             })}
 
+            {/* Note deadlines — blinking, clickable chips (view text / play voice) */}
+            {displayedNoteDeadlines.map((n, idx) => {
+              const d2 = n.dueAt?.toDate ? n.dueAt.toDate() : new Date(n.dueAt)
+              let mins = d2.getHours() * 60 + d2.getMinutes()
+              if (mins < START) mins = START
+              if (mins > END) mins = END - 15
+              return (
+                <NoteDeadlineChip
+                  key={n.id}
+                  note={n}
+                  topPx={toTop(mins) + (idx % 2 === 1 ? 12 : 0)}
+                  onOpen={onOpenNote}
+                />
+              )
+            })}
+
             {/* Now indicator — dot + red line (only shown when viewing today) */}
             {nowVisible && (
               <div
@@ -727,7 +755,7 @@ export function TodayAgenda({
             )}
 
             {/* Empty-state hint */}
-            {displayedSlots.length === 0 && displayedEvents.length === 0 && displayedTasks.length === 0 && displayedAllDayTasks.length === 0 && (
+            {displayedSlots.length === 0 && displayedEvents.length === 0 && displayedTasks.length === 0 && displayedAllDayTasks.length === 0 && displayedNoteDeadlines.length === 0 && (
               <div
                 className="pointer-events-none absolute inset-x-2 flex flex-col items-center justify-center gap-2 p-3 text-center"
                 style={{ top: nowVisible ? nowTop + 8 : TOTAL_H / 2 - 32 }}

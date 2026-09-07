@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { classifyDeadline, isDueToday, dueAtToMinutes, getUpcomingItems } from '../deadlines.js'
+import {
+  classifyDeadline,
+  isDueToday,
+  dueAtToMinutes,
+  getUpcomingItems,
+  getNoteReminders,
+} from '../deadlines.js'
 
 // Use a local-time constructor so tests behave consistently across time zones.
 // "Pin" to June 15 2024 at noon.
@@ -181,5 +187,67 @@ describe('getUpcomingItems', () => {
     const todo = makeTodo({ dueAt: todayAt(15) })
     const [item] = getUpcomingItems([todo], [], 48)
     expect(['overdue', 'due_today', 'due_soon', 'upcoming']).toContain(item._urgency)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// getNoteReminders
+// ---------------------------------------------------------------------------
+describe('getNoteReminders', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(noon())
+  })
+  afterEach(() => vi.useRealTimers())
+
+  const makeNote = (overrides) => ({
+    id: 'n1',
+    reminderEnabled: true,
+    dueAt: null,
+    ...overrides,
+  })
+
+  it('returns empty array when no notes provided', () => {
+    expect(getNoteReminders([], 48)).toEqual([])
+  })
+
+  it('excludes notes without a reminder enabled', () => {
+    const note = makeNote({ reminderEnabled: false, dueAt: tomorrowAt(10) })
+    expect(getNoteReminders([note], 48)).toHaveLength(0)
+  })
+
+  it('excludes notes without a deadline', () => {
+    const note = makeNote({ dueAt: null })
+    expect(getNoteReminders([note], 48)).toHaveLength(0)
+  })
+
+  it('includes a reminder due within the 48h window ("2 days earlier")', () => {
+    const note = makeNote({ dueAt: tomorrowAt(12) })
+    const result = getNoteReminders([note], 48)
+    expect(result).toHaveLength(1)
+    expect(result[0].id).toBe('n1')
+  })
+
+  it('includes overdue reminders so nothing is missed', () => {
+    const note = makeNote({ dueAt: daysLater(-1) })
+    expect(getNoteReminders([note], 48)).toHaveLength(1)
+  })
+
+  it('excludes reminders beyond the window', () => {
+    const note = makeNote({ dueAt: daysLater(5) })
+    expect(getNoteReminders([note], 48)).toHaveLength(0)
+  })
+
+  it('sorts reminders by due date ascending', () => {
+    const a = makeNote({ id: 'a', dueAt: tomorrowAt(15) })
+    const b = makeNote({ id: 'b', dueAt: todayAt(16) })
+    const result = getNoteReminders([a, b], 48)
+    expect(result[0].id).toBe('b')
+    expect(result[1].id).toBe('a')
+  })
+
+  it('works with a Firestore Timestamp-like dueAt', () => {
+    const note = makeNote({ dueAt: { toDate: () => tomorrowAt(9) } })
+    expect(getNoteReminders([note], 48)).toHaveLength(1)
   })
 })

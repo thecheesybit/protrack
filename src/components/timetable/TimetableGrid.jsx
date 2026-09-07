@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo, memo } from 'react'
 import { Pencil, Sparkles, X, Check, ChevronLeft, ChevronRight } from 'lucide-react'
 import { classifyDeadline } from '@/lib/deadlines'
+import { NoteDeadlineChip } from './NoteDeadlineChip'
 import { getWeekDate, ymd } from '@/lib/dates'
 import { DayGrove } from '@/components/focus/CalendarForest'
 import {
@@ -238,6 +239,8 @@ export function TimetableGrid({
   onDeleteTask,
   onDeleteEvent,
   dateTasks = [],
+  noteDeadlines = [],
+  onOpenNote,
   allTodos = [],
   sessions = [],
   compact = false,
@@ -599,6 +602,29 @@ export function TimetableGrid({
                           topPx={(mins - DAY_START_MIN) * PX_PER_MIN + (idx % 2 === 1 ? 12 : 0)}
                           onToggle={onToggleTask}
                           onDelete={onDeleteTask}
+                        />
+                      )
+                    })}
+
+                  {/* Note deadlines — blinking chips on the day the note is due */}
+                  {noteDeadlines
+                    .filter((n) => {
+                      if (!n.dueAt) return false
+                      const d2 = n.dueAt?.toDate ? n.dueAt.toDate() : new Date(n.dueAt)
+                      if (isNaN(d2.getTime())) return false
+                      return ymd(d2) === colDateStr
+                    })
+                    .map((n, idx) => {
+                      const d2 = n.dueAt?.toDate ? n.dueAt.toDate() : new Date(n.dueAt)
+                      let mins = d2.getHours() * 60 + d2.getMinutes()
+                      if (mins < DAY_START_MIN) mins = DAY_START_MIN
+                      if (mins > DAY_END_MIN) mins = DAY_END_MIN - 15
+                      return (
+                        <NoteDeadlineChip
+                          key={n.id}
+                          note={n}
+                          topPx={(mins - DAY_START_MIN) * PX_PER_MIN + (idx % 2 === 1 ? 12 : 0)}
+                          onOpen={onOpenNote}
                         />
                       )
                     })}

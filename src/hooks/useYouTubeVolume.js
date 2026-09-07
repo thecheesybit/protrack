@@ -14,9 +14,11 @@ import { useEffect, useRef, useCallback } from 'react'
  * @param {{ current: HTMLIFrameElement | null }} iframeRef
  * @param {number} volume 0..1
  * @param {boolean} muted
+ * @param {boolean} [playing=true] when false the scene is paused (playVideo /
+ *   pauseVideo), so the Deep Focus pause button also stops and resumes the audio
  * @returns {() => void} onLoad handler
  */
-export function useYouTubeVolume(iframeRef, volume, muted) {
+export function useYouTubeVolume(iframeRef, volume, muted, playing = true) {
   const readyRef = useRef(false)
 
   const post = useCallback((func, args = []) => {
@@ -47,7 +49,10 @@ export function useYouTubeVolume(iframeRef, volume, muted) {
     post('setVolume', [Math.round((volume ?? 0.5) * 100)])
     if (muted) post('mute')
     else post('unMute')
-  }, [post, volume, muted])
+    // Mirror the timer's run/pause state onto the scene so the Deep Focus
+    // pause button stops the ambient audio and resume restarts it.
+    post(playing ? 'playVideo' : 'pauseVideo')
+  }, [post, volume, muted, playing])
 
   // Listen for the YT API ready signal, then push the current state.
   useEffect(() => {

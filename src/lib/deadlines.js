@@ -72,3 +72,24 @@ export function getUpcomingItems(todos = [], tasks = [], windowHours = 48) {
 
   return items.sort((a, b) => a._due - b._due)
 }
+
+/**
+ * Returns notes whose reminder is enabled and whose deadline falls within
+ * `windowHours` from now (default 48h — the "remind two days earlier" rule),
+ * including already-overdue ones so nothing is silently missed. Sorted by due
+ * time. Pure — the caller (hooks/useNoteReminders) handles notification/dedupe.
+ */
+export function getNoteReminders(notes = [], windowHours = 48) {
+  const now = new Date()
+  const cutoff = new Date(now.getTime() + windowHours * 3600000)
+  const items = []
+
+  for (const n of notes) {
+    if (!n.reminderEnabled) continue
+    const due = toDate(n.dueAt)
+    if (!due || due > cutoff) continue
+    items.push({ ...n, _due: due, _urgency: classifyDeadline(n.dueAt) })
+  }
+
+  return items.sort((a, b) => a._due - b._due)
+}

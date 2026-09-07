@@ -6,11 +6,13 @@ import { useStore } from '@/store/useStore'
 import { useAuth } from '@/hooks/useAuth'
 import { useTimetable } from '@/hooks/useTimetable'
 import { useTodos } from '@/hooks/useWellness'
+import { useNotes } from '@/hooks/useNotes'
 import { useFocusSessions } from '@/hooks/useFocusSessions'
 import { WidgetFrame } from './WidgetFrame'
 import { cn } from '@/utils/cn'
 import { TimetableGrid } from '@/components/timetable/TimetableGrid'
 import { TodayAgenda } from '@/components/timetable/TodayAgenda'
+import { NoteDeadlinePeek } from '@/components/timetable/NoteDeadlinePeek'
 import { SlotEditorModal } from '@/components/timetable/SlotEditorModal'
 import { NlQuickCapture } from '@/components/calendar/NlQuickCapture'
 import { TimeContextPanel } from '@/components/timetable/TimeContextPanel'
@@ -76,9 +78,11 @@ export function TimetableWidget({ widget, variant }) {
   const { sessions } = useFocusSessions()
 
   const todos = useTodos()
+  const notes = useNotes()
   const activeMode = modes.find((m) => m.id === activeModeId)
   const defaultColor = activeMode?.accentColor || MODE_PALETTE[0]
 
+  const [peekNote, setPeekNote] = useState(null)
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingSlot, setEditingSlot] = useState(null)
   const [captureSeed, setCaptureSeed] = useState(null)
@@ -200,6 +204,16 @@ export function TimetableWidget({ widget, variant }) {
     [activeTodos],
   )
 
+  // Notes carrying a deadline — surfaced as blinking chips on their due day,
+  // scoped like todos (all modes when 'all', otherwise this mode + global).
+  const noteDeadlines = useMemo(
+    () =>
+      notes.filter(
+        (n) => n.dueAt && (activeModeId === 'all' || !n.modeId || n.modeId === activeModeId),
+      ),
+    [notes, activeModeId],
+  )
+
   const headerActions = (
     <div className="flex items-center gap-1.5">
       {/* View switcher: Day vs Week calendar */}
@@ -281,6 +295,8 @@ export function TimetableWidget({ widget, variant }) {
                 onDeleteTask={handleDeleteTask}
                 onDeleteEvent={handleDeleteEvent}
                 dateTasks={chipTodos}
+                noteDeadlines={noteDeadlines}
+                onOpenNote={setPeekNote}
                 allTodos={activeTodos}
                 sessions={sessions}
               />
@@ -341,6 +357,8 @@ export function TimetableWidget({ widget, variant }) {
                   onDeleteTask={handleDeleteTask}
                   onDeleteEvent={handleDeleteEvent}
                   dateTasks={chipTodos}
+                  noteDeadlines={noteDeadlines}
+                  onOpenNote={setPeekNote}
                   allTodos={activeTodos}
                   sessions={sessions}
                   compact
@@ -351,6 +369,8 @@ export function TimetableWidget({ widget, variant }) {
                 slots={slots}
                 events={eventTodos}
                 dateTasks={chipTodos}
+                noteDeadlines={noteDeadlines}
+                onOpenNote={setPeekNote}
                 allTodos={activeTodos}
                 sessions={sessions}
                 onOpenSlot={openSlotFocus}
@@ -381,6 +401,8 @@ export function TimetableWidget({ widget, variant }) {
         modeId={activeModeId}
         defaultColor={defaultColor}
       />
+
+      <NoteDeadlinePeek note={peekNote} onClose={() => setPeekNote(null)} />
 
       <AnimatePresence>
         {selection && (

@@ -11,7 +11,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { encryptObject, decryptObject } from '@/services/cryptoService'
+import { encryptObject, decryptObject, getContentKey } from '@/services/cryptoService'
 
 const todosCol = (uid) => collection(db, 'users', uid, 'todos')
 const ENCRYPTED_TODO_FIELDS = ['text', 'notes']
@@ -22,8 +22,9 @@ export function subscribeToTodos(uid, callback) {
   const q = query(todosCol(uid), orderBy('createdAt', 'desc'))
   return onSnapshot(q, async (snap) => {
     const rawTodos = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+    const key = await getContentKey(uid)
     const decrypted = await Promise.all(
-      rawTodos.map((t) => decryptObject(t, ENCRYPTED_TODO_FIELDS))
+      rawTodos.map((t) => decryptObject(t, ENCRYPTED_TODO_FIELDS, key))
     )
     // Sort by `order` ascending if set; otherwise by createdAt desc (already
     // applied by the query). Stable sort keeps un-ordered todos at the end.
@@ -41,7 +42,8 @@ export async function addTodo(
   uid,
   { text, modeId, dueAt = null, subjectId = null, priority = 'medium', notes = '', ...rest },
 ) {
-  const encrypted = await encryptObject({ text: text || '', notes: notes || '' }, ENCRYPTED_TODO_FIELDS)
+  const key = await getContentKey(uid)
+  const encrypted = await encryptObject({ text: text || '', notes: notes || '' }, ENCRYPTED_TODO_FIELDS, key)
 
   return addDoc(todosCol(uid), {
     text: encrypted.text,
@@ -59,7 +61,8 @@ export async function addTodo(
 
 export async function updateTodo(uid, todoId, patch) {
   const fields = ENCRYPTED_TODO_FIELDS.filter((f) => f in patch)
-  const encrypted = fields.length > 0 ? await encryptObject(patch, fields) : patch
+  const key = fields.length > 0 ? await getContentKey(uid) : null
+  const encrypted = fields.length > 0 ? await encryptObject(patch, fields, key) : patch
   return updateDoc(doc(todosCol(uid), todoId), encrypted)
 }
 

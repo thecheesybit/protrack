@@ -459,6 +459,9 @@ function createWindow() {
     if (!win || win.isDestroyed()) return
     if (saveTimer) clearTimeout(saveTimer)
     saveTimer = setTimeout(() => {
+      // Never persist the tiny PiP bounds — they'd become the window's remembered
+      // "normal" size and it would reopen as a 240×240 box next launch.
+      if (prePipState) return
       const isMaximized = win.isMaximized()
       const isFullScreen = win.isFullScreen()
       // Don't capture the inflated bounds while maximized/fullscreen — keep
@@ -709,47 +712,64 @@ let prePipState = null
 
 ipcMain.handle('pip:enter', async () => {
   if (!win) return false
+  const wasFullScreen = win.isFullScreen()
+  const wasMaximized = win.isMaximized()
   prePipState = {
     bounds: win.getNormalBounds ? win.getNormalBounds() : win.getBounds(),
-    isFullScreen: win.isFullScreen(),
-    isMaximized: win.isMaximized(),
+    isFullScreen: wasFullScreen,
+    isMaximized: wasMaximized,
   }
 
-  if (win.isFullScreen()) {
+  // Lower the minimum size FIRST, else setBounds is clamped to the old minimum.
+  win.setMinimumSize(160, 160)
+  win.setResizable(true)
+
+  // A compact always-on-top square — just the floating timer, like a video PiP.
+  const applyPipBounds = () => {
+    if (!win || win.isDestroyed()) return
+    const display = screen.getDisplayMatching(win.getBounds()) || screen.getPrimaryDisplay()
+    const { x: dx, y: dy, width: dw, height: dh } = display.workArea
+    const pipW = 240
+    const pipH = 240
+    win.setBounds({
+      x: Math.round(dx + dw - pipW - 24),
+      y: Math.round(dy + dh - pipH - 24),
+      width: pipW,
+      height: pipH,
+    })
+    try {
+      win.setAlwaysOnTop(true, 'screen-saver')
+    } catch {
+      win.setAlwaysOnTop(true)
+    }
+    win.show()
+    win.focus()
+  }
+
+  // Leaving fullscreen/maximize is async on Windows; resizing mid-transition is
+  // ignored (the OS restores the pre-transition bounds). So exit first, wait for
+  // it to settle (event + fallback timeout), then apply — and apply once more a
+  // tick later to defeat any late restore.
+  if (wasFullScreen) {
+    win.setFullScreen(false)
     await new Promise((resolve) => {
-      let finished = false
-      const done = () => {
-        if (!finished) {
-          finished = true
+      let done = false
+      const finish = () => {
+        if (!done) {
+          done = true
           resolve()
         }
       }
-      win.once('leave-full-screen', done)
-      win.setFullScreen(false)
-      setTimeout(done, 250)
+      win.once('leave-full-screen', finish)
+      setTimeout(finish, 500)
     })
-  } else if (win.isMaximized()) {
+  } else if (wasMaximized) {
     win.unmaximize()
+    await new Promise((resolve) => setTimeout(resolve, 80))
   }
 
-  win.setMinimumSize(240, 300)
-
-  const display = screen.getDisplayMatching(win.getBounds()) || screen.getPrimaryDisplay()
-  const { x: dx, y: dy, width: dw, height: dh } = display.workArea
-
-  const pipW = 300
-  const pipH = 380
-  const pipX = Math.round(dx + dw - pipW - 24)
-  const pipY = Math.round(dy + dh - pipH - 24)
-
-  win.setBounds({ x: pipX, y: pipY, width: pipW, height: pipH })
-  try {
-    win.setAlwaysOnTop(true, 'screen-saver')
-  } catch {
-    win.setAlwaysOnTop(true)
-  }
-  win.show()
-  win.focus()
+  applyPipBounds()
+  setTimeout(applyPipBounds, 140)
   return true
 })
 

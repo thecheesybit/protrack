@@ -136,7 +136,7 @@ export function FocusLockScreen() {
   const [videoError, setVideoError] = useState(false)
 
   const iframeRef = useRef(null)
-  const onIframeLoad = useYouTubeVolume(iframeRef, volume, muted)
+  const onIframeLoad = useYouTubeVolume(iframeRef, volume, muted, status === 'running')
 
   const videoId = youtubeId(focusAudioUrl)
   const showVideo = Boolean(focusVideoEnabled && videoId && !videoError)

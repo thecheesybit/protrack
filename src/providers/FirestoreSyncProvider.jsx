@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
 import { subscribeToModes } from '@/services/modeService'
@@ -29,11 +29,19 @@ export function FirestoreSyncProvider({ children }) {
   const setLockConfigState = useStore((s) => s.setLockConfigState)
   const lockApp = useStore((s) => s.lockApp)
 
+  // Last-seen REMOTE appLock enabled state. Auto-lock only on a genuine off→on
+  // edge in this value (fresh device, or a lock enabled on another device) —
+  // never on snapshot echoes and never right after a local disable. Seeded per
+  // user from the current (localStorage-derived) state inside the effect.
+  const prevRemoteLockEnabledRef = useRef(false)
+
   useEffect(() => {
     if (!user) return undefined
 
     // Clear any previous sync error when starting new listeners
     setSyncError(null)
+
+    prevRemoteLockEnabledRef.current = Boolean(useStore.getState().lockConfig?.enabled)
 
     const unsubModes = subscribeToModes(
       user.uid,
@@ -84,14 +92,22 @@ export function FirestoreSyncProvider({ children }) {
           }
         }
 
-        // Account-bound App Lock synchronization from Firestore
-        const isLockConfigured = Boolean(data?.settings?.appLock?.enabled)
-        if (data?.settings && 'appLock' in data.settings) {
-          const remoteLock = data.settings.appLock ?? null
+        // Account-bound App Lock synchronization from Firestore.
+        const hasAppLockField = Boolean(data?.settings && 'appLock' in data.settings)
+        const remoteLock = hasAppLockField ? (data.settings.appLock ?? null) : null
+        const remoteEnabled = Boolean(remoteLock?.enabled)
+        // Rising-edge detection: only lock when the REMOTE lock transitions from
+        // disabled→enabled. This is echo-proof and, crucially, disable-proof —
+        // right after a local disable the remote is (or becomes) disabled, so no
+        // edge fires and the workspace stays open.
+        const wasRemoteEnabled = prevRemoteLockEnabledRef.current
+        prevRemoteLockEnabledRef.current = remoteEnabled
+
+        if (hasAppLockField) {
           syncRemoteLockConfig(remoteLock, (appliedConfig) => {
             if (appliedConfig?.enabled) {
               setLockConfigState(appliedConfig)
-              lockApp()
+              if (!wasRemoteEnabled) lockApp()
             } else {
               setLockConfigState(null)
               if (!hasActivePinSession()) {
@@ -100,7 +116,7 @@ export function FirestoreSyncProvider({ children }) {
               }
             }
           })
-        } else if (!isLockConfigured && !hasActivePinSession()) {
+        } else if (!remoteEnabled && !hasActivePinSession()) {
           const uniqueCode = data?.profile?.uniqueCode || deriveUniqueCode(user.uid)
           initSessionFromAccount(user.uid, uniqueCode, null)
         }
