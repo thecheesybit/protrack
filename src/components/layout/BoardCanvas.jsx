@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { LayoutGroup, AnimatePresence, motion } from 'framer-motion'
-import { ChevronUp } from 'lucide-react'
+import { ChevronUp, ChevronLeft } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { getIcon } from '@/lib/icons'
 import { WIDGETS } from '@/components/widgets/widgetRegistry'
@@ -28,9 +28,12 @@ const MINI_META = {
 
 // ── Components ────────────────────────────────────────────────────────────────
 
-function Widget({ widget, variant }) {
+function Widget({ widget, variant, context = null }) {
   const Component = getWidgetComponent(widget.id)
-  return <Component widget={widget} variant={variant} />
+  // `context` is the P7 nav-bus moduleContext for THIS widget (or null). P8
+  // widgets read it to scroll-to / highlight `context.itemId`; today's widgets
+  // simply ignore the extra prop.
+  return <Component widget={widget} variant={variant} context={context} />
 }
 
 /** Minimal dock trigger shown alongside the hero when a widget is maximised. */
@@ -143,6 +146,13 @@ function MiniCard({ widget, onSingleClick, onDoubleClick }) {
 export function BoardCanvas() {
   const maximizedWidgetId = useStore((s) => s.maximizedWidgetId)
   const maximizeWidget = useStore((s) => s.maximizeWidget)
+
+  // ── P7 cross-module nav bus ───────────────────────────────────────────────
+  const moduleContext = useStore((s) => s.moduleContext)
+  const navStack = useStore((s) => s.navStack)
+  const navBack = useStore((s) => s.navBack)
+  const lastNavSeqRef = useRef(null)
+  const contextFor = (id) => (moduleContext && moduleContext.widgetId === id ? moduleContext : null)
 
   const [rightId, setRightId] = useState(DEFAULT_RIGHT_ID)
 
@@ -262,12 +272,36 @@ export function BoardCanvas() {
     }
   }, [])
 
+  // ── P7 nav bus: surface the widget a moduleContext points at ──────────────
+  // `activate: false` contexts (e.g. from openFocus, whose overlay owns the
+  // screen) are recorded but never move the board. `seq` guards against
+  // re-running for the same nav intent. P8 widgets pick up the `context` prop.
+  useEffect(() => {
+    if (!moduleContext || moduleContext.activate === false) return
+    if (moduleContext.seq === lastNavSeqRef.current) return
+    lastNavSeqRef.current = moduleContext.seq
+    const { widgetId } = moduleContext
+    if (!WIDGETS.some((w) => w.id === widgetId)) return
+    maximizeWidget(widgetId)
+    if (ALL_SWAPPABLE.includes(widgetId)) setRightId(widgetId)
+  }, [moduleContext, maximizeWidget])
+
   // ── Maximised: dock + hero ────────────────────────────────────────────────
   if (maximized) {
     return (
       <LayoutGroup>
         <div className="flex h-full gap-3 p-1">
           <div className="flex shrink-0 flex-col gap-2">
+            {navStack.length > 0 && moduleContext?.activate !== false && (
+              <button
+                onClick={navBack}
+                title="Back to previous view"
+                aria-label="Back to previous view"
+                className="flex h-12 w-12 items-center justify-center rounded-2xl border border-line/60 bg-surface/60 text-muted backdrop-blur-xl transition-all duration-200 hover:border-accent/40 hover:text-ink"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+            )}
             {WIDGETS.map((w) => (
               <DockChip
                 key={w.id}
@@ -278,7 +312,7 @@ export function BoardCanvas() {
             ))}
           </div>
           <motion.div layout className="min-h-0 flex-1">
-            <Widget widget={maximized} variant="hero" />
+            <Widget widget={maximized} variant="hero" context={contextFor(maximized.id)} />
           </motion.div>
         </div>
       </LayoutGroup>
@@ -322,7 +356,7 @@ export function BoardCanvas() {
               )}
             >
               <div className="h-full">
-                <Widget widget={leftWidget} variant="grid" />
+                <Widget widget={leftWidget} variant="grid" context={contextFor(leftWidget.id)} />
               </div>
             </motion.div>
           )}
@@ -365,7 +399,7 @@ export function BoardCanvas() {
               )}
             >
               <div className="h-full">
-                <Widget widget={rightWidget} variant="grid" />
+                <Widget widget={rightWidget} variant="grid" context={contextFor(rightWidget.id)} />
               </div>
             </motion.div>
           )}
