@@ -1,9 +1,10 @@
-import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth'
+import { GoogleAuthProvider } from 'firebase/auth'
 import { doc, setDoc, onSnapshot, deleteDoc } from 'firebase/firestore'
 import { auth, db } from '@/lib/firebase'
 import { isDesktop } from '@/desktop/isDesktop'
 import { nextOccurrence } from '@/lib/time'
 import { addSlot, updateSlot } from '@/services/timetableService'
+import { signInWithGooglePopup } from '@/lib/authPopup'
 
 /**
  * Google Calendar integration.
@@ -126,7 +127,10 @@ export async function connectCalendar() {
   const provider = new GoogleAuthProvider()
   provider.addScope(CAL_SCOPE)
   provider.setCustomParameters({ prompt: 'consent' })
-  const result = await signInWithPopup(auth, provider)
+  // Retries once against the popup/third-party-cookie failure class
+  // (auth/internal-error and friends). Runs only in a real browser tab (the
+  // isDesktop branch above never reaches here), so this cannot affect Electron.
+  const result = await signInWithGooglePopup(auth, provider)
   const credential = GoogleAuthProvider.credentialFromResult(result)
   const token = credential?.accessToken
   if (!token) throw new Error('No calendar access token returned')

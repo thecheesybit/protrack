@@ -1,12 +1,13 @@
 import { createContext, useCallback, useEffect, useState } from 'react'
 import {
   onAuthStateChanged,
-  signInWithPopup,
   signOut as firebaseSignOut,
   deleteUser,
 } from 'firebase/auth'
 import { auth, googleProvider, isFirebaseConfigured } from '@/lib/firebase'
 import { ensureUserDocument } from '@/services/userService'
+import { signInWithGooglePopup, completePendingRedirect, friendlyAuthError } from '@/lib/authPopup'
+import { isDesktop } from '@/desktop/isDesktop'
 
 function withTimeout(promise, ms, errorMessage) {
   return new Promise((resolve, reject) => {
@@ -57,6 +58,12 @@ export function AuthProvider({ children }) {
     const slowConnectionTimer = setTimeout(() => {
       setLoadingStatus('Network is slow — verifying connection…')
     }, 3000)
+
+    // If this load is returning from a signIn() redirect fallback (web/mobile
+    // only — see signIn below), let Firebase process it. Either way,
+    // onAuthStateChanged below picks up the resulting session on its own —
+    // this call exists only to consume the pending redirect state.
+    completePendingRedirect(auth)
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       let profileSlowTimer = null
@@ -116,12 +123,18 @@ export function AuthProvider({ children }) {
     }
     setError(null)
     try {
-      await signInWithPopup(auth, googleProvider)
+      // Retries once against the popup/third-party-cookie failure class
+      // (auth/internal-error and friends — common on real browsers since
+      // Chrome's 2024+ cookie phase-out). Redirect fallback is allowed only
+      // outside the desktop shell: Electron's main window blocks in-place
+      // navigation to external URLs (main.js `will-navigate`), so a redirect
+      // there would silently fail to leave the app and orphan the sign-in.
+      await signInWithGooglePopup(auth, googleProvider, { allowRedirectFallback: !isDesktop })
     } catch (err) {
       // Ignore the benign "user closed the popup" case.
       if (err.code !== 'auth/popup-closed-by-user') {
         console.error('[auth] sign-in failed', err)
-        setError(err.message)
+        setError(friendlyAuthError(err))
       }
     }
   }, [])

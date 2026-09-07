@@ -5,9 +5,10 @@ import { useAuth } from '@/hooks/useAuth'
 import { AuroraBackground } from '@/components/common/AuroraBackground'
 import { Logo } from '@/components/common/Logo'
 import { GlassCard } from '@/components/ui/GlassCard'
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth'
+import { GoogleAuthProvider } from 'firebase/auth'
 import { auth, db } from '@/lib/firebase'
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { signInWithGooglePopup, friendlyAuthError } from '@/lib/authPopup'
 
 export function LinkGcalPage() {
   const { user, loading } = useAuth()
@@ -24,7 +25,11 @@ export function LinkGcalPage() {
       provider.addScope('https://www.googleapis.com/auth/calendar.events')
       provider.setCustomParameters({ prompt: 'consent' })
       
-      const result = await signInWithPopup(auth, provider)
+      // Retries once against the popup/third-party-cookie failure class
+      // (auth/internal-error and friends). No redirect fallback here — this
+      // flow needs the access token back in the same call, and a full
+      // redirect-resume for it isn't wired up yet.
+      const result = await signInWithGooglePopup(auth, provider)
       const credential = GoogleAuthProvider.credentialFromResult(result)
       const token = credential?.accessToken
 
@@ -52,7 +57,7 @@ export function LinkGcalPage() {
       setState('done')
     } catch (err) {
       console.error('[gcal-link] auth/sync failed', err)
-      setMessage(err.message || 'Failed to authenticate Google Calendar')
+      setMessage(friendlyAuthError(err))
       setState('error')
     }
   }

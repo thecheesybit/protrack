@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Monitor, Check, AlertTriangle, Loader2 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { AuroraBackground } from '@/components/common/AuroraBackground'
 import { Logo } from '@/components/common/Logo'
 import { GlassCard } from '@/components/ui/GlassCard'
-import { claimDesktop } from '@/services/deviceLinkService'
+import { claimDesktop, resumePendingClaim } from '@/services/deviceLinkService'
+import { friendlyAuthError } from '@/lib/authPopup'
 
 /**
  * Opened on the phone after scanning the desktop QR (URL: /link?s=<sessionId>).
@@ -21,15 +22,37 @@ export function LinkDevicePage() {
   const [state, setState] = useState('idle') // idle | linking | done | error
   const [message, setMessage] = useState('')
 
+  // If confirm() below fell back to a full-page redirect (some browsers block
+  // the Google sign-in popup outright — third-party cookies / FedCM), the tab
+  // navigated away and came back. Finish that claim here.
+  useEffect(() => {
+    let cancelled = false
+    resumePendingClaim()
+      .then((resumedSessionId) => {
+        if (!cancelled && resumedSessionId) setState('done')
+      })
+      .catch((err) => {
+        if (cancelled) return
+        console.error('[link] resume claim failed', err)
+        setMessage(friendlyAuthError(err))
+        setState('error')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const confirm = async () => {
     if (!sessionId) return
     setState('linking')
     try {
-      await claimDesktop(sessionId)
-      setState('done')
+      const completed = await claimDesktop(sessionId)
+      // completed === false means it fell back to a redirect — the page is
+      // navigating away right now, so leave the "linking…" state in place.
+      if (completed) setState('done')
     } catch (err) {
       console.error('[link] claim failed', err)
-      setMessage(err.message || 'Could not link this device')
+      setMessage(friendlyAuthError(err))
       setState('error')
     }
   }
