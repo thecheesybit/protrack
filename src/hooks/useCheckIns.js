@@ -82,7 +82,11 @@ export function useCheckIns() {
 
     const evaluate = async () => {
       const st = useStore.getState()
-      if (st.checkinPrompt) return
+      // Don't stack a second check-in; it may still queue behind a routine/quote.
+      const checkinPending =
+        st.activePrompt?.type === 'checkin' ||
+        st.promptQueue.some((p) => p.type === 'checkin')
+      if (checkinPending) return
       if (st.focusLocked || st.status === 'running') return
 
       const slot = currentSlot()
@@ -109,7 +113,13 @@ export function useCheckIns() {
         morningIntent: morningAnswer?.type === 'intent' ? morningAnswer.value : null,
         overrideText,
       })
-      if (question) st.setCheckinPrompt({ slot, question })
+      if (question) {
+        st.pushPrompt({
+          type: 'checkin',
+          payload: { slot, question },
+          snoozeMs: CHECKIN_SNOOZE_MS,
+        })
+      }
     }
 
     evaluate()

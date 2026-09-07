@@ -30,7 +30,7 @@ import { FloatingFocusPip } from '@/components/focus/FloatingFocusPip'
 import { PipAppView } from '@/components/focus/PipAppView'
 import { SessionCompleteModal } from '@/components/focus/SessionCompleteModal'
 import { HydrationReminder } from '@/components/wellness/HydrationReminder'
-import { CheckInCard } from '@/components/checkin/CheckInCard'
+import { CenterPrompt } from '@/components/prompt/CenterPrompt'
 
 const SettingsPanel = React.lazy(() =>
   import('@/components/settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel }))
@@ -293,7 +293,7 @@ export function Dashboard() {
       <FloatingFocusPip />
       <SessionCompleteModal />
       <HydrationReminder />
-      <CheckInCard />
+      <CenterPrompt />
       <BackgroundAudioPlayer />
 
       <Suspense fallback={null}>

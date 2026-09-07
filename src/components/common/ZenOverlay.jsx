@@ -171,15 +171,21 @@ export function ZenOverlay() {
   const [quote, setQuote] = useState(QUOTES[0])
 
   const autoTimerRef = useRef(null)
+  // Id of the queue slot this overlay holds while a quote is on screen, so a
+  // check-in / routine cue queues behind it instead of stacking on top.
+  const quotePromptIdRef = useRef(null)
   const activeModeId = useStore((s) => s.activeModeId)
   const settings = useStore((s) => s.settings)
-  
+
   const zenEnabled = useStore((s) => s.settings?.zenEnabled !== false)
   const zenDuration = useStore((s) => s.settings?.zenDuration || 60000)
   const openFocus = useStore((s) => s.openFocus)
   const focusRunning = useStore((s) => s.status === 'running')
   const focusLocked = useStore((s) => s.focusLocked)
-  const isBlocked = focusRunning || focusLocked || !zenEnabled
+  const activePrompt = useStore((s) => s.activePrompt)
+  // Never draw a quote over a prompt that needs an answer.
+  const promptBlocking = !!activePrompt && activePrompt.type !== 'quote'
+  const isBlocked = focusRunning || focusLocked || !zenEnabled || promptBlocking
 
   const { subjects } = useSubjects(activeModeId)
   const todos = useTodos()
@@ -192,6 +198,11 @@ export function ZenOverlay() {
     clearTimeout(autoTimerRef.current)
     stopSpeaking()
     setShow(false)
+    const pid = quotePromptIdRef.current
+    if (pid != null) {
+      useStore.getState().dismissPrompt(pid)
+      quotePromptIdRef.current = null
+    }
   }, [])
 
   const nextQuote = useCallback(async () => {
@@ -263,8 +274,7 @@ export function ZenOverlay() {
     let active = true
 
     if (isBlocked) {
-      setShow(false)
-      stopSpeaking()
+      dismiss()
       return
     }
 
@@ -304,6 +314,12 @@ export function ZenOverlay() {
         } catch { /* private mode */ }
 
         setQuote(newQuote)
+        // Claim the prompt queue so a due check-in waits until the quote clears.
+        if (quotePromptIdRef.current == null) {
+          quotePromptIdRef.current = useStore
+            .getState()
+            .pushPrompt({ type: 'quote', dismissible: true })
+        }
         setShow(true)
 
         const voiceEnabled = settings?.zenVoiceEnabled !== false
@@ -328,7 +344,7 @@ export function ZenOverlay() {
 
   return (
     <AnimatePresence>
-      {show && (
+      {show && (!activePrompt || activePrompt.type === 'quote') && (
         <motion.div
           key="zen-overlay"
           initial={{ opacity: 0 }}
