@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { MicroKanban } from './MicroKanban'
+import { SubjectQuickAdd } from './SubjectQuickAdd'
 import {
   adjustProgress,
   addSubjectLink,
@@ -189,6 +190,12 @@ export function SubjectDetail({ modeId, subject, onEdit }) {
       {/* Kanban */}
       <div className={cn('mt-4 flex min-h-0 flex-1 flex-col')}>
         <span className="mb-2 text-xs font-medium text-muted">Tasks</span>
+        <SubjectQuickAdd
+          uid={user?.uid}
+          modeId={targetModeId}
+          subjectId={subject.id}
+          subjectName={subject.name}
+        />
         <div className="min-h-0 flex-1">
           <MicroKanban modeId={targetModeId} subjectId={subject.id} subjectName={subject.name} />
         </div>

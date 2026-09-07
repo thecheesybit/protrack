@@ -19,6 +19,7 @@ import {
   setSubjectProgress,
   getSubjectsOnce,
   addTask,
+  addTasksBulk,
   updateTask,
   subscribeToTasks,
 } from '@/services/subjectService'
@@ -172,6 +173,26 @@ export const TOOL_DECLARATIONS = [
             },
           },
           required: ['subjectName', 'title'],
+        },
+      },
+      {
+        name: 'add_tasks_bulk',
+        description:
+          'Add multiple tasks to an existing subject in a single batched operation. Ideal for lesson ranges or task lists.',
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            subjectName: {
+              type: SchemaType.STRING,
+              description: 'Name of the subject to add tasks to',
+            },
+            titles: {
+              type: SchemaType.ARRAY,
+              items: { type: SchemaType.STRING },
+              description: 'List of task titles to create',
+            },
+          },
+          required: ['subjectName', 'titles'],
         },
       },
       {
@@ -388,6 +409,22 @@ export async function executeTool(name, args, ctx) {
           notes: args.notes || '',
         })
         return { ok: true, summary: `Added "${args.title}" to ${subj.name} (${col}, ${priority}).` }
+      }
+
+      case 'add_tasks_bulk': {
+        if (!modeId) return { ok: false, error: 'No active mode.' }
+        const subj = findSubject(subjects, args.subjectName)
+        if (!subj) return { ok: false, error: `Subject "${args.subjectName}" not found.` }
+        if (!Array.isArray(args.titles) || args.titles.length === 0) {
+          return { ok: false, error: 'No task titles provided.' }
+        }
+        const res = await addTasksBulk(uid, modeId, subj.id, args.titles, {
+          subjectName: subj.name,
+        })
+        return {
+          ok: true,
+          summary: `Added ${res.count} task${res.count > 1 ? 's' : ''} to "${subj.name}".`,
+        }
       }
 
       case 'add_todo': {

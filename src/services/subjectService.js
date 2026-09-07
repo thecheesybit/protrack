@@ -13,6 +13,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { addLedgerEntry } from '@/services/ledgerService'
 
 const subjectsCol = (uid, modeId) =>
   collection(db, 'users', uid, 'modes', modeId, 'subjects')
@@ -134,4 +135,68 @@ export async function updateTask(uid, modeId, subjectId, taskId, patch) {
 
 export async function deleteTask(uid, modeId, subjectId, taskId) {
   return deleteDoc(doc(tasksCol(uid, modeId, subjectId), taskId))
+}
+
+/**
+ * Bulk create tasks for a subject using chunked writeBatch (chunk size <= 400).
+ * Recomputes subject progress once, logs one ledger entry, and returns { count, ids }.
+ */
+export async function addTasksBulk(uid, modeId, subjectId, titles, opts = {}) {
+  if (!uid || !modeId || !subjectId || !titles?.length) {
+    return { count: 0, ids: [] }
+  }
+
+  const column = opts.column || 'todo'
+  const priority = opts.priority || 'medium'
+  const baseOrder = Date.now()
+  const CHUNK_SIZE = 400
+  const createdIds = []
+
+  for (let i = 0; i < titles.length; i += CHUNK_SIZE) {
+    const chunk = titles.slice(i, i + CHUNK_SIZE)
+    const batch = writeBatch(db)
+
+    chunk.forEach((title, idx) => {
+      const taskDocRef = doc(tasksCol(uid, modeId, subjectId))
+      createdIds.push(taskDocRef.id)
+      batch.set(taskDocRef, {
+        title: typeof title === 'string' ? title.trim() : String(title),
+        column,
+        priority,
+        notes: opts.notes || '',
+        dueAt: opts.dueAt || null,
+        order: baseOrder + (i + idx) * 10,
+        createdAt: serverTimestamp(),
+      })
+    })
+
+    await batch.commit()
+  }
+
+  // Recompute progress once
+  try {
+    const snap = await getDocs(tasksCol(uid, modeId, subjectId))
+    if (!snap.empty) {
+      const total = snap.docs.length
+      const done = snap.docs.filter((d) => d.data().column === 'done').length
+      const pct = Math.round((done / total) * 100)
+      await setSubjectProgress(uid, modeId, subjectId, pct)
+    }
+  } catch (err) {
+    console.warn('[subjectService] bulk task progress recompute error:', err)
+  }
+
+  // Single ledger entry
+  try {
+    await addLedgerEntry(uid, {
+      kind: 'task',
+      title: `Added ${createdIds.length} tasks`,
+      detail: opts.subjectName ? `Bulk created in ${opts.subjectName}` : 'Bulk tasks created',
+      modeId,
+    })
+  } catch (err) {
+    console.warn('[subjectService] bulk task ledger entry error:', err)
+  }
+
+  return { count: createdIds.length, ids: createdIds }
 }

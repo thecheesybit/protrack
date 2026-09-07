@@ -9,6 +9,7 @@ import { chatWithGemini, hasGeminiKey } from '@/services/geminiService'
 import { executeTool } from '@/services/geminiTools'
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition'
 import { todayDow } from '@/lib/time'
+import { bulkParse } from '@/lib/bulkParse'
 import { CommandMatrix } from './CommandMatrix'
 
 const SLASH_PATTERNS = [
@@ -39,6 +40,19 @@ const SLASH_PATTERNS = [
       name: 'add_task',
       args: { subjectName: subjectName.trim(), title: title.trim() },
     }),
+  },
+  {
+    re: /^\/tasks\s+(.+?)\s+@(.+)$/i,
+    toTool: ([, spec, subjectName]) => {
+      const parsed = bulkParse(spec.trim())
+      const titles = parsed?.titles?.length
+        ? parsed.titles
+        : spec.split(',').map((s) => s.trim()).filter(Boolean)
+      return {
+        name: 'add_tasks_bulk',
+        args: { subjectName: subjectName.trim(), titles },
+      }
+    },
   },
 ]
 
