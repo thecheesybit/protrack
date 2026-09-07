@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence } from 'framer-motion'
-import { CalendarCheck, CalendarPlus, RefreshCw, Flame, Clock, CalendarDays } from 'lucide-react'
+import { CalendarCheck, CalendarPlus, RefreshCw, Flame, Clock, CalendarDays, LayoutGrid, Calendar as CalendarIcon } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useStore } from '@/store/useStore'
+import { useAuth } from '@/hooks/useAuth'
 import { useTimetable } from '@/hooks/useTimetable'
 import { useTodos } from '@/hooks/useWellness'
 import { useFocusSessions } from '@/hooks/useFocusSessions'
 import { WidgetFrame } from './WidgetFrame'
+import { cn } from '@/utils/cn'
 import { TimetableGrid } from '@/components/timetable/TimetableGrid'
 import { TodayAgenda } from '@/components/timetable/TodayAgenda'
 import { SlotEditorModal } from '@/components/timetable/SlotEditorModal'
 import { NlQuickCapture } from '@/components/calendar/NlQuickCapture'
 import { TimeContextPanel } from '@/components/timetable/TimeContextPanel'
+import { updateTodo, deleteTodo } from '@/services/todoService'
 import { MODE_PALETTE } from '@/lib/constants'
 import { DAY_START_MIN, todayDow, minutesToLabel, durationLabel } from '@/lib/time'
 import { ymd } from '@/lib/dates'
@@ -82,8 +85,26 @@ export function TimetableWidget({ widget, variant }) {
   const [connected, setConnected] = useState(isCalendarConnected())
   const [calEvents, setCalEvents] = useState([])
   const [selection, setSelection] = useState(null) // { dayIndex, startMin, endMin }
+  const { user } = useAuth()
 
   const isHero = variant === 'hero'
+
+  const handleToggleTask = (t) => {
+    if (!user) return
+    updateTodo(user.uid, t.id, { done: !t.done })
+  }
+
+  const handleDeleteTask = (id) => {
+    if (!user) return
+    deleteTodo(user.uid, id)
+    toast.success('Task removed')
+  }
+
+  const handleDeleteEvent = (id) => {
+    if (!user) return
+    deleteTodo(user.uid, id)
+    toast.success('Event removed')
+  }
 
   const refreshEvents = async () => {
     try {
@@ -115,16 +136,18 @@ export function TimetableWidget({ widget, variant }) {
     setEditorOpen(true)
   }
   const openSlotFocus = (slot) => {
+    const durMin = Math.max(5, (slot.endMin || 0) - (slot.startMin || 0))
     openFocus({
       title: slot.label || 'Study session',
       subtitle: `${minutesToLabel(slot.startMin)} · ${durationLabel(slot.startMin, slot.endMin)}`,
       color: slot.color,
       slotId: slot.id,
+      durationMin: durMin,
     })
   }
-  const quickAdd = (startMin, endMin) =>
+  const quickAdd = (startMin, endMin, dayIndex) =>
     openEditor({
-      dayOfWeek: todayDow(),
+      dayOfWeek: dayIndex ?? todayDow(),
       startMin: startMin ?? DAY_START_MIN + 3 * 60,
       endMin: endMin ?? DAY_START_MIN + 4 * 60,
       label: '',
@@ -133,45 +156,114 @@ export function TimetableWidget({ widget, variant }) {
 
   const handleSelect = (sel) => setSelection(sel)
 
-  const handleCreateSlotFromPanel = () => {
-    if (!selection) return
+  const handleCreateSlotFromPanel = (data) => {
+    const sel = data || selection
+    if (!sel) return
     openEditor({
-      dayOfWeek: selection.dayIndex,
-      startMin: selection.startMin,
-      endMin: selection.endMin,
+      dayOfWeek: sel.dayIndex,
+      startMin: sel.startMin,
+      endMin: sel.endMin,
       label: '',
       color: defaultColor,
     })
   }
 
-  // Partition todos: events (type='event') vs deadline chips
-  const eventTodos = todos.filter((t) => !t.done && t.type === 'event')
-  const chipTodos = todos.filter((t) => !t.done && t.dueAt && t.type !== 'event')
+  const [viewMode, setViewMode] = useState(() => {
+    try {
+      return localStorage.getItem('protrack:timetable_widget_view') || 'week'
+    } catch {
+      return 'week'
+    }
+  })
 
-  const headerActions = isHero ? (
-    <button
-      onClick={connect}
-      title="Connect Google Calendar"
-      className="flex items-center gap-1.5 rounded-lg border border-line bg-surface-2/50 px-2.5 py-1.5 text-xs text-muted transition-colors hover:text-ink"
-    >
-      {connected ? (
-        <>
-          <CalendarCheck className="h-3.5 w-3.5 text-emerald-400" /> Synced
-        </>
-      ) : (
-        <>
-          <CalendarPlus className="h-3.5 w-3.5" /> Calendar
-        </>
+  const handleSetViewMode = (mode) => {
+    setViewMode(mode)
+    try {
+      localStorage.setItem('protrack:timetable_widget_view', mode)
+    } catch { /* noop */ }
+  }
+
+  // Scope todos: all modes if 'all', or matching active mode + unassigned global todos
+  const activeTodos = useMemo(() => {
+    return todos.filter(
+      (t) => !t.done && (activeModeId === 'all' || !t.modeId || t.modeId === activeModeId),
+    )
+  }, [todos, activeModeId])
+
+  // Partition todos: events (type='event') vs deadline chips
+  const eventTodos = useMemo(
+    () => activeTodos.filter((t) => t.type === 'event'),
+    [activeTodos],
+  )
+  const chipTodos = useMemo(
+    () => activeTodos.filter((t) => t.dueAt && t.type !== 'event'),
+    [activeTodos],
+  )
+
+  const headerActions = (
+    <div className="flex items-center gap-1.5">
+      {/* View switcher: Day vs Week calendar */}
+      {!isHero && (
+        <div className="flex items-center rounded-xl border border-white/10 bg-surface-2/40 p-0.5 text-[11px] font-medium backdrop-blur-md">
+          <button
+            onClick={() => handleSetViewMode('week')}
+            className={cn(
+              'flex items-center gap-1.5 rounded-lg px-2.5 py-1 transition-all',
+              viewMode === 'week'
+                ? 'bg-surface shadow-glass font-bold text-accent'
+                : 'text-muted hover:text-ink',
+            )}
+            title="Full Week Calendar view"
+          >
+            <LayoutGrid className="h-3 w-3" />
+            Week
+          </button>
+          <button
+            onClick={() => handleSetViewMode('day')}
+            className={cn(
+              'flex items-center gap-1.5 rounded-lg px-2.5 py-1 transition-all',
+              viewMode === 'day'
+                ? 'bg-surface shadow-glass font-bold text-accent'
+                : 'text-muted hover:text-ink',
+            )}
+            title="Single Day Agenda view"
+          >
+            <CalendarIcon className="h-3 w-3" />
+            Day
+          </button>
+        </div>
       )}
-    </button>
-  ) : null
+
+      {isHero && (
+        <button
+          onClick={connect}
+          title="Connect Google Calendar"
+          className="flex items-center gap-1.5 rounded-lg border border-line bg-surface-2/50 px-2.5 py-1.5 text-xs text-muted transition-colors hover:text-ink"
+        >
+          {connected ? (
+            <>
+              <CalendarCheck className="h-3.5 w-3.5 text-emerald-400" /> Synced
+            </>
+          ) : (
+            <>
+              <CalendarPlus className="h-3.5 w-3.5" /> Calendar
+            </>
+          )}
+        </button>
+      )}
+    </div>
+  )
 
   return (
     <>
       <WidgetFrame
         widget={widget}
         variant={variant}
-        subtitle={`${slots.length} sessions / week`}
+        subtitle={
+          activeModeId === 'all'
+            ? `${slots.length} sessions / week · All Scopes`
+            : `${slots.length} sessions / week${activeMode ? ` · ${activeMode.name}` : ''}`
+        }
         headerActions={headerActions}
       >
         {isHero ? (
@@ -185,7 +277,12 @@ export function TimetableWidget({ widget, variant }) {
                 onOpenSlot={openSlotFocus}
                 onEditSlot={openEditor}
                 onQuickCapture={setCaptureSeed}
+                onToggleTask={handleToggleTask}
+                onDeleteTask={handleDeleteTask}
+                onDeleteEvent={handleDeleteEvent}
                 dateTasks={chipTodos}
+                allTodos={activeTodos}
+                sessions={sessions}
               />
             </div>
 
@@ -230,7 +327,40 @@ export function TimetableWidget({ widget, variant }) {
           </div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col">
-            <TodayAgenda slots={slots} onOpenSlot={openSlotFocus} onAdd={quickAdd} />
+            {viewMode === 'week' ? (
+              <div className="flex min-h-0 flex-1 flex-col">
+                <TimetableGrid
+                  slots={slots}
+                  events={eventTodos}
+                  defaultColor={defaultColor}
+                  onSelect={handleSelect}
+                  onOpenSlot={openSlotFocus}
+                  onEditSlot={openEditor}
+                  onQuickCapture={setCaptureSeed}
+                  onToggleTask={handleToggleTask}
+                  onDeleteTask={handleDeleteTask}
+                  onDeleteEvent={handleDeleteEvent}
+                  dateTasks={chipTodos}
+                  allTodos={activeTodos}
+                  sessions={sessions}
+                  compact
+                />
+              </div>
+            ) : (
+              <TodayAgenda
+                slots={slots}
+                events={eventTodos}
+                dateTasks={chipTodos}
+                allTodos={activeTodos}
+                sessions={sessions}
+                onOpenSlot={openSlotFocus}
+                onAdd={quickAdd}
+                onSelect={handleSelect}
+                onToggleTask={handleToggleTask}
+                onDeleteTask={handleDeleteTask}
+                onDeleteEvent={handleDeleteEvent}
+              />
+            )}
             <CompactStats sessions={sessions} stats={stats} />
           </div>
         )}

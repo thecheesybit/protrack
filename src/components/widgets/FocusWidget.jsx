@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Play, Pause, RotateCcw, Flame, Clock, CloudRain, Waves, Wind, VolumeX, Volume2, TreePine, Headphones, Coffee, Trees, AudioLines, Sprout } from 'lucide-react'
+import { Play, Pause, RotateCcw, Flame, Clock, CloudRain, Waves, Wind, VolumeX, Volume2, TreePine, Headphones, Coffee, Trees, AudioLines, Sprout, PictureInPicture2 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { WidgetFrame } from './WidgetFrame'
 import { ForestView } from '@/components/focus/ForestView'
@@ -10,7 +10,8 @@ import { useAuth } from '@/hooks/useAuth'
 import { updateSettings } from '@/services/userService'
 import { logFailedFocusSession } from '@/services/focusService'
 import { addLedgerEntry } from '@/services/ledgerService'
-import { VIDEO_PRESETS } from '@/lib/focusScenes'
+import { VIDEO_PRESETS, youtubeId, toCanonicalYouTubeUrl } from '@/lib/focusScenes'
+import { enterPip } from '@/lib/pip'
 
 import f1 from '@/assets/f1.jpg'
 import f2 from '@/assets/f2.jpg'
@@ -142,6 +143,7 @@ export function FocusWidget({ widget, variant }) {
   const pause = useStore((s) => s.pause)
   const resume = useStore((s) => s.resume)
   const reset = useStore((s) => s.reset)
+  const setPipActive = useStore((s) => s.setPipActive)
   const setVolume = useStore((s) => s.adjustTrackVolume)
   const toggleMute = useStore((s) => s.toggleMute)
 
@@ -213,13 +215,11 @@ export function FocusWidget({ widget, variant }) {
     }
   }
 
-  const YT_PATTERN = /(?:youtube\.com\/(?:watch\?v=|embed\/|v\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i
-
   const updateFocusAudioUrl = async (url, enableVideo = false) => {
     try {
       const patch = enableVideo
         ? { focusAudioUrl: url, focusVideoEnabled: true }
-        : { focusAudioUrl: url }
+        : { focusAudioUrl: url, focusVideoEnabled: Boolean(url) }
       await updateSettings(user.uid, patch)
     } catch (err) {
       console.error('[focus] failed to save audio URL', err)
@@ -227,16 +227,18 @@ export function FocusWidget({ widget, variant }) {
   }
 
   const loadStream = async () => {
-    const url = focusAudioUrl.trim()
-    if (!url) {
+    const raw = focusAudioUrl.trim()
+    if (!raw) {
       toast.error('Paste a YouTube or audio URL first')
       return
     }
-    if (YT_PATTERN.test(url)) {
-      await updateFocusAudioUrl(url, true)
+    const id = youtubeId(raw)
+    if (id) {
+      const canonical = toCanonicalYouTubeUrl(id)
+      await updateFocusAudioUrl(canonical, true)
       toast.success('YouTube background saved — plays when focus begins')
-    } else if (url.startsWith('http')) {
-      await updateFocusAudioUrl(url)
+    } else if (raw.startsWith('http')) {
+      await updateFocusAudioUrl(raw)
       toast.success('Audio URL saved — plays when focus begins')
     } else {
       toast.error('Not a recognised YouTube or audio URL')
@@ -245,7 +247,8 @@ export function FocusWidget({ widget, variant }) {
 
   const selectVideoPreset = async (url) => {
     try {
-      await updateFocusAudioUrl(url, true)
+      const canonical = toCanonicalYouTubeUrl(url) || url
+      await updateFocusAudioUrl(canonical, true)
       toast.success('Video background set')
     } catch (err) {
       console.error('[focus] failed to set preset', err)
@@ -271,8 +274,23 @@ export function FocusWidget({ widget, variant }) {
 
   const subtitle = `${stats?.currentStreak || 0}-day streak · ${stats?.treesGrown || 0} trees`
 
+  const pipHeaderAction = !isIdle ? (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        enterPip()
+      }}
+      className="flex items-center gap-1 rounded-xl border border-white/15 bg-white/10 px-2.5 py-1 text-xs font-semibold text-amber-400 backdrop-blur-md transition-all hover:scale-105 hover:bg-white/20 hover:text-amber-300 active:scale-95"
+      title="Picture-in-Picture mode"
+    >
+      <PictureInPicture2 className="h-3.5 w-3.5" />
+      <span>PiP</span>
+    </button>
+  ) : null
+
   return (
-    <WidgetFrame widget={widget} variant={variant} subtitle={subtitle}>
+    <WidgetFrame widget={widget} variant={variant} subtitle={subtitle} headerActions={pipHeaderAction}>
       {/* ── Background layer for compact mode ── */}
       {!isHero && (
         <FocusBackground bgImage={bgImage} className="inset-0 rounded-3xl" />
@@ -325,6 +343,17 @@ export function FocusWidget({ widget, variant }) {
                 >
                   <RotateCcw className="h-5 w-5" />
                 </button>
+                {!isIdle && (
+                  <button
+                    type="button"
+                    onClick={enterPip}
+                    className="flex h-12 items-center gap-2 rounded-2xl border border-white/20 bg-black/60 px-4 text-xs font-semibold text-amber-400 backdrop-blur-sm transition-all hover:scale-105 hover:border-amber-400/40 hover:bg-black/80 hover:text-amber-300 active:scale-95"
+                    title="Float timer in Picture-in-Picture mode"
+                  >
+                    <PictureInPicture2 className="h-4 w-4" />
+                    <span>PiP</span>
+                  </button>
+                )}
               </div>
 
             {/* Elegant glassmorphic Tab Switcher */}
@@ -485,36 +514,46 @@ export function FocusWidget({ widget, variant }) {
                   {activeTab === 'scenes' && (
                     <div className="flex flex-col gap-2.5 w-full max-w-[300px]">
                       <div className="grid grid-cols-3 gap-1">
-                        {VIDEO_PRESETS.map((p) => (
-                          <button
-                            key={p.url}
-                            onClick={() => selectVideoPreset(p.url)}
-                            className={cn(
-                              'truncate rounded-lg border px-2 py-1.5 text-[10px] transition-colors',
-                              focusAudioUrl === p.url
-                                ? 'border-accent/50 bg-accent/15 text-accent'
-                                : 'border-white/20 bg-black/60 text-white/70 hover:border-accent/50 hover:text-white hover:bg-black/80',
-                            )}
-                            title={p.label}
-                          >
-                            {p.label}
-                          </button>
-                        ))}
-                        {customPresets.map((p, idx) => (
-                          <button
-                            key={p.url + idx}
-                            onClick={() => selectVideoPreset(p.url)}
-                            className={cn(
-                              'truncate rounded-lg border px-2 py-1.5 text-[10px] transition-colors',
-                              focusAudioUrl === p.url
-                                ? 'border-accent/50 bg-accent/15 text-accent'
-                                : 'border-white/20 bg-black/60 text-white/70 hover:border-accent/50 hover:text-white hover:bg-black/80',
-                            )}
-                            title={p.label}
-                          >
-                            {p.label}
-                          </button>
-                        ))}
+                        {VIDEO_PRESETS.map((p) => {
+                          const isSelected =
+                            focusAudioUrl === p.url ||
+                            (Boolean(focusAudioUrl) && youtubeId(focusAudioUrl) === youtubeId(p.url))
+                          return (
+                            <button
+                              key={p.url}
+                              onClick={() => selectVideoPreset(p.url)}
+                              className={cn(
+                                'truncate rounded-lg border px-2 py-1.5 text-[10px] transition-colors',
+                                isSelected
+                                  ? 'border-accent/50 bg-accent/15 text-accent'
+                                  : 'border-white/20 bg-black/60 text-white/70 hover:border-accent/50 hover:text-white hover:bg-black/80',
+                              )}
+                              title={p.label}
+                            >
+                              {p.label}
+                            </button>
+                          )
+                        })}
+                        {customPresets.map((p, idx) => {
+                          const isSelected =
+                            focusAudioUrl === p.url ||
+                            (Boolean(focusAudioUrl) && youtubeId(focusAudioUrl) === youtubeId(p.url))
+                          return (
+                            <button
+                              key={p.url + idx}
+                              onClick={() => selectVideoPreset(p.url)}
+                              className={cn(
+                                'truncate rounded-lg border px-2 py-1.5 text-[10px] transition-colors',
+                                isSelected
+                                  ? 'border-accent/50 bg-accent/15 text-accent'
+                                  : 'border-white/20 bg-black/60 text-white/70 hover:border-accent/50 hover:text-white hover:bg-black/80',
+                              )}
+                              title={p.label}
+                            >
+                              {p.label}
+                            </button>
+                          )
+                        })}
                         <button
                           onClick={() => updateFocusAudioUrl('')}
                           className={cn(
@@ -609,6 +648,17 @@ export function FocusWidget({ widget, variant }) {
             >
               <RotateCcw className="h-4 w-4" />
             </button>
+            {!isIdle && (
+              <button
+                type="button"
+                onClick={enterPip}
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-amber-400 transition-colors hover:bg-white/10 hover:text-amber-300"
+                title="Float in Picture-in-Picture mode"
+                aria-label="Picture-in-Picture"
+              >
+                <PictureInPicture2 className="h-4 w-4" />
+              </button>
+            )}
           </div>
 
           {/* Mini stat strip */}

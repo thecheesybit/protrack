@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Play, Pause } from 'lucide-react'
+import { Play, Pause, PictureInPicture2 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
+import { enterPip } from '@/lib/pip'
 
 function mmss(sec) {
   return `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`
@@ -46,6 +47,7 @@ export function FocusMiniOverlay() {
   const maximizeWidget = useStore((s) => s.maximizeWidget)
   const pause = useStore((s) => s.pause)
   const resume = useStore((s) => s.resume)
+  const setPipActive = useStore((s) => s.setPipActive)
 
   const active = status !== 'idle'
   const show = active && Boolean(maximizedWidgetId) && maximizedWidgetId !== 'focus' && !focusContext
@@ -64,7 +66,7 @@ export function FocusMiniOverlay() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 16, scale: 0.9 }}
           transition={{ type: 'spring', stiffness: 420, damping: 30 }}
-          className="edge-light fixed bottom-6 left-6 z-30 flex items-center gap-3 rounded-2xl border border-line/70 bg-surface/80 py-2 pl-2 pr-3 shadow-glass-lg backdrop-blur-2xl"
+          className="edge-light fixed bottom-6 left-6 z-30 flex items-center gap-2 rounded-2xl border border-line/70 bg-surface/80 py-2 pl-2 pr-2.5 shadow-glass-lg backdrop-blur-2xl"
         >
           <button
             type="button"
@@ -90,6 +92,15 @@ export function FocusMiniOverlay() {
             aria-label={status === 'running' ? 'Pause' : 'Resume'}
           >
             {status === 'running' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 fill-current" />}
+          </button>
+          <button
+            type="button"
+            onClick={enterPip}
+            className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-amber-400 transition-colors hover:bg-white/10 hover:text-amber-300"
+            title="Picture-in-Picture mode"
+            aria-label="Picture-in-Picture"
+          >
+            <PictureInPicture2 className="h-4 w-4" />
           </button>
         </motion.div>
       )}

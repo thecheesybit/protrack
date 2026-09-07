@@ -1,31 +1,16 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Flag, Repeat, CalendarPlus, Sparkles, Check, Clock } from 'lucide-react'
+import { X, Flag, Repeat, CalendarPlus, Sparkles, Check, Clock, Layers, Play } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
+import { useStore } from '@/store/useStore'
 import { addTodo } from '@/services/todoService'
 import { minutesToLabel, durationLabel, DAY_FULL, isSlotOnDay } from '@/lib/time'
+import { getWeekDate, dayMinToDate, ymd } from '@/lib/dates'
 import { playPop } from '@/lib/audioFX'
 import { cn } from '@/utils/cn'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-/** Return the Date for dayIndex (0=Mon) of the current week. */
-function getWeekDate(dayIndex) {
-  const now = new Date()
-  const nowDow = (now.getDay() + 6) % 7
-  const d = new Date(now)
-  d.setDate(now.getDate() + (dayIndex - nowDow))
-  d.setHours(0, 0, 0, 0)
-  return d
-}
-
-/** Return a Date set to dayIndex at the given minute-from-midnight. */
-function dayMinToDate(dayIndex, min) {
-  const d = getWeekDate(dayIndex)
-  d.setHours(Math.floor(min / 60), min % 60, 0, 0)
-  return d
-}
 
 function formatDate(dayIndex) {
   const d = getWeekDate(dayIndex)
@@ -79,36 +64,48 @@ export function TimeContextPanel({
   onCreateSlot,
 }) {
   const { user } = useAuth()
+  const modes = useStore((s) => s.modes)
+  const startFocus = useStore((s) => s.startFocus)
+  const maximizeWidget = useStore((s) => s.maximizeWidget)
+  const [selectedModeId, setSelectedModeId] = useState(() => modeId || (modes?.length ? modes[0].id : null))
   const [mode, setMode] = useState(null) // null | 'task' | 'event'
   const [title, setTitle] = useState('')
+  const [curStartMin, setCurStartMin] = useState(startMin)
+  const [curEndMin, setCurEndMin] = useState(endMin)
+  const [isAllDay, setIsAllDay] = useState(false)
   const [saving, setSaving] = useState(false)
 
+  // Keep internal range in sync if external selection updates
+  useEffect(() => {
+    setCurStartMin(startMin)
+    setCurEndMin(endMin)
+  }, [startMin, endMin])
+
   const dayName = DAY_FULL[dayIndex] || 'Day'
-  const rangeLabel = `${minutesToLabel(startMin)} – ${minutesToLabel(endMin)}`
-  const dur = durationLabel(startMin, endMin)
+  const rangeLabel = isAllDay ? 'All Day' : `${minutesToLabel(curStartMin)} – ${minutesToLabel(curEndMin)}`
+  const dur = isAllDay ? 'All-day' : durationLabel(curStartMin, curEndMin)
+  const selectedDateStr = ymd(getWeekDate(dayIndex))
 
   // Items that overlap the selected range on this day
   const rangeSlots = slots.filter(
-    (s) => isSlotOnDay(s, dayIndex) && s.startMin < endMin && s.endMin > startMin,
+    (s) => isSlotOnDay(s, dayIndex) && s.startMin < curEndMin && s.endMin > curStartMin,
   )
 
   const rangeTodos = todos.filter((t) => {
     if (!t.dueAt || t.done) return false
     const d = t.dueAt?.toDate ? t.dueAt.toDate() : new Date(t.dueAt)
     if (isNaN(d)) return false
-    const dow = (d.getDay() + 6) % 7
-    if (dow !== dayIndex) return false
+    if (ymd(d) !== selectedDateStr) return false
     const min = d.getHours() * 60 + d.getMinutes()
-    return min >= startMin && min < endMin
+    return min >= curStartMin && min < curEndMin
   })
 
   const rangeEvents = todos.filter((t) => {
     if (t.type !== 'event' || t.done) return false
-    const d = getWeekDate(dayIndex)
     return (
-      t.eventDate === d.toISOString().split('T')[0] &&
-      t.eventStartMin < endMin &&
-      (t.eventEndMin ?? t.eventStartMin + 60) > startMin
+      t.eventDate === selectedDateStr &&
+      t.eventStartMin < curEndMin &&
+      (t.eventEndMin ?? t.eventStartMin + 60) > curStartMin
     )
   })
 
@@ -119,34 +116,56 @@ export function TimeContextPanel({
     setTitle('')
   }
 
+  const handleStartFocus = () => {
+    const durMin = Math.max(5, curEndMin - curStartMin)
+    startFocus({
+      label: title.trim() || `${dur} Scheduled Focus`,
+      durationMin: durMin,
+      color: '#10b981',
+      modeId: selectedModeId,
+    })
+    maximizeWidget('focus')
+    playPop()
+    toast.success(`Started ${durationLabel(curStartMin, curEndMin)} focus session`)
+    onClose()
+  }
+
+  const handleCreateSlot = () => {
+    onCreateSlot?.({ dayIndex, startMin: curStartMin, endMin: curEndMin })
+    onClose()
+  }
+
   const save = async () => {
     const text = title.trim()
     if (!text || !user) return
     setSaving(true)
     try {
       playPop()
-      const dueAt = dayMinToDate(dayIndex, startMin)
+      const dueAt = isAllDay ? dayMinToDate(dayIndex, 9 * 60) : dayMinToDate(dayIndex, curStartMin)
+      const targetModeId = selectedModeId || modeId || null
       if (mode === 'task') {
         await addTodo(user.uid, {
           text,
-          modeId: modeId || null,
+          modeId: targetModeId,
           dueAt,
+          allDay: isAllDay,
           column: 'backlog',
         })
-        toast.success('Task added')
+        toast.success(`Task added · ${isAllDay ? 'All Day' : minutesToLabel(curStartMin)}`)
       } else {
-        const eventDate = getWeekDate(dayIndex).toISOString().split('T')[0]
+        const eventDate = selectedDateStr
         await addTodo(user.uid, {
           text,
-          modeId: modeId || null,
+          modeId: targetModeId,
           dueAt,
           type: 'event',
           eventDate,
-          eventStartMin: startMin,
-          eventEndMin: endMin,
+          eventStartMin: isAllDay ? 9 * 60 : curStartMin,
+          eventEndMin: isAllDay ? 18 * 60 : curEndMin,
+          allDay: isAllDay,
           column: 'backlog',
         })
-        toast.success('Event added')
+        toast.success(`Event added · ${isAllDay ? 'All Day' : minutesToLabel(curStartMin)}`)
       }
       onClose()
     } catch (err) {
@@ -236,15 +255,18 @@ export function TimeContextPanel({
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted">
                 Add to this time
               </p>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <ActionBtn
+                  icon={Play}
+                  label={`Focus (${dur})`}
+                  color="border-emerald-500/40 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20"
+                  onClick={handleStartFocus}
+                />
                 <ActionBtn
                   icon={Repeat}
                   label="Weekly Slot"
                   color="border-accent/30 text-accent bg-accent/5 hover:bg-accent/10"
-                  onClick={() => {
-                    onClose()
-                    onCreateSlot()
-                  }}
+                  onClick={handleCreateSlot}
                 />
                 <ActionBtn
                   icon={Flag}
@@ -268,15 +290,48 @@ export function TimeContextPanel({
               exit={{ opacity: 0, y: 4 }}
               transition={{ duration: 0.14 }}
             >
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted">
-                {mode === 'task' ? 'New task' : 'New event'}
-              </p>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
+                  {mode === 'task' ? 'New task' : 'New event'}
+                </p>
+                <label className="flex items-center gap-1.5 text-[11px] text-muted cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={isAllDay}
+                    onChange={(e) => setIsAllDay(e.target.checked)}
+                    className="rounded border-line text-accent"
+                  />
+                  <span>All-day</span>
+                </label>
+              </div>
               <form
                 onSubmit={(e) => {
                   e.preventDefault()
                   save()
                 }}
               >
+                {modes && modes.length > 1 && (
+                  <div className="mb-2.5 flex items-center gap-1.5 overflow-x-auto py-0.5">
+                    <span className="flex items-center gap-1 text-[10px] font-medium text-muted">
+                      <Layers className="h-3 w-3" /> Scope:
+                    </span>
+                    {modes.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setSelectedModeId(m.id)}
+                        className={cn(
+                          'shrink-0 rounded-lg px-2 py-0.5 text-[10px] font-semibold transition-all',
+                          selectedModeId === m.id
+                            ? 'border border-accent/40 bg-accent/20 text-accent shadow-sm'
+                            : 'border border-line/50 bg-surface-2/60 text-muted hover:text-ink',
+                        )}
+                      >
+                        {m.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <input
                   autoFocus
                   value={title}

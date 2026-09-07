@@ -4,6 +4,7 @@ import { Sparkles, CalendarClock, ListTodo, Link2, X, Loader2, CornerDownLeft } 
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
 import { parseCapture, dateToDow, dateToMinutes } from '@/lib/nlParse'
+import { getWeekDate, dayMinToDate, ymd } from '@/lib/dates'
 import { DAYS, DAY_START_MIN, DAY_END_MIN, minutesToLabel, clampMin } from '@/lib/time'
 import { addSlot } from '@/services/timetableService'
 import { addTodo } from '@/services/todoService'
@@ -100,21 +101,50 @@ export function NlQuickCapture({ open, onClose, seed, modeId, defaultColor }) {
     }
   }
 
+  const addAsEvent = async () => {
+    if (!canSubmit || busy) return
+    setBusy('event')
+    try {
+      const targetModeId = modeId === 'all' ? (modes[0]?.id || '') : modeId
+      const eventDate = ymd(getWeekDate(placement.dayOfWeek))
+      const dueAt =
+        parsed.date ||
+        (seed?.dayOfWeek != null ? dayMinToDate(seed.dayOfWeek, seed.startMin ?? DAY_START_MIN) : null)
+      await addTodo(user.uid, {
+        text: title,
+        modeId: targetModeId,
+        dueAt,
+        type: 'event',
+        eventDate,
+        eventStartMin: placement.startMin,
+        eventEndMin: placement.endMin,
+        column: 'backlog',
+      })
+      done('success', `${DAYS[placement.dayOfWeek]} · ${minutesToLabel(placement.startMin)} event added`)
+    } catch (err) {
+      console.error('[capture] event failed', err)
+      setBusy('')
+    }
+  }
+
   const addAsTodo = async () => {
     if (!canSubmit || busy) return
     setBusy('todo')
     try {
       const targetModeId = modeId === 'all' ? (modes[0]?.id || '') : modeId
+      const effectiveDue =
+        parsed.date ||
+        (seed?.dayOfWeek != null ? dayMinToDate(seed.dayOfWeek, seed.startMin ?? DAY_START_MIN) : null)
       await addTodo(user.uid, {
         text: title,
         modeId: targetModeId,
-        dueAt: parsed.date || null,
+        dueAt: effectiveDue || null,
         subjectId: null,
       })
       done(
         'success',
-        parsed.date
-          ? `To-do due ${parsed.date.toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`
+        effectiveDue
+          ? `To-do due ${effectiveDue.toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`
           : 'To-do added',
       )
     } catch (err) {
@@ -129,12 +159,15 @@ export function NlQuickCapture({ open, onClose, seed, modeId, defaultColor }) {
     try {
       const subject = subjects.find((s) => s.id === subjectId)
       const targetModeId = modeId === 'all' ? (subject?._modeId || modeId) : modeId
+      const effectiveDue =
+        parsed.date ||
+        (seed?.dayOfWeek != null ? dayMinToDate(seed.dayOfWeek, seed.startMin ?? DAY_START_MIN) : null)
       await addTask(user.uid, targetModeId, subjectId, {
         title,
         column: 'todo',
         priority: 'medium',
         notes: '',
-        dueAt: parsed.date || null,
+        dueAt: effectiveDue || null,
       })
       done('success', `Kanban card added to ${subject?.name || 'subject'}`)
     } catch (err) {
@@ -215,7 +248,15 @@ export function NlQuickCapture({ open, onClose, seed, modeId, defaultColor }) {
             </div>
 
             {/* Actions */}
-            <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className="mt-4 grid grid-cols-4 gap-2">
+              <ActionButton
+                icon={Sparkles}
+                label="Event"
+                hint="One-time"
+                busy={busy === 'event'}
+                disabled={!canSubmit || Boolean(busy)}
+                onClick={addAsEvent}
+              />
               <ActionButton
                 icon={CalendarClock}
                 label="Session"
@@ -227,10 +268,10 @@ export function NlQuickCapture({ open, onClose, seed, modeId, defaultColor }) {
               <ActionButton
                 icon={ListTodo}
                 label="To-do"
-                hint={parsed.date ? 'With deadline' : 'No deadline'}
+                hint={parsed.date || seed ? 'Deadline' : 'No deadline'}
                 busy={busy === 'todo'}
                 disabled={!canSubmit || Boolean(busy)}
-                onClick={() => addAsTodo(null)}
+                onClick={addAsTodo}
               />
               <ActionButton
                 icon={Link2}

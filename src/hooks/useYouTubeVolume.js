@@ -93,6 +93,7 @@ export function useYouTubeVolume(iframeRef, volume, muted) {
 
   // Register this frame with the IFrame API on load.
   return () => {
+    readyRef.current = false
     const iframe = iframeRef.current
     if (!iframe?.contentWindow) return
     try {

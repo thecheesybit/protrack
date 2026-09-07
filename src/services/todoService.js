@@ -11,24 +11,29 @@ import {
   serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { encryptObject, decryptObject } from '@/services/cryptoService'
 
 const todosCol = (uid) => collection(db, 'users', uid, 'todos')
+const ENCRYPTED_TODO_FIELDS = ['text', 'notes']
 
 export function subscribeToTodos(uid, callback) {
   // Sort by the user-controlled `order` field first (set on drag-reorder),
   // falling back to createdAt for legacy todos that don't have one.
   const q = query(todosCol(uid), orderBy('createdAt', 'desc'))
-  return onSnapshot(q, (snap) => {
-    const todos = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  return onSnapshot(q, async (snap) => {
+    const rawTodos = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+    const decrypted = await Promise.all(
+      rawTodos.map((t) => decryptObject(t, ENCRYPTED_TODO_FIELDS))
+    )
     // Sort by `order` ascending if set; otherwise by createdAt desc (already
     // applied by the query). Stable sort keeps un-ordered todos at the end.
-    todos.sort((a, b) => {
+    decrypted.sort((a, b) => {
       if (a.order != null && b.order != null) return a.order - b.order
       if (a.order != null) return -1
       if (b.order != null) return 1
       return 0
     })
-    callback(todos)
+    callback(decrypted)
   })
 }
 
@@ -36,14 +41,16 @@ export async function addTodo(
   uid,
   { text, modeId, dueAt = null, subjectId = null, priority = 'medium', notes = '', ...rest },
 ) {
+  const encrypted = await encryptObject({ text: text || '', notes: notes || '' }, ENCRYPTED_TODO_FIELDS)
+
   return addDoc(todosCol(uid), {
-    text,
+    text: encrypted.text,
     done: false,
     modeId: modeId || null,
     dueAt: dueAt || null,
     subjectId: subjectId || null,
     priority,
-    notes,
+    notes: encrypted.notes,
     order: Date.now(),
     createdAt: serverTimestamp(),
     ...rest,
@@ -51,7 +58,9 @@ export async function addTodo(
 }
 
 export async function updateTodo(uid, todoId, patch) {
-  return updateDoc(doc(todosCol(uid), todoId), patch)
+  const fields = ENCRYPTED_TODO_FIELDS.filter((f) => f in patch)
+  const encrypted = fields.length > 0 ? await encryptObject(patch, fields) : patch
+  return updateDoc(doc(todosCol(uid), todoId), encrypted)
 }
 
 export async function deleteTodo(uid, todoId) {

@@ -1,5 +1,50 @@
 # Changelog
 
+## v2.0.0 — 2026-09-07
+
+### Added
+- **Deep Focus Calendar Forest & Focus Tree:**
+  - Gamified session growth visualization: every completed focus interval plants a unique, lush tree into your personal productivity forest mapped across the calendar month.
+  - Interactive tree inspect modal with completion stats, streak growth, and celebratory visual effects (`SessionCompleteModal`, `FocusTree`, `CalendarForest`).
+  - Dedicated shrubs border and ambient art assets for calendar and timetable views (`/forest/tree-hero.png`, `/forest/shrubs-border.png`).
+- **Picture-in-Picture (PiP) Floating Focus Mode:**
+  - Native always-on-top micro-timer window in Electron desktop builds via custom IPC channels (`pip.js`).
+  - Draggable, responsive floating overlay (`FloatingFocusPip`, `PipFocusWindow`, `PipAppView`) for distraction-free multitasking.
+  - Full session controls: pause/resume, break skip, elapsed/remaining time countdown, and instant restore to the primary workspace.
+- **App Lock & Client-Side Encryption Security Vault:**
+  - Dedicated security lock screen with animated lock visuals and PIN keypad (`AppLockOverlay`, `lockSlice`).
+  - End-to-end client-side encryption using Web Crypto API (`PBKDF2` key derivation, `AES-GCM` 256-bit encryption with random salt and IVs in `cryptoService.js` & `lockService.js`).
+  - Auto-lock after configurable idle duration (1m, 5m, 15m, 30m, 1h) or manual instant lock.
+  - Secure PIN recovery mechanism and subscription caching.
+- **Dedicated Notes & Audio Quick-Capture Widget:**
+  - 8th core workspace widget (`NotesWidget.jsx`, `noteService.js`, `useNotes.js`): rich categorized note-taking with color coding, pinning, and multi-scope partitioning.
+  - Voice note transcription and hands-free recording integration.
+  - Markdown preview, search, tag filtering, and instant Firestore synchronization.
+- **Interactive Habit Reminders & In-App Toasts:**
+  - Real-time in-app interactive toasts (`HabitReminderToast.jsx`) with 10-minute snooze and one-tap completion.
+  - Synchronized with native OS notifications on desktop.
+  - Intelligent interval tracking (`every-1h`, `every-2h`, `every-4h`, `morning`, `evening`) and backlog aggregation.
+- **Workspace Modes Contextual Menu & Safe Deletion:**
+  - Right-click / ellipsis contextual actions on workspace mode chips (`ModeContextMenu.jsx`).
+  - Safe mode deletion dialog (`DeleteModeModal.jsx`) with subject/task migration and orphan prevention.
+  - Refined mode editing, color badge selection, and visual order adjustments.
+- **Timetable & Today Agenda Overhaul:**
+  - Redesigned daily agenda view (`TodayAgenda.jsx`, `TimeContextPanel.jsx`) with live time indicator, slot completion toggles, and integrated forest view.
+  - Enriched drag handles, slot snapping, and seamless natural language capture integration in `TimetableGrid.jsx`.
+  - Expanded timetable grid with responsive zoom and day/week view toggles.
+
+### Changed
+- **Settings Panel Complete Redesign:** Reorganized tabbed Settings panel (`SettingsPanel.jsx`) with dedicated sections for General, Appearance, Focus & Forest, Security & Lock, AudioFX, Sync & Backup, and Wall of Honor.
+- **AudioFX Synthesizer Expansion:** Web Audio API synthesized audioFX library (`audioFX.js`) for crisp completion sounds, timer transitions, and button clicks without external audio asset dependencies.
+- **Widget Canvas & Layout Stability:** Strengthened `BoardCanvas` layout engine and `WidgetFrame` boundaries with fluid transitions, min/max bounds, and responsive grid resizing.
+- **Todos & Kanban Cards:** Enriched card controls, inline due-date pickers, tag pills, priority toggles, and smoother drag-and-drop mechanics.
+
+### Fixed
+- **Electron Production Builds & Localhost Fallback:** Fixed YouTube iframe embed playback and media permissions across packaged Windows/Mac/Linux environments.
+- **CSP & Google Auth Gate:** Allowed `apis.google.com` in desktop Content Security Policy for flawless OAuth popup sign-in.
+- **Auto-Update Stability:** Improved resilience against GitHub release asset 504 timeouts and enhanced update manifest resolution.
+- **Lint & Test Coverage:** Added unit test suites for `cryptoService`, `lockService`, `CalendarForest`, and `FlipClock`, bringing total test count to 201 tests across 11 test suites.
+
 ## v1.8.0 — 2026-06-08
 
 ### Added

@@ -37,3 +37,24 @@ export function lastNDays(n) {
   }
   return out
 }
+
+/**
+ * Return the local Date for dayIndex (0=Mon … 6=Sun) of the week containing refDate.
+ * Resets time to midnight (00:00:00.000) in local timezone.
+ */
+export function getWeekDate(dayIndex, refDate = new Date()) {
+  const d = new Date(refDate)
+  const nowDow = (d.getDay() + 6) % 7
+  d.setDate(d.getDate() + (dayIndex - nowDow))
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
+/**
+ * Return a local Date set to dayIndex at the given minute-from-midnight of the week containing refDate.
+ */
+export function dayMinToDate(dayIndex, min, refDate = new Date()) {
+  const d = getWeekDate(dayIndex, refDate)
+  d.setHours(Math.floor(min / 60), min % 60, 0, 0)
+  return d
+}

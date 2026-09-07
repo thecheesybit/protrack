@@ -1,18 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, Zap, Volume2, VolumeX } from 'lucide-react'
+import { X, Zap } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { useIdleDetection } from '@/hooks/useIdleDetection'
 import { useSubjects } from '@/hooks/useSubjects'
 import { useTodos } from '@/hooks/useWellness'
-import { fetchZenQuote, getElevenLabsKey } from '@/services/geminiService'
+import { getElevenLabsKey } from '@/services/geminiService'
 import { classifyDeadline } from '@/lib/deadlines'
 import { cn } from '@/utils/cn'
 
 const MIN_DURATION_MS = 15000
 
 const QUOTES = [
-  { text: "The secret of getting ahead is getting started.", author: "Mark Twain", category: "productivity", language: "en", mood: "motivating" },
+  { text: "The secret of getting ahead is getting started.", author: "Mark Twain", category: "productivity", language: "en", mood: "motifying" },
   { text: "It does not matter how slowly you go as long as you do not stop.", author: "Confucius", category: "philosophy", language: "en", mood: "calm" },
   { text: "Amateurs sit and wait for inspiration, the rest of us just get up and go to work.", author: "Stephen King", category: "productivity", language: "en", mood: "sharp" },
   { text: "You don't have to see the whole staircase, just take the first step.", author: "Martin Luther King Jr.", category: "productivity", language: "en", mood: "motivating" },
@@ -47,17 +47,24 @@ function computeRecs(subjects, todos) {
   return recs.slice(0, 2)
 }
 
+let activeZenFadeInterval = null
+
 const fadeOutActiveAudio = () => {
   if (typeof window !== 'undefined' && window.activeZenAudio) {
+    if (activeZenFadeInterval) clearInterval(activeZenFadeInterval)
     const audio = window.activeZenAudio
     let vol = audio.volume
-    const fadeInterval = setInterval(() => {
+    activeZenFadeInterval = setInterval(() => {
       if (vol > 0.1) {
         vol -= 0.1
         audio.volume = Math.max(0, vol)
       } else {
-        clearInterval(fadeInterval)
+        clearInterval(activeZenFadeInterval)
+        activeZenFadeInterval = null
         audio.pause()
+        if (audio.src) {
+          try { URL.revokeObjectURL(audio.src) } catch { /* noop */ }
+        }
         if (window.activeZenAudio === audio) {
           window.activeZenAudio = null
         }
@@ -68,11 +75,18 @@ const fadeOutActiveAudio = () => {
 
 const stopSpeaking = () => {
   if (typeof window !== 'undefined') {
+    if (activeZenFadeInterval) {
+      clearInterval(activeZenFadeInterval)
+      activeZenFadeInterval = null
+    }
     if (window.speechSynthesis) {
       window.speechSynthesis.cancel()
     }
     if (window.activeZenAudio) {
       window.activeZenAudio.pause()
+      if (window.activeZenAudio.src) {
+        try { URL.revokeObjectURL(window.activeZenAudio.src) } catch { /* noop */ }
+      }
       window.activeZenAudio = null
     }
   }
@@ -111,6 +125,18 @@ const speakQuote = async (quote, voiceEnabled) => {
         const audio = new Audio(audioUrl)
         audio.volume = 0.9
         window.activeZenAudio = audio
+        audio.onended = () => {
+          try { URL.revokeObjectURL(audioUrl) } catch { /* noop */ }
+          if (window.activeZenAudio === audio) {
+            window.activeZenAudio = null
+          }
+        }
+        audio.onerror = () => {
+          try { URL.revokeObjectURL(audioUrl) } catch { /* noop */ }
+          if (window.activeZenAudio === audio) {
+            window.activeZenAudio = null
+          }
+        }
         audio.play()
         return
       }
@@ -157,7 +183,10 @@ export function ZenOverlay() {
 
   const { subjects } = useSubjects(activeModeId)
   const todos = useTodos()
-  const recs = computeRecs(subjects, todos)
+  const recs = useMemo(() => {
+    if (!show) return []
+    return computeRecs(subjects, todos)
+  }, [show, subjects, todos])
 
   const dismiss = useCallback(() => {
     clearTimeout(autoTimerRef.current)
@@ -177,7 +206,7 @@ export function ZenOverlay() {
     } catch { /* private */ }
     if (history.length > 30) history = history.slice(history.length - 30)
 
-    let newQuote = null
+    let newQuote
     const categories = settings?.zenCategories || ['stoic', 'philosophy', 'productivity', 'proverbs', 'hindi_urdu', 'modern']
 
     try {
@@ -202,7 +231,7 @@ export function ZenOverlay() {
       history.push({ text: newQuote.text, author: newQuote.author, date: Date.now() })
       try {
         localStorage.setItem('protrack:zen_history', JSON.stringify(history))
-      } catch {}
+      } catch { /* private mode */ }
       setQuote(newQuote)
       
       const voiceEnabled = settings?.zenVoiceEnabled !== false
@@ -244,10 +273,10 @@ export function ZenOverlay() {
         let history = []
         try {
           history = JSON.parse(localStorage.getItem('protrack:zen_history')) || []
-        } catch {}
+        } catch { /* private mode */ }
         if (history.length > 30) history = history.slice(history.length - 30)
 
-        let newQuote = null
+        let newQuote
         const categories = settings?.zenCategories || ['stoic', 'philosophy', 'productivity', 'proverbs', 'hindi_urdu', 'modern']
 
         try {
@@ -272,7 +301,7 @@ export function ZenOverlay() {
         history.push({ text: newQuote.text, author: newQuote.author, date: Date.now() })
         try {
           localStorage.setItem('protrack:zen_history', JSON.stringify(history))
-        } catch {}
+        } catch { /* private mode */ }
 
         setQuote(newQuote)
         setShow(true)

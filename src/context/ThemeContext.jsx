@@ -1,4 +1,4 @@
-import { createContext, useCallback, useEffect, useState } from 'react'
+import { createContext, useCallback, useEffect, useMemo, useState } from 'react'
 import { STORAGE_KEYS } from '@/lib/constants'
 
 export const ThemeContext = createContext(null)
@@ -36,8 +36,10 @@ export function ThemeProvider({ children }) {
     [],
   )
 
+  const value = useMemo(() => ({ theme, setTheme, toggleTheme }), [theme, toggleTheme])
+
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
+    <ThemeContext.Provider value={value}>
       {children}
     </ThemeContext.Provider>
   )

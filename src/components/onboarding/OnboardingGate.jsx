@@ -84,17 +84,16 @@ export function OnboardingGate() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  // Pre-select presets that already exist (seeded UPSC + M.Tech), else default
-  // the first preset on so the user can never finish with zero scopes.
+  // Pre-select presets that already exist (if any), otherwise start clean with no modes
   const initialSelected = useMemo(() => {
     const existingNames = new Set(existingModes.map((m) => m.name))
     const matches = MODE_PRESETS.filter((p) => existingNames.has(p.name)).map((p) => p.name)
-    return new Set(matches.length ? matches : [MODE_PRESETS[0].name])
+    return new Set(matches)
   }, [existingModes])
   const [selected, setSelected] = useState(initialSelected)
 
   const bothAgreed = agreePrivacy && agreeTerms
-  const canFinish = selected.size > 0
+  const canFinish = true
 
   const toggleScope = (name) =>
     setSelected((prev) => {
@@ -181,7 +180,7 @@ export function OnboardingGate() {
             >
               <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
                 <p className="mb-4 text-sm text-muted">
-                  Pick the tracks you want active. You can add, rename, or remove scopes anytime — the
+                  Pick the tracks you want active, or start with a clean slate (no modes). You can add, rename, or remove scopes anytime — the
                   first one becomes your active mode.
                 </p>
                 <div className="grid grid-cols-2 gap-3">
@@ -230,7 +229,7 @@ export function OnboardingGate() {
                 </button>
                 <button
                   type="button"
-                  disabled={!canFinish || submitting}
+                  disabled={submitting}
                   onClick={finish}
                   className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-accent px-5 py-3 font-semibold text-white shadow-glow transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
                 >
@@ -238,9 +237,13 @@ export function OnboardingGate() {
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" /> Setting up…
                     </>
-                  ) : (
+                  ) : selected.size > 0 ? (
                     <>
                       <Sparkles className="h-4 w-4" /> Enter PRO TRACK
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4" /> Enter PRO TRACK (Clean slate)
                     </>
                   )}
                 </button>

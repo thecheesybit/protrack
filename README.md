@@ -29,8 +29,20 @@
 <tr>
 <td width="50%" valign="top">
 
-### 🗂️ Workspace Modes
-Partition everything — subjects, timetable, tasks, analytics — by execution scope: **UPSC, M.Tech, GATE**, and more. Includes an **"All Scopes"** aggregation mode to view all workspace data in a single flattened dashboard. The active mode re-tints the entire UI in real time.
+### 🌲 Calendar Forest & Focus Tree
+Turn focus sessions into a lush digital forest. Every completed Pomodoro session plants a vibrant tree on your calendar. Inspect session streaks, celebrate milestones with the Session Complete modal, and track your visual productivity density across days and months.
+
+### 🪟 Picture-in-Picture (PiP) Floating Focus
+Multitask without losing track of deep work. Launch a compact, always-on-top floating timer window (native Electron window or draggable web overlay) with live countdowns, play/pause toggles, and instant return to your workspace.
+
+### 🔐 App Lock & Cryptographic Vault
+Safeguard your study plans, private notes, and workspace data. Lock with a custom PIN or password backed by client-side PBKDF2 key derivation and AES-GCM 256-bit encryption. Configurable inactivity auto-lock (1m to 1h).
+
+### 📝 Notes & Voice Quick Capture
+The dedicated 8th core workspace widget: capture rich categorized notes with color coding, pinning, tag filtering, markdown formatting, and hands-free voice transcription powered by Web Speech recognition.
+
+### 🗂️ Workspace Modes & Safe Reallocation
+Partition everything — subjects, timetable, tasks, analytics — by execution scope: **UPSC, M.Tech, GATE**, and more. Right-click context menus for instant editing, and a safe deletion flow that reallocates subjects and tasks before removal.
 
 ### 🏝️ Universal Dynamic Island
 One floating, morphing notifier for Pomodoro alerts, hydration nudges, sync state, and live progress — inspired by Apple's Dynamic Island.
@@ -38,41 +50,29 @@ One floating, morphing notifier for Pomodoro alerts, hydration nudges, sync stat
 ### 🌗 Chrono-Adaptive Aesthetics
 Surfaces and ambient light shift by time of day (crisp midday → deep obsidian at night). Added an **"Auto" theme** that natively cross-fades light/dark modes based on local time.
 
-### 🔤 Pixel-Perfect Typography
-Compact / Standard / Large display modes cascade through a single CSS variable. Electron is locked to native device pixels (`zoomFactor: 1.0`) for HiDPI sharpness.
-
-### 🕰️ Flip-Card Clock
-Mechanical split-flap clock supporting custom placement (draggable) and scaling (**scroll-to-scale** from 0.5x to 3.0x), with position and scale persisted to localStorage. Auto-hides during focus.
-
-### 📅 Interactive Calendar
-Click the grid and type natural language — *"Revise Polity tomorrow 5pm for 2h"* — to create sessions, deadlines, or subject-linked tasks. Supports advanced recurrence rules and event tagging.
-
-### 🧘 Zen Motivation Overlay
-An elegant, full-screen idle overlay that triggers during user inactivity. Fetches uniquely generated quotes via Gemini (with 30-day deduplication cache) to keep inspiration fresh.
-
 </td>
 <td width="50%" valign="top">
 
 ### 🎯 Deep Focus
-Pomodoro with ambient soundscapes, customized background audio URLs (YouTube/direct), exits restricted via warning prompts, and an always-on miniature timer that follows you across every module.
+Pomodoro with ambient soundscapes, curated video presets (Forest River, Lo-fi Jazz, mantras), YouTube embeds, exit prevention warnings, and an always-on miniature timer that follows you across every module.
 
-### ✅ Comprehensive Kanban
+### 🔔 Interactive Habit Reminders
+Habits with `every-1h`, `every-2h`, `every-4h`, `morning`, or `evening` intervals trigger interactive in-app toasts with 10-minute snooze and one-tap completion, synchronized with persistent native OS notifications.
+
+### 📅 Timetable & Today Agenda
+Click the grid and type natural language — *"Revise Polity tomorrow 5pm for 2h"* — to schedule slots. Real-time daily agenda timeline, slot status toggles, and dynamic day/week timetable grid views.
+
+### ✅ Comprehensive Kanban & Todos
 Drag a task to *Done* → syllabus % recalculates instantly. Tasks support priority, inline notes, drag-and-drop column reordering, empty column drops, glowing hover states, and double-click-to-edit.
 
-### 💪 Apple-Style Activity Rings
-Visual progress rings + a read-only **achievement ledger** bounded to 200 entries, forever free-tier safe.
-
-### 🔔 Intelligent Habit Engine
-Habits with `every-1h`, `every-2h`, `every-4h`, `morning`, or `evening` intervals trigger persistent OS notifications. Missed reminders aggregate as an inline backlog badge.
-
-### 📝 Smart To-Dos
-Priority + notes + drag-to-reorder, just like the Kanban. Sort by user order or auto-weight by priority.
-
 ### 🤖 AI Companion with Write Access
-The Gemini chat assistant can complete tasks, set subject progress, add to-dos (with priority + notes), schedule timetable slots, toggle habits, and create subjects via natural language — *"I finished my Calculus session"* → marks done + recomputes progress + logs to ledger.
+The Gemini chat assistant can complete tasks, set subject progress, add to-dos (with priority + notes), schedule timetable slots, toggle habits, and create subjects via natural language.
 
 ### 🔊 AudioFX Synthesized Sounds
-Lightweight Web Audio API synthesizers that generate zero-latency chimes on Todo completion and pops during Kanban moves (toggleable in Settings).
+Lightweight Web Audio API synthesizers that generate zero-latency chimes on Todo completion, timer transitions, and button clicks (customizable in Settings).
+
+### 🕰️ Mechanical Flip-Card Clock
+Draggable, scroll-to-scale (0.5x to 3.0x) split-flap clock with position/scale persisted in localStorage.
 
 </td>
 </tr>
@@ -91,20 +91,22 @@ Lightweight Web Audio API synthesizers that generate zero-latency chimes on Todo
 │     Ctrl/Cmd+Shift+Space          platform + arch + CPU         │
 │     Ctrl/Cmd+Shift+F              + non-internal MACs           │
 │     Ctrl/Cmd+Shift+H                                            │
-│     Ctrl/Cmd+Shift+M          🛡️  safeStorage Encryption        │
-│                                   DPAPI / Keychain / libsecret  │
+│     Ctrl/Cmd+Shift+M          🛡️  safeStorage & Web Crypto      │
+│                                   DPAPI / Keychain / PBKDF2     │
 │  📡  Minimize-to-Tray         🔄  OTA Auto-Updates              │
 │     Background execution          Enforced update gate          │
 │     Alarms fire even when         GitHub Release feed           │
 │     window is hidden              Auto-merge → auto-release     │
 │                                                                 │
-│  🚫  DevTools Lockdown        💾  Window State Persistence      │
-│     F12 / Ctrl+Shift+I            Size, position, maximize,     │
-│     blocked in packaged           and fullscreen survive        │
-│     production builds             restart                       │
+│  🪟  Picture-in-Picture (PiP) 💾  Window State Persistence      │
+│     Always-on-top micro timer     Size, position, maximize,     │
+│     floating window               and fullscreen survive        │
+│                                   restart                       │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+- **Picture-in-Picture (PiP)** — compact, always-on-top micro-timer window with live countdown and play/pause controls
+- **Cryptographic App Lock** — PIN-protected security overlay with PBKDF2/AES-GCM encryption and auto-lock on idle
 - **Frameless window** with custom chrome, strict min bounds `940×600`, HiDPI-locked rendering
 - **Window state persistence** — size, position, maximize, and fullscreen survive restart
 - **`backgroundThrottling: false`** — alarms and chimes fire regardless of window state
@@ -150,6 +152,9 @@ Lightweight Web Audio API synthesizers that generate zero-latency chimes on Todo
 | **State** | Zustand | Feature slices, no boilerplate |
 | **Backend** | Firebase Auth + Firestore | Google Auth, persistent local cache |
 | **AI** | `@google/generative-ai` (`gemini-flash-latest`) | Function-calling with full write access |
+| **Security & Crypto** | Web Crypto API + Electron safeStorage | PBKDF2 (100k iter) + AES-GCM 256-bit encryption |
+| **Audio & SFX** | Web Audio API | Zero-latency synthesized chimes & UI audioFX |
+| **Testing** | Vitest 2 + ESLint 10 | 201 unit tests across 11 test suites |
 | **Desktop** | Electron + electron-builder + electron-updater | Multi-OS builds |
 | **NL Parsing** | chrono-node | *"tomorrow 5pm for 2h"* → Date objects |
 | **CI/CD** | GitHub Actions | Auto-merge dev→master, multi-OS matrix, changelog |
@@ -278,6 +283,7 @@ Writes  ██░░░░░░░░░░░░░░░░░░░░░░
 | Surface | Mechanism |
 |:--------|:----------|
 | **Gemini API key** | Browser `localStorage` only — never uploaded to any server |
+| **App Lock Vault** | Client-side PBKDF2 key derivation (100k iterations, SHA-256) + AES-GCM 256-bit encryption with random salt & IV |
 | **Desktop session** | Encrypted via `safeStorage` (DPAPI / Keychain / libsecret) |
 | **QR / Code `sessionId`** | 8-char base32 (~1e12 combos), single-use bearer secret, 2-minute TTL, deleted on claim |
 | **Firestore rules** | Strict owner-only access on `users/{uid}/**` |

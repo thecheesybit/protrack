@@ -21,6 +21,8 @@ export const createFocusSlice = (set, get) => ({
   
   // Phase 1.1: New State payloads
   focusLocked: false,
+  pipActive: false,
+  congratulations: null, // { durationMin, label, timestamp } | null
   customTimerSetting: { work: DEFAULT_FOCUS * 60, break: DEFAULT_BREAK * 60 },
   volume: 0.5,
   audioTracks: { ambient1: 'off', ambient2: 'off', ytTrack: '' },
@@ -67,16 +69,18 @@ export const createFocusSlice = (set, get) => ({
     set((s) => ({ audioTracks: { ...s.audioTracks, [trackKey]: trackValue } })),
   
   setFocusLock: (isLocked) => set({ focusLocked: isLocked }),
+  setPipActive: (active) => set({ pipActive: active }),
+  clearCongratulations: () => set({ congratulations: null }),
 
   setMuted: (muted) => set({ muted }),
   toggleMute: () => set((s) => ({ muted: !s.muted })),
 
   startFocus: (session = null) =>
     set((s) => {
-      // Use customTimerSetting if defined and we are just starting
+      const customMin = session?.durationMin
       const startingSeconds = s.phase === 'focus' && s.status === 'paused' 
         ? s.secondsLeft 
-        : s.customTimerSetting.work;
+        : (customMin ? customMin * 60 : s.customTimerSetting.work);
         
       return {
         status: 'running',
@@ -100,6 +104,7 @@ export const createFocusSlice = (set, get) => ({
       phaseTotalSec: s.customTimerSetting.work,
       startedAt: null,
       focusLocked: false,
+      pipActive: false,
     })),
 
   tick: () =>
@@ -123,6 +128,7 @@ export const createFocusSlice = (set, get) => ({
       secondsLeft: s.customTimerSetting.work,
       phaseTotalSec: s.customTimerSetting.work,
       startedAt: null,
-      focusLocked: false
+      focusLocked: false,
+      pipActive: false,
     })),
 })

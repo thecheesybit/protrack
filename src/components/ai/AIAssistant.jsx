@@ -16,8 +16,6 @@ export function AIAssistant() {
     setSettingsOpen(true)
   }
 
-  if (!open) return null
-
   return (
     <AnimatePresence>
       {open && (

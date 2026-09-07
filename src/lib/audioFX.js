@@ -76,3 +76,31 @@ export function playSuccess() {
   playNote(783.99, 0.2)  // G5
   playNote(1046.50, 0.3) // C6
 }
+
+export function playHabitChime() {
+  if (!isEnabled()) return
+  const ctx = getCtx()
+  if (ctx.state === 'suspended') ctx.resume()
+
+  const notes = [
+    { freq: 587.33, delay: 0 },    // D5
+    { freq: 739.99, delay: 0.12 }, // F#5
+    { freq: 880.00, delay: 0.24 }, // A5
+    { freq: 1174.66, delay: 0.38 },// D6
+  ]
+
+  notes.forEach(({ freq, delay }) => {
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(freq, ctx.currentTime + delay)
+    gain.gain.setValueAtTime(0, ctx.currentTime + delay)
+    gain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + delay + 0.04)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.45)
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.start(ctx.currentTime + delay)
+    osc.stop(ctx.currentTime + delay + 0.45)
+  })
+}
+

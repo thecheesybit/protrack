@@ -4,6 +4,12 @@ import { useStore } from '@/store/useStore'
 import { subscribeToModes } from '@/services/modeService'
 import { subscribeToUserDoc, updateActiveMode } from '@/services/userService'
 import { subscribeVerifiedPatreons } from '@/services/patreonService'
+import { syncRemoteLockConfig } from '@/services/lockService'
+import {
+  deriveUniqueCode,
+  initSessionFromAccount,
+  hasActivePinSession,
+} from '@/services/cryptoService'
 
 /**
  * Wires realtime Firestore listeners for the signed-in user into the Zustand
@@ -20,6 +26,8 @@ export function FirestoreSyncProvider({ children }) {
   const setUserDoc = useStore((s) => s.setUserDoc)
   const setVerifiedPatreons = useStore((s) => s.setVerifiedPatreons)
   const setSyncError = useStore((s) => s.setSyncError)
+  const setLockConfigState = useStore((s) => s.setLockConfigState)
+  const lockApp = useStore((s) => s.lockApp)
 
   useEffect(() => {
     if (!user) return undefined
@@ -41,6 +49,10 @@ export function FirestoreSyncProvider({ children }) {
             updateActiveMode(user.uid, fallbackId).catch((err) =>
               console.error('[sync] failed to set active mode fallback', err),
             )
+          }
+        } else {
+          if (currentActive !== 'all') {
+            setActiveModeId('all')
           }
         }
       },
@@ -71,6 +83,27 @@ export function FirestoreSyncProvider({ children }) {
             setActiveModeId(saved)
           }
         }
+
+        // Account-bound App Lock synchronization from Firestore
+        const isLockConfigured = Boolean(data?.settings?.appLock?.enabled)
+        if (data?.settings && 'appLock' in data.settings) {
+          const remoteLock = data.settings.appLock ?? null
+          syncRemoteLockConfig(remoteLock, (appliedConfig) => {
+            if (appliedConfig?.enabled) {
+              setLockConfigState(appliedConfig)
+              lockApp()
+            } else {
+              setLockConfigState(null)
+              if (!hasActivePinSession()) {
+                const uniqueCode = data?.profile?.uniqueCode || deriveUniqueCode(user.uid)
+                initSessionFromAccount(user.uid, uniqueCode, null)
+              }
+            }
+          })
+        } else if (!isLockConfigured && !hasActivePinSession()) {
+          const uniqueCode = data?.profile?.uniqueCode || deriveUniqueCode(user.uid)
+          initSessionFromAccount(user.uid, uniqueCode, null)
+        }
       },
       (err) => setSyncError(err.message)
     )
@@ -83,7 +116,7 @@ export function FirestoreSyncProvider({ children }) {
       unsubUser()
       unsubPatreons()
     }
-  }, [user, setModes, setActiveModeId, setUserDoc, setVerifiedPatreons, setSyncError])
+  }, [user, setModes, setActiveModeId, setUserDoc, setVerifiedPatreons, setSyncError, setLockConfigState, lockApp])
 
   return children
 }

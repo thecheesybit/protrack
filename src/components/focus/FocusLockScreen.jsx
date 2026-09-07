@@ -14,6 +14,8 @@ import {
   Sun,
   Sunset,
   Moon,
+  PictureInPicture2,
+  Maximize2,
 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { useAuth } from '@/hooks/useAuth'
@@ -24,6 +26,7 @@ import { addLedgerEntry } from '@/services/ledgerService'
 import { updateSettings } from '@/services/userService'
 import { VIDEO_PRESETS, DEFAULT_FOCUS_SCENE, youtubeId, buildSceneEmbedUrl } from '@/lib/focusScenes'
 import { withAlpha } from '@/lib/color'
+import { enterPip } from '@/lib/pip'
 import { cn } from '@/utils/cn'
 
 /**
@@ -108,6 +111,8 @@ export function FocusLockScreen() {
   const volume = useStore((s) => s.volume)
   const muted = useStore((s) => s.muted)
   const activeModeId = useStore((s) => s.activeModeId)
+  const pipActive = useStore((s) => s.pipActive)
+  const setPipActive = useStore((s) => s.setPipActive)
 
   const pause = useStore((s) => s.pause)
   const resume = useStore((s) => s.resume)
@@ -178,7 +183,9 @@ export function FocusLockScreen() {
   // user can start/change the background music or scene without leaving Deep
   // Focus. Writes settings; the iframe above reacts to focusAudioUrl.
   const allScenes = [...VIDEO_PRESETS, ...customPresets]
-  const activeScene = allScenes.find((p) => p.url === focusAudioUrl)
+  const activeScene = allScenes.find(
+    (p) => p.url === focusAudioUrl || (videoId && youtubeId(p.url) === videoId),
+  )
   const activeSceneLabel = activeScene?.label || (userFocusAudioUrl ? 'Custom scene' : 'Default scene')
 
   const applyScene = async (url) => {
@@ -186,7 +193,7 @@ export function FocusLockScreen() {
     try {
       await updateSettings(
         user.uid,
-        url ? { focusAudioUrl: url, focusVideoEnabled: true } : { focusAudioUrl: '' },
+        url ? { focusAudioUrl: url, focusVideoEnabled: true } : { focusAudioUrl: '', focusVideoEnabled: false },
       )
     } catch (err) {
       console.error('[focus] scene change failed', err)
@@ -225,7 +232,7 @@ export function FocusLockScreen() {
 
   return (
     <AnimatePresence>
-      {focusLocked && (
+      {focusLocked && !pipActive && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -233,12 +240,26 @@ export function FocusLockScreen() {
           transition={{ duration: 0.5, ease: 'easeInOut' }}
           className="fixed inset-0 z-[45] flex items-center justify-center overflow-hidden"
         >
+          {/* ── Top-Right Picture-in-Picture Button ─────────────────── */}
+          <div className="absolute top-6 right-6 z-30 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={enterPip}
+              className="group flex items-center gap-2 rounded-2xl border border-white/20 bg-black/40 px-4 py-2.5 text-xs font-semibold text-white/90 shadow-glass-lg backdrop-blur-xl transition-all hover:scale-105 hover:border-white/40 hover:bg-black/60 hover:text-white active:scale-95"
+              title="Float timer in Picture-in-Picture mode on top of all windows"
+            >
+              <PictureInPicture2 className="h-4 w-4 text-amber-400 group-hover:scale-110 transition-transform" />
+              <span>PiP Mode</span>
+            </button>
+          </div>
+
           {/* ── Background ─────────────────────────────────────────── */}
           {showVideo ? (
             <>
               <div className="absolute inset-0 overflow-hidden">
                 <iframe
                   ref={iframeRef}
+                  key={videoId}
                   src={embedUrl}
                   onLoad={onIframeLoad}
                   allow="autoplay; fullscreen"
@@ -398,21 +419,26 @@ export function FocusLockScreen() {
                     className="overflow-hidden"
                   >
                     <div className="mt-2 grid grid-cols-3 gap-1.5">
-                      {allScenes.map((p) => (
-                        <button
-                          key={p.url}
-                          onClick={() => applyScene(p.url)}
-                          title={p.label}
-                          className={cn(
-                            'truncate rounded-lg border px-2 py-1.5 text-[10px] transition-colors',
-                            focusAudioUrl === p.url
-                              ? 'border-white/60 bg-white/15 text-white'
-                              : 'border-white/15 bg-white/5 text-white/70 hover:border-white/40 hover:text-white',
-                          )}
-                        >
-                          {p.label}
-                        </button>
-                      ))}
+                      {allScenes.map((p) => {
+                        const isSelected =
+                          focusAudioUrl === p.url ||
+                          (videoId && youtubeId(p.url) === videoId)
+                        return (
+                          <button
+                            key={p.url + p.label}
+                            onClick={() => applyScene(p.url)}
+                            title={p.label}
+                            className={cn(
+                              'truncate rounded-lg border px-2 py-1.5 text-[10px] transition-colors',
+                              isSelected
+                                ? 'border-white/60 bg-white/15 text-white'
+                                : 'border-white/15 bg-white/5 text-white/70 hover:border-white/40 hover:text-white',
+                            )}
+                          >
+                            {p.label}
+                          </button>
+                        )
+                      })}
                       <button
                         onClick={() => applyScene('')}
                         className={cn(

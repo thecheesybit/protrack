@@ -9,6 +9,7 @@ import { createChronoSlice } from './slices/chronoSlice'
 import { createUpdateSlice } from './slices/updateSlice'
 import { createPatreonSlice } from './slices/patreonSlice'
 import { createCheckinSlice } from './slices/checkinSlice'
+import { createLockSlice } from './slices/lockSlice'
 
 /**
  * Single Zustand store composed from feature slices. Realtime Firestore
@@ -26,4 +27,5 @@ export const useStore = create((...a) => ({
   ...createUpdateSlice(...a),
   ...createPatreonSlice(...a),
   ...createCheckinSlice(...a),
+  ...createLockSlice(...a),
 }))

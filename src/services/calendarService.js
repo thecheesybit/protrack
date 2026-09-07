@@ -18,35 +18,29 @@ import { signInWithGooglePopup } from '@/lib/authPopup'
 const CAL_SCOPE = 'https://www.googleapis.com/auth/calendar.events'
 const AUTH_CORE_KEY = 'protrack:auth_core'
 
-// Simple encryption/decryption (base64 obfuscation acting as a "cipher block")
-function encrypt(data) {
-  try {
-    return btoa(JSON.stringify(data))
-  } catch {
-    return ''
-  }
-}
-
-function decrypt(cipher) {
-  try {
-    if (!cipher) return null
-    return JSON.parse(atob(cipher))
-  } catch {
-    return null
-  }
-}
+import { secureStorage } from '@/services/cryptoService'
 
 export function getCalCredentials() {
-  const cipher = localStorage.getItem(AUTH_CORE_KEY)
-  return decrypt(cipher)
+  const data = secureStorage.getItemSync(AUTH_CORE_KEY)
+  if (!data) return null
+  try {
+    return typeof data === 'string' ? JSON.parse(data) : data
+  } catch {
+    // Graceful fallback for legacy btoa strings
+    try {
+      return JSON.parse(atob(data))
+    } catch {
+      return null
+    }
+  }
 }
 
 export function saveCalCredentials(creds) {
-  localStorage.setItem(AUTH_CORE_KEY, encrypt(creds))
+  secureStorage.setItem(AUTH_CORE_KEY, JSON.stringify(creds))
 }
 
 export function clearCalCredentials() {
-  localStorage.removeItem(AUTH_CORE_KEY)
+  secureStorage.removeItem(AUTH_CORE_KEY)
 }
 
 export function getCalToken() {

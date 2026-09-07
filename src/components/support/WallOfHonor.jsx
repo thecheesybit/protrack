@@ -1,71 +1,152 @@
-import { useState } from 'react'
-import { motion } from 'framer-motion'
-import { Quote } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Crown, Sparkles, MapPin, Globe } from 'lucide-react'
 import { useWall } from '@/hooks/useWall'
+import { cn } from '@/utils/cn'
 
 function amountLabel(p) {
   return p.currency === 'USD' ? `$${p.amount}` : `₹${p.amount}`
 }
 
 function regionLabel(region) {
-  return region === 'US' ? 'USA' : 'India'
+  return region === 'US' ? 'United States' : 'India'
 }
 
 /**
- * The global Wall of Honor. Cards are compact by default (anti-clutter); click
- * one to morph it open (Framer layout) revealing the full story + feature
- * request, while neighbours gracefully dim. Live verified patrons are merged
- * with the local seed set.
+ * Aesthetic, dignified Wall of Honor.
+ * Celebrates contributors with editorial typography, refined monograms, and quiet luxury polish.
  */
 export function WallOfHonor() {
   const entries = useWall()
   const [openId, setOpenId] = useState(null)
+  const [filter, setFilter] = useState('all') // 'all' | 'top' | 'IN' | 'US'
+
+  const filteredEntries = useMemo(() => {
+    return entries.filter((p) => {
+      if (filter === 'top') {
+        const isUsd = p.currency === 'USD'
+        return isUsd ? p.amount >= 20 : p.amount >= 500
+      }
+      if (filter === 'IN') return p.region === 'IN'
+      if (filter === 'US') return p.region === 'US'
+      return true
+    })
+  }, [entries, filter])
 
   return (
-    <motion.div layout className="columns-1 gap-3.5 sm:columns-2 [&>*]:mb-3.5">
-      {entries.map((p) => {
-        const open = openId === p.id
-        const dimmed = openId && !open
-        return (
-          <motion.button
-            key={p.id}
-            layout
-            type="button"
-            onClick={() => setOpenId(open ? null : p.id)}
-            animate={{ opacity: dimmed ? 0.4 : 1 }}
-            transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-            className="block w-full break-inside-avoid rounded-2xl border border-line bg-surface-2/15 p-4 text-left transition-all duration-200 hover:bg-surface-2/30 hover:border-accent/30 hover:shadow-sm"
-          >
-            <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/10 border border-accent/15 text-xs font-bold text-accent">
-                {p.name?.[0] || '?'}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-xs font-bold text-ink tracking-wide">{p.name}</div>
-                <div className="text-[10px] font-bold text-muted/70 uppercase tracking-wider mt-0.5">{regionLabel(p.region)}</div>
-              </div>
-              <span className="shrink-0 rounded-lg bg-emerald-500/10 border border-emerald-500/15 px-2 py-0.5 text-xs font-bold text-emerald-400">
-                {amountLabel(p)}
-              </span>
-            </div>
-
-            <p className={`mt-2.5 text-xs leading-relaxed text-muted font-medium ${open ? '' : 'line-clamp-2'}`}>
-              <Quote className="mr-1.5 inline h-3 w-3 text-muted/40 fill-muted/10" />
-              {p.testimony}
-            </p>
-
-            {open && p.featureRequest && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                className="mt-2.5 rounded-xl bg-accent/10 border border-accent/15 px-3 py-2 text-[11px] font-medium text-accent leading-relaxed"
-              >
-                Wants next: {p.featureRequest}
-              </motion.div>
+    <div className="space-y-4">
+      {/* Refined Filter Pills — Zero Emojis */}
+      <div className="flex flex-wrap items-center gap-1.5 pb-1">
+        {[
+          { id: 'all', label: `All Patrons (${entries.length})` },
+          { id: 'top', label: 'Top Contributors' },
+          { id: 'IN', label: 'India' },
+          { id: 'US', label: 'United States' },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setFilter(tab.id)}
+            className={cn(
+              'rounded-xl px-3 py-1.5 text-xs font-medium transition-all duration-150 cursor-pointer',
+              filter === tab.id
+                ? 'bg-ink text-surface font-semibold shadow-sm'
+                : 'border border-line/60 bg-surface-2/30 text-muted hover:border-line hover:text-ink hover:bg-surface-2/60',
             )}
-          </motion.button>
-        )
-      })}
-    </motion.div>
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Grid of Patron Cards */}
+      <motion.div layout className="columns-1 gap-3.5 sm:columns-2 [&>*]:mb-3.5">
+        <AnimatePresence>
+          {filteredEntries.map((p) => {
+            const open = openId === p.id
+            const isUsd = p.currency === 'USD'
+            const isTopTier = isUsd ? p.amount >= 25 : p.amount >= 500
+
+            return (
+              <motion.div
+                key={p.id}
+                layout
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96 }}
+                transition={{ duration: 0.2 }}
+                onClick={() => setOpenId(open ? null : p.id)}
+                className={cn(
+                  'group block w-full break-inside-avoid rounded-2xl border p-4 text-left transition-all duration-200 cursor-pointer select-none',
+                  isTopTier
+                    ? 'border-amber-500/25 bg-gradient-to-br from-amber-500/5 via-surface-2/25 to-surface-2/10 hover:border-amber-500/45 shadow-sm'
+                    : 'border-line/60 bg-surface-2/20 hover:border-line hover:bg-surface-2/35 shadow-sm',
+                  open && 'ring-1 ring-accent/30',
+                )}
+              >
+                {/* Top Row: Monogram, Name, Location & Amount */}
+                <div className="flex items-center gap-3">
+                  <span
+                    className={cn(
+                      'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-display text-xs font-semibold uppercase transition-transform group-hover:scale-105',
+                      isTopTier
+                        ? 'border border-amber-500/30 bg-amber-500/15 text-amber-400'
+                        : 'border border-line/60 bg-surface-2 text-ink',
+                    )}
+                  >
+                    {p.name?.[0] || '?'}
+                  </span>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate font-display text-sm font-semibold text-ink tracking-tight">
+                        {p.name}
+                      </span>
+                      {isTopTier && (
+                        <Crown className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-muted">
+                      <Globe className="h-2.5 w-2.5 opacity-60" />
+                      <span>{regionLabel(p.region)}</span>
+                    </div>
+                  </div>
+
+                  <span
+                    className={cn(
+                      'shrink-0 rounded-lg border px-2.5 py-1 font-mono text-xs font-semibold tracking-tight',
+                      isTopTier
+                        ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+                        : 'border-line/60 bg-surface/60 text-ink/80',
+                    )}
+                  >
+                    {amountLabel(p)}
+                  </span>
+                </div>
+
+                {/* Testimony */}
+                <p
+                  className={cn(
+                    'mt-3 text-xs leading-relaxed text-ink/80 font-normal transition-all',
+                    open ? '' : 'line-clamp-2',
+                  )}
+                >
+                  "{p.testimony}"
+                </p>
+
+                {/* Feature Request Note (Shown when open, or subtle when collapsed) */}
+                {p.featureRequest && (
+                  <div className="mt-2.5 border-t border-line/30 pt-2 flex items-baseline gap-1.5 text-[11px] text-muted">
+                    <span className="font-mono text-[9px] uppercase font-semibold text-accent tracking-wider shrink-0">
+                      Wants next:
+                    </span>
+                    <span className="text-ink/80 font-medium truncate">{p.featureRequest}</span>
+                  </div>
+                )}
+              </motion.div>
+            )
+          })}
+        </AnimatePresence>
+      </motion.div>
+    </div>
   )
 }

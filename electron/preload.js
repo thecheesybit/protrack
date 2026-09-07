@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('protrack', {
 
   window: {
     minimize: () => ipcRenderer.invoke('window:minimize'),
+    restore: () => ipcRenderer.invoke('window:restore'),
     maximize: () => ipcRenderer.invoke('window:maximize'),
     close: () => ipcRenderer.invoke('window:close'),
     isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
@@ -27,6 +28,12 @@ contextBridge.exposeInMainWorld('protrack', {
     // Main forwards maximize/unmaximize/enter-full-screen/leave-full-screen
     // events so the TitleBar icons always reflect the true window state.
     onStateChange: (cb) => subscribe('window:state', cb),
+  },
+
+  // Picture-in-Picture floating mini-widget morphing
+  pip: {
+    enter: () => ipcRenderer.invoke('pip:enter'),
+    exit: () => ipcRenderer.invoke('pip:exit'),
   },
 
   // OS keychain / DPAPI-backed session storage.

@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react'
 import { createPortal } from 'react-dom'
 import {
   DndContext,
@@ -7,7 +7,10 @@ import {
   useSensor,
   useSensors,
   closestCorners,
+  pointerWithin,
   useDroppable,
+  DragOverlay,
+  defaultDropAnimationSideEffects,
 } from '@dnd-kit/core'
 import {
   SortableContext,
@@ -40,6 +43,8 @@ import { WidgetFrame } from './WidgetFrame'
 import { addTodo, updateTodo, deleteTodo, reorderTodos } from '@/services/todoService'
 import { getPriority, nextPriority, PRIORITIES, PRIORITY_ORDER } from '@/lib/priority'
 import { classifyDeadline } from '@/lib/deadlines'
+import { parseCapture } from '@/lib/nlParse'
+import toast from 'react-hot-toast'
 import { playPop, playSuccess } from '@/lib/audioFX'
 import { cn } from '@/utils/cn'
 
@@ -51,10 +56,10 @@ const COLS = {
     label: 'Backlog',
     Icon: Inbox,
     headerClass: 'text-slate-400',
-    borderClass: 'border-slate-500/20',
-    bgClass: 'bg-slate-500/5',
-    cardBorder: 'border-line/50',
-    cardBg: 'bg-surface-2/30',
+    borderClass: 'border-white/[0.08]',
+    bgClass: 'bg-surface-2/20',
+    cardBorder: 'border-white/[0.07] hover:border-white/20',
+    cardBg: 'bg-surface-2/40 hover:bg-surface-2/65',
     emptyHint: 'Add tasks above',
   },
   doing: {
@@ -63,9 +68,9 @@ const COLS = {
     Icon: Zap,
     headerClass: 'text-amber-400',
     borderClass: 'border-amber-500/25',
-    bgClass: 'bg-amber-500/5',
-    cardBorder: 'border-amber-500/25',
-    cardBg: 'bg-amber-500/8',
+    bgClass: 'bg-amber-500/[0.04]',
+    cardBorder: 'border-amber-500/30 hover:border-amber-500/50',
+    cardBg: 'bg-amber-500/[0.08] hover:bg-amber-500/[0.13]',
     emptyHint: 'Double-click a backlog task',
   },
 }
@@ -115,7 +120,7 @@ function PriorityDot({ priority, onCycle }) {
 
 // ── Priority Legend ───────────────────────────────────────────────────────────
 
-function PriorityLegend() {
+const PriorityLegend = memo(function PriorityLegend() {
   return (
     <div className="flex items-center gap-3 px-1 py-0.5">
       {PRIORITIES.map((p) => (
@@ -126,7 +131,8 @@ function PriorityLegend() {
       ))}
     </div>
   )
-}
+})
+
 
 // ── Calendar Deadline Picker ──────────────────────────────────────────────────
 
@@ -196,9 +202,9 @@ function CalendarDeadlinePicker({ x, y, dueAt, onSave, onClear, onClose }) {
     }
     const d = new Date(selectedDate)
     if (timeHour != null) {
-      let h24 = timeHour
-      if (timePeriod === 'AM') h24 = timeHour === 12 ? 0 : timeHour
-      else h24 = timeHour === 12 ? 12 : timeHour + 12
+      const h24 = timePeriod === 'AM'
+        ? (timeHour === 12 ? 0 : timeHour)
+        : (timeHour === 12 ? 12 : timeHour + 12)
       d.setHours(h24, timeMinute || 0, 0, 0)
     } else {
       d.setHours(23, 59, 0, 0)
@@ -376,9 +382,88 @@ function CalendarDeadlinePicker({ x, y, dueAt, onSave, onClear, onClose }) {
   )
 }
 
+// ── Drop Animation Configuration ───────────────────────────────────────────────
+
+const dropAnimationConfig = {
+  sideEffects: defaultDropAnimationSideEffects({
+    styles: {
+      active: {
+        opacity: '0.4',
+      },
+    },
+  }),
+  duration: 250,
+  easing: 'cubic-bezier(0.2, 0, 0, 1)',
+}
+
+// ── KanbanCardOverlay (Floating preview while dragging) ───────────────────────
+
+function KanbanCardOverlay({ todo, isFocusReady }) {
+  if (!todo) return null
+  const col = COLS[todo.column || 'backlog']
+  const urgency = classifyDeadline(todo.dueAt)
+  const isDoing = (todo.column || 'backlog') === 'doing'
+
+  return (
+    <div
+      className={cn(
+        'relative flex flex-col rounded-2xl border backdrop-blur-2xl select-none cursor-grabbing transition-transform duration-150',
+        'shadow-2xl ring-2 ring-accent/60 bg-surface/95 scale-[1.04] rotate-[1.5deg]',
+        col.cardBorder,
+        col.cardBg,
+        isFocusReady && 'ring-2 ring-amber-500/60',
+      )}
+      style={{
+        boxShadow: '0 20px 35px -8px rgba(0, 0, 0, 0.45), 0 0 24px -2px rgba(99, 102, 241, 0.35)',
+      }}
+    >
+      {/* Main row */}
+      <div className="flex items-start gap-2 p-2.5">
+        <div className="mt-0.5 text-accent">
+          <GripVertical className="h-3.5 w-3.5" />
+        </div>
+
+        <div className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-lg border border-white/20 bg-white/5">
+          <Check className="h-2.5 w-2.5 text-transparent" />
+        </div>
+
+        {isDoing && (
+          <span className="mt-1.5 relative flex h-1.5 w-1.5 shrink-0">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" />
+          </span>
+        )}
+
+        <span className="min-w-0 flex-1 text-xs leading-relaxed font-medium text-ink">
+          {todo.text}
+        </span>
+
+        <PriorityDot priority={todo.priority} />
+      </div>
+
+      {/* Deadline row */}
+      {todo.dueAt && (
+        <div className="flex items-center gap-1.5 px-2.5 pb-2.5 pl-[28px]">
+          <span
+            className={cn(
+              'flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium backdrop-blur-sm',
+              urgency === 'overdue'
+                ? 'border-rose-500/30 bg-rose-500/15 text-rose-300'
+                : 'border-white/10 bg-white/[0.06] text-muted',
+            )}
+          >
+            <Clock3 className="h-2.5 w-2.5 shrink-0" />
+            {formatDueShort(todo.dueAt)}
+          </span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── KanbanCard ────────────────────────────────────────────────────────────────
 
-function KanbanCard({
+const KanbanCard = memo(function KanbanCard({
   todo,
   onToggle,
   onUpdate,
@@ -395,12 +480,11 @@ function KanbanCard({
   const [editing, setEditing] = useState(false)
   const [textDraft, setTextDraft] = useState(todo.text)
 
-  // Use CSS.Transform (not Translate) so the element moves from its exact position
   const style = {
-    transform: CSS.Transform.toString(transform),
+    transform: CSS.Translate.toString(transform),
     transition,
-    zIndex: isDragging ? 50 : undefined,
-    position: isDragging ? 'relative' : undefined,
+    opacity: isDragging ? 0.35 : 1,
+    position: 'relative',
   }
   const col = COLS[todo.column || 'backlog']
   const urgency = classifyDeadline(todo.dueAt)
@@ -417,41 +501,48 @@ function KanbanCard({
       ref={setNodeRef}
       style={style}
       className={cn(
-        'group relative flex flex-col rounded-xl border transition-all duration-150',
-        col.cardBorder,
-        col.cardBg,
+        'group relative flex flex-col rounded-2xl border transition-all duration-200',
         isDragging
-          ? 'shadow-glass-lg scale-[1.02] opacity-90 ring-2 ring-accent/40'
-          : 'hover:-translate-y-px hover:shadow-premium-sm',
-        isFocusReady && 'ring-2 ring-amber-500/40',
+          ? 'border-2 border-dashed border-accent/60 bg-accent/[0.04] opacity-35 scale-[0.98]'
+          : cn(col.cardBorder, col.cardBg, 'backdrop-blur-md hover:-translate-y-0.5 hover:shadow-premium-sm'),
+        isFocusReady && !isDragging && 'ring-2 ring-amber-500/40',
       )}
     >
       {/* Main row */}
       <div
-        className="flex items-start gap-1.5 p-2"
+        className="flex items-start gap-2 p-2.5"
         onDoubleClick={(e) => {
           if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return
           onDoubleClick()
         }}
       >
-        {/* Drag handle — NO onPointerDown override so dnd-kit listeners work */}
+        {/* Drag handle */}
         <button
           {...attributes}
           {...listeners}
-          className="mt-0.5 cursor-grab touch-none text-muted/40 hover:text-muted active:cursor-grabbing"
+          className="mt-0.5 cursor-grab touch-none text-muted/30 hover:text-muted active:cursor-grabbing transition-colors"
           aria-label="Drag to reorder"
         >
-          <GripVertical className="h-3 w-3" />
+          <GripVertical className="h-3.5 w-3.5" />
         </button>
 
+        {/* Checkbox */}
         <button
           onPointerDown={(e) => e.stopPropagation()}
           onClick={() => onToggle()}
-          className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 border-line transition-colors hover:border-emerald-500 hover:bg-emerald-500/10"
+          className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-lg border border-white/20 bg-white/5 transition-all hover:border-emerald-400 hover:bg-emerald-500/15"
           aria-label="Toggle done"
         >
-          <Check className="h-2.5 w-2.5 text-transparent group-hover:text-emerald-500/60" />
+          <Check className="h-2.5 w-2.5 text-transparent group-hover:text-emerald-500/70 transition-colors" />
         </button>
+
+        {/* Active Doing pulse indicator */}
+        {isDoing && (
+          <span className="mt-1.5 relative flex h-1.5 w-1.5 shrink-0" title="In progress">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" />
+          </span>
+        )}
 
         {editing ? (
           <input
@@ -464,10 +555,10 @@ function KanbanCard({
               if (e.key === 'Escape') setEditing(false)
             }}
             onPointerDown={(e) => e.stopPropagation()}
-            className="min-w-0 flex-1 rounded border border-accent/60 bg-surface-2/60 px-1.5 py-0.5 text-xs outline-none"
+            className="min-w-0 flex-1 rounded-lg border border-accent/60 bg-surface-2/80 px-2 py-0.5 text-xs outline-none shadow-inner-sm"
           />
         ) : (
-          <span className="min-w-0 flex-1 cursor-default text-xs leading-relaxed text-ink">
+          <span className="min-w-0 flex-1 cursor-default text-xs leading-relaxed text-ink/95">
             {todo.text}
           </span>
         )}
@@ -480,10 +571,10 @@ function KanbanCard({
         <button
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => { e.stopPropagation(); setTextDraft(todo.text); setEditing(true) }}
-          className="hidden shrink-0 text-muted/50 hover:text-ink group-hover:block"
+          className="hidden shrink-0 text-muted/50 hover:text-ink group-hover:block transition-colors"
           aria-label="Edit"
         >
-          <Pencil className="h-2.5 w-2.5" />
+          <Pencil className="h-3 w-3" />
         </button>
 
         {/* X button: in "doing" → push back; in "backlog" → delete */}
@@ -491,35 +582,35 @@ function KanbanCard({
           <button
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); onPushBack?.() }}
-            className="hidden shrink-0 text-muted/50 hover:text-amber-400 group-hover:block"
+            className="hidden shrink-0 text-muted/50 hover:text-amber-400 group-hover:block transition-colors"
             aria-label="Move back to Backlog"
             title="Move back to Backlog"
           >
-            <Undo2 className="h-2.5 w-2.5" />
+            <Undo2 className="h-3 w-3" />
           </button>
         ) : (
           <button
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); onDelete() }}
-            className="hidden shrink-0 text-muted/50 hover:text-rose-400 group-hover:block"
+            className="hidden shrink-0 text-muted/50 hover:text-rose-400 group-hover:block transition-colors"
             aria-label="Delete"
           >
-            <X className="h-2.5 w-2.5" />
+            <X className="h-3 w-3" />
           </button>
         )}
       </div>
 
       {/* Deadline row */}
-      <div className="flex items-center gap-1.5 px-2 pb-2 pl-[22px]">
+      <div className="flex items-center gap-1.5 px-2.5 pb-2.5 pl-[28px]">
         {todo.dueAt ? (
           <button
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); onDeadlineClick(e) }}
             className={cn(
-              'flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-[10px] transition-colors',
+              'flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium backdrop-blur-sm transition-all',
               urgency === 'overdue'
-                ? 'bg-rose-500/15 text-rose-400 hover:bg-rose-500/25'
-                : 'bg-surface-2/60 text-muted hover:text-ink',
+                ? 'border-rose-500/30 bg-rose-500/15 text-rose-300 hover:bg-rose-500/25'
+                : 'border-white/10 bg-white/[0.06] text-muted hover:border-white/20 hover:text-ink',
             )}
           >
             <Clock3 className="h-2.5 w-2.5 shrink-0" />
@@ -529,7 +620,7 @@ function KanbanCard({
           <button
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); onDeadlineClick(e) }}
-            className="hidden items-center gap-1 rounded-lg bg-surface-2/40 px-1.5 py-0.5 text-[10px] text-muted hover:text-ink group-hover:flex"
+            className="hidden items-center gap-1 rounded-full border border-white/5 bg-white/[0.04] px-2 py-0.5 text-[10px] text-muted hover:border-white/15 hover:text-ink group-hover:flex transition-all"
           >
             <Calendar className="h-2.5 w-2.5" />
             Deadline
@@ -547,9 +638,9 @@ function KanbanCard({
             transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
             className="overflow-hidden"
           >
-            <div className="mx-2 mb-2 flex items-center gap-1.5 rounded-xl border border-amber-500/25 bg-gradient-to-r from-amber-500/12 to-amber-400/6 px-2 py-2">
-              <Zap className="h-3.5 w-3.5 shrink-0 text-amber-400" />
-              <span className="flex-1 text-[10px] font-semibold text-amber-300">Ready to focus?</span>
+            <div className="mx-2 mb-2.5 flex items-center gap-2 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/15 to-amber-400/8 px-2.5 py-2 backdrop-blur-sm">
+              <Zap className="h-3.5 w-3.5 shrink-0 text-amber-400 animate-pulse" />
+              <span className="flex-1 text-[11px] font-semibold text-amber-300">Ready to focus?</span>
               <button
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => { e.stopPropagation(); onPushBack?.() }}
@@ -557,12 +648,12 @@ function KanbanCard({
                 className="shrink-0 rounded-lg p-1 text-amber-400/50 transition-colors hover:bg-amber-500/15 hover:text-amber-300"
                 aria-label="Push back to Backlog"
               >
-                <X className="h-3 w-3" />
+                <X className="h-3.5 w-3.5" />
               </button>
               <button
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => { e.stopPropagation(); onStartFocus() }}
-                className="flex items-center gap-1 rounded-lg bg-amber-500 px-2.5 py-1 text-[10px] font-bold text-white shadow-premium-sm transition-transform hover:scale-105 active:scale-95"
+                className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-3 py-1 text-[10px] font-bold text-white shadow-premium-sm transition-transform hover:scale-105 active:scale-95"
               >
                 <Play className="h-2.5 w-2.5 fill-white" />
                 Begin
@@ -573,7 +664,8 @@ function KanbanCard({
       </AnimatePresence>
     </div>
   )
-}
+})
+
 
 // ── KanbanColumn ──────────────────────────────────────────────────────────────
 
@@ -597,22 +689,22 @@ function KanbanColumn({
     <div
       style={style || { flex: '1 1 0%' }}
       className={cn(
-        'flex min-w-0 flex-col rounded-2xl border transition-all duration-300',
+        'flex min-w-0 flex-col rounded-3xl border transition-all duration-300 backdrop-blur-md',
         col.borderClass,
         col.bgClass,
-        isOver && 'ring-1 ring-accent/40',
+        isOver && 'ring-2 ring-accent/60 bg-accent/[0.06] shadow-glow-sm',
       )}
     >
-      <div className={cn('flex shrink-0 items-center gap-2 px-3 py-2 text-xs font-semibold', col.headerClass)}>
+      <div className={cn('flex shrink-0 items-center gap-2 px-3.5 py-2.5 text-xs font-semibold', col.headerClass)}>
         <col.Icon className="h-3.5 w-3.5" />
         {col.label}
-        <span className="ml-auto rounded-full bg-surface-2/60 px-1.5 py-0.5 text-[10px] font-mono text-muted">
+        <span className="ml-auto rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-mono text-muted">
           {todos.length}
         </span>
       </div>
 
       <SortableContext items={todos.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-        <div ref={setDropRef} className="flex min-h-[48px] flex-1 flex-col gap-1.5 overflow-y-auto px-2 pb-2">
+        <div ref={setDropRef} className="flex min-h-[56px] flex-1 flex-col gap-2 overflow-y-auto px-2.5 pb-2.5">
           {todos.map((t) => (
             <KanbanCard
               key={t.id}
@@ -628,7 +720,12 @@ function KanbanColumn({
             />
           ))}
           {todos.length === 0 && (
-            <div className="flex flex-1 items-center justify-center py-3 text-center text-[10px] text-muted/60">
+            <div
+              className={cn(
+                'flex flex-1 items-center justify-center rounded-2xl border-2 border-dashed border-white/5 py-6 text-center text-xs font-medium text-muted/50 transition-colors m-0.5',
+                isOver && 'border-accent/40 bg-accent/5 text-accent',
+              )}
+            >
               {col.emptyHint}
             </div>
           )}
@@ -647,9 +744,13 @@ export function TodosWidget({ widget, variant }) {
   const todos = useTodos()
 
   const [text, setText] = useState('')
+  const [pendingDueAt, setPendingDueAt] = useState(null)
   const [focusReadyId, setFocusReadyId] = useState(null)
   const [activeId, setActiveId] = useState(null)
   const [deadlinePicker, setDeadlinePicker] = useState(null)
+
+  const parsed = useMemo(() => parseCapture(text), [text])
+  const effectiveDeadline = pendingDueAt || parsed.date
 
   const isHero = variant === 'hero'
 
@@ -684,16 +785,43 @@ export function TodosWidget({ widget, variant }) {
   const submit = async () => {
     const value = text.trim()
     if (!value) return
+
+    let dueAt = pendingDueAt || parsed.date || null
+    let taskText = parsed.date && parsed.title ? parsed.title : value
+
+    // If dueAt is at midnight (00:00) with unspecified time, default to 09:00 AM so it displays on the calendar
+    if (dueAt) {
+      const d = new Date(dueAt)
+      if (d.getHours() === 0 && d.getMinutes() === 0) {
+        d.setHours(9, 0, 0, 0)
+        dueAt = d
+      }
+    }
+
     setText('')
+    setPendingDueAt(null)
+
     try {
       playPop()
       await addTodo(user.uid, {
-        text: value,
+        text: taskText,
         modeId: activeModeId === 'all' ? null : activeModeId,
         column: 'backlog',
+        dueAt: dueAt || null,
       })
+      if (dueAt) {
+        const dueStr = new Date(dueAt).toLocaleDateString([], {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+        toast.success(`Task added · Due ${dueStr}`)
+      }
     } catch (err) {
       console.error('[todo] add failed', err)
+      toast.error('Failed to add task')
     }
   }
 
@@ -738,44 +866,160 @@ export function TodosWidget({ widget, variant }) {
     setDeadlinePicker({ todoId, dueAt, x: rect.left, y: rect.bottom + 4 })
   }
 
-  const getColOf = (id) => {
-    if (backlogTodos.some((t) => t.id === id)) return 'backlog'
-    if (doingTodos.some((t) => t.id === id)) return 'doing'
+  const [columns, setColumns] = useState({
+    backlog: [],
+    doing: [],
+  })
+
+  // Synchronize local columns with store todos when not actively dragging
+  useEffect(() => {
+    if (!activeId) {
+      setColumns({
+        backlog: backlogTodos,
+        doing: doingTodos,
+      })
+    }
+  }, [backlogTodos, doingTodos, activeId])
+
+  const columnsRef = useRef(columns)
+  columnsRef.current = columns
+
+  const findCol = useCallback((id) => {
+    if (!id) return null
+    if (id === 'backlog' || id === 'doing') return id
+    const current = columnsRef.current
+    if (current.backlog.some((t) => t.id === id)) return 'backlog'
+    if (current.doing.some((t) => t.id === id)) return 'doing'
     return null
-  }
+  }, [])
 
-  const onDragStart = ({ active }) => setActiveId(active.id)
+  const collisionDetectionStrategy = useCallback((args) => {
+    const pointerCollisions = pointerWithin(args)
+    if (pointerCollisions.length > 0) {
+      return pointerCollisions
+    }
+    return closestCorners(args)
+  }, [])
 
-  const onDragEnd = ({ active: a, over }) => {
-    setActiveId(null)
+  const onDragStart = useCallback(({ active }) => {
+    setActiveId(active.id)
+    playPop()
+  }, [])
+
+  const onDragOver = useCallback(({ active, over }) => {
     if (!over) return
 
-    const srcCol = getColOf(a.id)
-    const dstCol = over.id === 'backlog' || over.id === 'doing' ? over.id : getColOf(over.id)
-    if (!srcCol || !dstCol) return
+    const activeId = active.id
+    const overId = over.id
 
-    if (srcCol !== dstCol) {
-      updateTodo(user.uid, a.id, { column: dstCol })
-      if (dstCol === 'doing') setFocusReadyId(a.id)
-      else if (focusReadyId === a.id) setFocusReadyId(null)
-    } else {
-      const colTodos = srcCol === 'backlog' ? backlogTodos : doingTodos
-      const oldIdx = colTodos.findIndex((t) => t.id === a.id)
-      const newIdx = colTodos.findIndex((t) => t.id === over.id)
-      if (oldIdx >= 0 && newIdx >= 0 && oldIdx !== newIdx) {
-        reorderTodos(user.uid, arrayMove(colTodos, oldIdx, newIdx).map((t) => t.id))
-      }
+    const activeCol = findCol(activeId)
+    const overCol = findCol(overId)
+
+    if (!activeCol || !overCol || activeCol === overCol) {
+      return
     }
-  }
 
-  const openCount = backlogTodos.length + doingTodos.length
+    setColumns((prev) => {
+      const activeItems = prev[activeCol]
+      const overItems = prev[overCol]
+
+      const activeIndex = activeItems.findIndex((t) => t.id === activeId)
+      if (activeIndex === -1) return prev
+
+      const activeItem = activeItems[activeIndex]
+      const overIndex = overItems.findIndex((t) => t.id === overId)
+
+      let newIndex
+      if (overId === overCol) {
+        newIndex = overItems.length
+      } else {
+        const isBelowOverItem =
+          over &&
+          active.rect.current.translated &&
+          active.rect.current.translated.top > over.rect.top + over.rect.height / 2
+        const modifier = isBelowOverItem ? 1 : 0
+        newIndex = overIndex >= 0 ? overIndex + modifier : overItems.length
+      }
+
+      return {
+        ...prev,
+        [activeCol]: activeItems.filter((t) => t.id !== activeId),
+        [overCol]: [
+          ...overItems.slice(0, newIndex),
+          { ...activeItem, column: overCol },
+          ...overItems.slice(newIndex),
+        ],
+      }
+    })
+  }, [findCol])
+
+  const onDragEnd = useCallback(({ active, over }) => {
+    setActiveId(null)
+
+    if (!over) {
+      setColumns({ backlog: backlogTodos, doing: doingTodos })
+      return
+    }
+
+    const activeCol = findCol(active.id)
+    const overCol = findCol(over.id)
+
+    if (!activeCol || !overCol) {
+      setColumns({ backlog: backlogTodos, doing: doingTodos })
+      return
+    }
+
+    const currentCols = columnsRef.current
+    const activeIndex = currentCols[activeCol].findIndex((t) => t.id === active.id)
+    const overIndex = currentCols[overCol].findIndex((t) => t.id === over.id)
+
+    let finalItems = currentCols[overCol]
+    if (activeCol === overCol && activeIndex !== overIndex && overIndex !== -1) {
+      finalItems = arrayMove(currentCols[overCol], activeIndex, overIndex)
+      setColumns((prev) => ({
+        ...prev,
+        [overCol]: finalItems,
+      }))
+    }
+
+    playPop()
+
+    const originalTodo = todos.find((t) => t.id === active.id)
+    const origCol = originalTodo?.column || 'backlog'
+
+    if (origCol !== overCol) {
+      updateTodo(user.uid, active.id, { column: overCol })
+      if (overCol === 'doing') setFocusReadyId(active.id)
+      else if (focusReadyId === active.id) setFocusReadyId(null)
+    }
+
+    // Persist ordering
+    reorderTodos(user.uid, finalItems.map((t) => t.id))
+  }, [findCol, backlogTodos, doingTodos, todos, user?.uid, focusReadyId])
+
+  const onDragCancel = useCallback(() => {
+    setActiveId(null)
+    setColumns({ backlog: backlogTodos, doing: doingTodos })
+  }, [backlogTodos, doingTodos])
+
+  const activeTodo = useMemo(() => {
+    if (!activeId) return null
+    return (
+      columns.backlog.find((t) => t.id === activeId) ||
+      columns.doing.find((t) => t.id === activeId) ||
+      todos.find((t) => t.id === activeId) ||
+      null
+    )
+  }, [activeId, columns, todos])
+
+  const openCount = columns.backlog.length + columns.doing.length
 
   const { backlogFlex, doingFlex } = useMemo(() => {
     if (isHero) {
       return { backlogFlex: '1 1 0%', doingFlex: '1 1 0%' }
     }
-    const backlogCount = backlogTodos.length
-    const doingCount = doingTodos.length
+    const backlogCount = columns.backlog.length
+    const doingCount = columns.doing.length
 
     if (backlogCount === 0 && doingCount === 0) {
       return { backlogFlex: '1 1 0%', doingFlex: '1 1 0%' }
@@ -795,22 +1039,89 @@ export function TodosWidget({ widget, variant }) {
       backlogFlex: `${clamped} ${clamped} 0%`,
       doingFlex: `${1 - clamped} ${1 - clamped} 0%`,
     }
-  }, [isHero, backlogTodos.length, doingTodos.length])
+  }, [isHero, columns.backlog.length, columns.doing.length])
 
   return (
     <WidgetFrame widget={widget} variant={variant} subtitle={`${openCount} open`}>
       <div className="flex min-h-0 flex-1 flex-col gap-2">
-        {/* Add input */}
-        <form onSubmit={(e) => { e.preventDefault(); submit() }} className="flex items-center gap-2">
-          <input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Add a task…"
-            className="flex-1 rounded-xl border border-line bg-surface-2/60 px-3 py-2 text-sm outline-none focus:border-accent"
-          />
-          <button type="submit" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent text-white" aria-label="Add">
-            <Plus className="h-4 w-4" />
-          </button>
+        {/* Add input capsule */}
+        <form onSubmit={(e) => { e.preventDefault(); submit() }} className="flex flex-col gap-2">
+          <div className="group/capsule flex items-center gap-2 rounded-2xl border border-white/10 bg-surface-2/40 px-3 py-1.5 shadow-inner-sm backdrop-blur-md transition-all focus-within:border-accent/50 focus-within:bg-surface-2/70 focus-within:ring-2 focus-within:ring-accent/20">
+            <input
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Add a task… (e.g. 'Math test tomorrow 10am')"
+              className="min-w-0 flex-1 bg-transparent text-xs sm:text-sm text-ink placeholder:text-muted/60 outline-none"
+            />
+            <button
+              type="button"
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect()
+                setDeadlinePicker({
+                  forNew: true,
+                  dueAt: effectiveDeadline,
+                  x: Math.min(rect.left, window.innerWidth - 300),
+                  y: rect.bottom + 4,
+                })
+              }}
+              className={cn(
+                'flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border transition-all',
+                effectiveDeadline
+                  ? 'border-accent/40 bg-accent/20 text-accent'
+                  : 'border-transparent text-muted/60 hover:border-white/10 hover:bg-white/5 hover:text-ink',
+              )}
+              title={effectiveDeadline ? 'Change deadline' : 'Set deadline'}
+              aria-label="Set deadline"
+            >
+              <Calendar className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="submit"
+              disabled={!text.trim()}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-accent text-white shadow-glow-sm transition-all hover:brightness-110 hover:scale-105 active:scale-95 disabled:opacity-30 disabled:hover:scale-100 disabled:hover:brightness-100"
+              aria-label="Add"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
+
+          {effectiveDeadline && (
+            <div className="flex items-center justify-between rounded-xl border border-accent/30 bg-accent/10 px-3 py-1.5 text-[11px] text-accent backdrop-blur-sm">
+              <span className="flex items-center gap-1.5 truncate">
+                <Clock3 className="h-3.5 w-3.5 shrink-0" />
+                <span>
+                  Due:{' '}
+                  <strong className="font-semibold">
+                    {new Date(effectiveDeadline).toLocaleString([], {
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </strong>
+                </span>
+                {parsed.matched && !pendingDueAt && (
+                  <span className="truncate text-[10px] opacity-75">
+                    (from &quot;{parsed.matched}&quot;)
+                  </span>
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingDueAt(null)
+                  if (parsed.matched && !pendingDueAt) {
+                    setText(parsed.title || '')
+                  }
+                }}
+                className="ml-1 rounded p-0.5 transition-colors hover:text-ink"
+                title="Remove deadline"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
         </form>
 
         {/* Priority Legend */}
@@ -824,18 +1135,20 @@ export function TodosWidget({ widget, variant }) {
           </div>
         )}
 
-        {/* Kanban board — no DragOverlay so items move from their exact position */}
+        {/* Kanban board with fluid DragOverlay & designated drop area animation */}
         {filtered.length > 0 && (
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCorners}
+            collisionDetection={collisionDetectionStrategy}
             onDragStart={onDragStart}
+            onDragOver={onDragOver}
             onDragEnd={onDragEnd}
+            onDragCancel={onDragCancel}
           >
             <div className={cn('flex min-h-0 flex-1 gap-2', isHero ? 'flex-row' : 'flex-col')}>
               <KanbanColumn
                 colId="backlog"
-                todos={backlogTodos}
+                todos={columns.backlog}
                 focusReadyId={focusReadyId}
                 onDoubleClick={onDoubleClick}
                 onToggle={onToggle}
@@ -848,7 +1161,7 @@ export function TodosWidget({ widget, variant }) {
               />
               <KanbanColumn
                 colId="doing"
-                todos={doingTodos}
+                todos={columns.doing}
                 focusReadyId={focusReadyId}
                 onDoubleClick={onDoubleClick}
                 onToggle={onToggle}
@@ -860,20 +1173,29 @@ export function TodosWidget({ widget, variant }) {
                 style={{ flex: doingFlex }}
               />
             </div>
+
+            <DragOverlay dropAnimation={dropAnimationConfig}>
+              {activeTodo ? (
+                <KanbanCardOverlay
+                  todo={activeTodo}
+                  isFocusReady={focusReadyId === activeTodo.id}
+                />
+              ) : null}
+            </DragOverlay>
           </DndContext>
         )}
 
         {/* Done section */}
         {doneTodos.length > 0 && (
-          <div className="mt-1 shrink-0 rounded-2xl border border-line/30 bg-surface-2/30 px-2 py-2 backdrop-blur-sm">
+          <div className="mt-1 shrink-0 rounded-3xl border border-white/[0.08] bg-surface-2/20 px-3 py-2.5 backdrop-blur-md">
             <p className="mb-1.5 flex items-center gap-1.5 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
-              <Check className="h-3 w-3 text-emerald-500/70" />
-              Done
-              <span className="font-mono ml-auto">{doneTodos.length}</span>
+              <Check className="h-3 w-3 text-emerald-400" />
+              <span>Completed</span>
+              <span className="ml-auto rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-mono text-[10px] text-muted">{doneTodos.length}</span>
             </p>
-            <div className="flex flex-col gap-0.5">
+            <div className="flex flex-col gap-1">
               {doneTodos.slice(0, isHero ? 50 : 3).map((t) => (
-                <div key={t.id} className="group flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-surface-2/40">
+                <div key={t.id} className="group flex items-center gap-2 rounded-xl px-2 py-1 hover:bg-white/5 transition-colors">
                   <button
                     onClick={() => onToggle(t)}
                     className="flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 border-transparent bg-emerald-500/80 text-white transition-colors hover:bg-emerald-500"
@@ -911,11 +1233,19 @@ export function TodosWidget({ widget, variant }) {
                 y={deadlinePicker.y}
                 dueAt={deadlinePicker.dueAt}
                 onSave={(date) => {
-                  onUpdate(deadlinePicker.todoId, { dueAt: date })
+                  if (deadlinePicker.forNew) {
+                    setPendingDueAt(date)
+                  } else {
+                    onUpdate(deadlinePicker.todoId, { dueAt: date })
+                  }
                   setDeadlinePicker(null)
                 }}
                 onClear={() => {
-                  onUpdate(deadlinePicker.todoId, { dueAt: null })
+                  if (deadlinePicker.forNew) {
+                    setPendingDueAt(null)
+                  } else {
+                    onUpdate(deadlinePicker.todoId, { dueAt: null })
+                  }
                   setDeadlinePicker(null)
                 }}
                 onClose={() => setDeadlinePicker(null)}

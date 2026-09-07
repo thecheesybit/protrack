@@ -58,17 +58,22 @@ if (isFirebaseConfigured) {
   // well). localStorage works reliably under file://; IDB is the fallback for
   // browsers where localStorage is constrained; in-memory is the last resort.
   try {
-    auth = initializeAuth(app, {
-      persistence: [
+    const isBrowser = typeof window !== 'undefined'
+    if (isBrowser) {
+      const persistenceList = [
         browserLocalPersistence,
         indexedDBLocalPersistence,
         inMemoryPersistence,
-      ],
-      // CRITICAL: without an explicit popupRedirectResolver, signInWithPopup
-      // throws `auth/argument-error` because the popup machinery isn't wired
-      // up. getAuth() includes this by default; initializeAuth() does not.
-      popupRedirectResolver: browserPopupRedirectResolver,
-    })
+      ].filter(Boolean)
+
+      const authOptions = { persistence: persistenceList }
+      if (typeof browserPopupRedirectResolver !== 'undefined' && browserPopupRedirectResolver) {
+        authOptions.popupRedirectResolver = browserPopupRedirectResolver
+      }
+      auth = initializeAuth(app, authOptions)
+    } else {
+      auth = getAuth(app)
+    }
   } catch (err) {
     // initializeAuth throws if called twice — fall back to getAuth.
     console.warn('[firebase] initializeAuth fell back to getAuth', err)

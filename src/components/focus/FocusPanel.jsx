@@ -20,6 +20,7 @@ export function FocusPanel() {
       color: ctx.color,
       subjectId: ctx.subjectId || null,
       modeId: activeModeId,
+      durationMin: ctx.durationMin,
     })
     maximizeWidget('focus')
     closeFocus()

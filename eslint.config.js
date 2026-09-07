@@ -15,6 +15,11 @@ export default [
         ...globals.node,
         ...globals.es2022,
       },
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true,
+        },
+      },
       ecmaVersion: 2022,
       sourceType: 'module',
     },

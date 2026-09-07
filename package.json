@@ -16,7 +16,7 @@
     "electron:build:mac": "cross-env ELECTRON=true vite build && electron-builder --mac",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "lint": "eslint src/lib src/services src/hooks"
+    "lint": "eslint src"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

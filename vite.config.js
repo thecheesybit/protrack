@@ -54,13 +54,25 @@ const APP_CSP = [
   "base-uri 'self'",
 ].join('; ')
 
-/** Injects the production CSP <meta> right after <meta charset>. */
+/**
+ * Injects the production CSP <meta> right after <meta charset>.
+ *
+ * ELECTRON BUILD ONLY. The desktop document loads locally (from the internal
+ * http://localhost server) where no server can send a CSP header, so a build-
+ * time meta tag is the only way to give it a policy. The WEB build (Netlify)
+ * must NOT get this meta: it's the public landing + the `/link` device-linking
+ * page, whose Google sign-in popup loads apis.google.com and other Google
+ * origins into the opener — a restrictive app meta CSP there silently blocked
+ * the popup and surfaced as `auth/internal-error` ("Couldn't link"). Netlify
+ * can carry its own security headers via netlify.toml if desired.
+ */
 function injectCspPlugin() {
   return {
     name: 'protrack-inject-csp',
     transformIndexHtml: {
       handler(html, ctx) {
         if (ctx.server) return html // dev server: no CSP, HMR needs freedom
+        if (!withElectron) return html // web build: no restrictive meta CSP
         return html.replace(
           '<meta charset="UTF-8" />',
           `<meta charset="UTF-8" />\n    <meta http-equiv="Content-Security-Policy" content="${APP_CSP}" />`,
@@ -78,7 +90,19 @@ export default defineConfig({
     ...(withElectron
       ? [
           electron({
-            main: { entry: 'electron/main.js' },
+            main: {
+              entry: 'electron/main.js',
+              onstart(args) {
+                const devUserData = path.join(
+                  process.env.APPDATA ||
+                    (process.platform === 'darwin'
+                      ? path.join(process.env.HOME || '', 'Library/Application Support')
+                      : path.join(process.env.HOME || '', '.config')),
+                  'pro-track-dev',
+                )
+                args.startup(['.', '--no-sandbox', `--user-data-dir=${devUserData}`])
+              },
+            },
             preload: {
               input: path.join(process.cwd(), 'electron/preload.js'),
               vite: {
@@ -117,21 +141,33 @@ export default defineConfig({
     rollupOptions: {
       output: {
         // Split heavy vendors so the app shell loads fast and caches well.
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom'],
-          'vendor-firebase': [
-            'firebase/app',
-            'firebase/auth',
-            'firebase/firestore',
-          ],
-          'vendor-motion': ['framer-motion'],
-          'vendor-charts': ['recharts'],
-          'vendor-nlp': ['chrono-node'],
-          'vendor-dnd': [
-            '@dnd-kit/core',
-            '@dnd-kit/sortable',
-            '@dnd-kit/utilities',
-          ],
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom') || id.includes('scheduler')) {
+              return 'vendor-react'
+            }
+            if (id.includes('firebase') || id.includes('@firebase')) {
+              return 'vendor-firebase'
+            }
+            if (id.includes('framer-motion')) {
+              return 'vendor-motion'
+            }
+            if (id.includes('recharts') || id.includes('d3-')) {
+              return 'vendor-charts'
+            }
+            if (id.includes('chrono-node')) {
+              return 'vendor-nlp'
+            }
+            if (id.includes('@dnd-kit')) {
+              return 'vendor-dnd'
+            }
+            if (id.includes('lucide-react')) {
+              return 'vendor-icons'
+            }
+            if (id.includes('@google/generative-ai') || id.includes('openai') || id.includes('@anthropic-ai')) {
+              return 'vendor-ai'
+            }
+          }
         },
       },
     },

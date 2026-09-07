@@ -133,4 +133,42 @@ describe('missedToday', () => {
     const habit = { interval: 'evening', timesPerDay: 1, doneDates: [] }
     expect(missedToday(habit, june15(20))).toBe(1)
   })
+
+  // -------------------------------------------------------------------------
+  // Multi-completion tracking with dayLogs
+  // -------------------------------------------------------------------------
+  it('deducts logged completions today from dayLogs count', () => {
+    const todayStr = ymd()
+    const habit = {
+      interval: 'every-1h',
+      timesPerDay: 8,
+      doneDates: [todayStr],
+      dayLogs: { [todayStr]: 3 },
+    }
+    // At noon (3 hours past 9am), 4 expected pings. 3 logged in dayLogs.
+    expect(missedToday(habit, june15(12))).toBe(1)
+  })
+
+  it('returns 0 when dayLogs meets or exceeds timesPerDay target', () => {
+    const todayStr = ymd()
+    const habit = {
+      interval: 'every-1h',
+      timesPerDay: 4,
+      doneDates: [todayStr],
+      dayLogs: { [todayStr]: 4 },
+    }
+    expect(missedToday(habit, june15(16))).toBe(0)
+  })
+
+  it('supports customIntervalMin', () => {
+    // customIntervalMin: 120 (same as every-2h). At 11am (2h past 9am), expected = 2
+    const habit = {
+      interval: 'custom',
+      customIntervalMin: 120,
+      timesPerDay: 6,
+      doneDates: [],
+    }
+    expect(missedToday(habit, june15(11))).toBe(2)
+  })
 })
+

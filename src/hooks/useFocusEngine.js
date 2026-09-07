@@ -64,15 +64,25 @@ export function useFocusEngine() {
     if (!st.muted) playChime()
 
     if (st.phase === 'focus') {
-      const durationMin = st.focusMin
+      const durationMin = Math.max(1, Math.round((st.phaseTotalSec || st.focusMin * 60) / 60))
       st.bumpCompleted()
-      notify('Focus complete', 'Great work. Time for a short break.')
+      notify('Focus complete! 🌲', `Congratulations! You completed your ${durationMin}-minute session.`)
       st.pushIsland({
         kind: 'success',
-        title: 'Focus session complete',
-        detail: 'A tree grew. Time for a short break.',
+        title: '🎉 Focus session complete!',
+        detail: `Planted a tree on today's calendar! (${durationMin} min)`,
         duration: 5000,
       })
+
+      // Congratulate and trigger celebration modal
+      useStore.setState({
+        congratulations: {
+          durationMin,
+          label: st.session?.label || 'Deep Focus',
+          timestamp: Date.now(),
+        },
+      })
+
       try {
         const uid = user?.uid
         if (!uid) throw new Error('not authenticated')
@@ -101,7 +111,10 @@ export function useFocusEngine() {
       } catch (err) {
         console.error('[focus] failed to log session', err)
       }
-      st.startBreak()
+
+      // Automatically end session and return to dashboard with newly planted tree
+      st.endToIdle()
+      window.protrack?.window?.setFullScreen?.(false)
     } else {
       notify('Break over', 'Ready for another deep focus session?')
       st.pushIsland({

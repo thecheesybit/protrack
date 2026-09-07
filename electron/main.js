@@ -8,6 +8,7 @@ import {
   safeStorage,
   nativeImage,
   globalShortcut,
+  screen,
 } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
@@ -22,6 +23,12 @@ const { autoUpdater } = electronUpdater
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isDev = !app.isPackaged
 const DEV_URL = process.env.VITE_DEV_SERVER_URL
+
+// Isolate development userData to avoid lockfile collisions (Windows error code 32)
+// when an installed production build (PRO TRACK.exe) is running concurrently.
+if (isDev) {
+  app.setPath('userData', path.join(app.getPath('appData'), 'pro-track-dev'))
+}
 
 // Built layout: dist-electron/main.js + preload.cjs, dist/ (renderer), build/ (assets)
 const RENDERER_DIST = path.join(__dirname, '../dist')
@@ -71,13 +78,22 @@ const MIME_TYPES = {
   '.webmanifest': 'application/manifest+json',
 }
 
+const staticAssetCache = new Map()
+
 function serveIndex(res) {
+  const cached = staticAssetCache.get('index.html')
+  if (cached) {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+    res.end(cached)
+    return
+  }
   fs.readFile(path.join(RENDERER_DIST, 'index.html'), (err, html) => {
     if (err) {
       res.writeHead(404)
       res.end('Not found')
       return
     }
+    staticAssetCache.set('index.html', html)
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
     res.end(html)
   })
@@ -99,10 +115,28 @@ function handleLocalRequest(req, res) {
     res.end('Forbidden')
     return
   }
+
+  const cached = staticAssetCache.get(filePath)
+  if (cached) {
+    const ext = path.extname(filePath).toLowerCase()
+    res.writeHead(200, {
+      'Content-Type': MIME_TYPES[ext] || 'application/octet-stream',
+      'Cache-Control': 'public, max-age=31536000, immutable',
+    })
+    res.end(cached)
+    return
+  }
+
   fs.readFile(filePath, (err, data) => {
     if (err) return serveIndex(res) // SPA fallback for client routes
     const ext = path.extname(filePath).toLowerCase()
-    res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream' })
+    if (data.length < 5 * 1024 * 1024) {
+      staticAssetCache.set(filePath, data)
+    }
+    res.writeHead(200, {
+      'Content-Type': MIME_TYPES[ext] || 'application/octet-stream',
+      'Cache-Control': 'public, max-age=31536000, immutable',
+    })
     res.end(data)
   })
 }
@@ -456,9 +490,32 @@ function createWindow() {
     queueSave()
     win.webContents.send('window:state', { fullscreen: false })
   })
+  win.on('minimize', () => {
+    win.webContents?.send('window:state', { minimized: true })
+  })
+  win.on('restore', () => {
+    win.webContents?.send('window:state', { restored: true, minimized: false })
+  })
+  win.on('hide', () => {
+    win.webContents?.send('window:state', { hidden: true })
+  })
+  win.on('show', () => {
+    win.webContents?.send('window:state', { shown: true, hidden: false })
+  })
 
-  // Minimize to tray instead of quitting.
+  // Minimize to tray instead of quitting (production only). In dev, close quits
+  // the app so running `npm run electron:dev` doesn't collide with a hidden tray instance.
   win.on('close', (e) => {
+    if (prePipState) {
+      win.setAlwaysOnTop(false)
+      win.setMinimumSize(940, 600)
+      prePipState = null
+    }
+    if (isDev) {
+      isQuitting = true
+      app.quit()
+      return
+    }
     if (!isQuitting) {
       e.preventDefault()
       win.hide()
@@ -467,6 +524,20 @@ function createWindow() {
 
   // External links open in the system browser; block in-app navigation away.
   win.webContents.setWindowOpenHandler(({ url }) => {
+    // 1. Native Document Picture-in-Picture window (Chromium uses about:blank)
+    if (url === 'about:blank') {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          alwaysOnTop: true,
+          webPreferences: {
+            contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: true,
+          },
+        },
+      }
+    }
     if (url.includes('/__/auth/') || url.includes('firebaseapp.com/__/auth')) {
       return {
         action: 'allow',
@@ -479,7 +550,10 @@ function createWindow() {
         },
       }
     }
-    shell.openExternal(url)
+    // Only launch system browser for external http/https links (never internal about: protocols)
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      shell.openExternal(url)
+    }
     return { action: 'deny' }
   })
   win.webContents.on('will-navigate', (e, url) => {
@@ -586,19 +660,32 @@ if (!gotLock) {
     localServer?.close?.()
   })
   app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin' && isQuitting) app.quit()
+    if (isDev || (process.platform !== 'darwin' && isQuitting)) app.quit()
   })
 }
 
 /* ── IPC: window controls ───────────────────────────────── */
-ipcMain.handle('window:minimize', () => win?.minimize())
+ipcMain.handle('window:minimize', () => {
+  win?.webContents?.send('window:state', { minimized: true })
+  return win?.minimize()
+})
+ipcMain.handle('window:restore', () => {
+  if (!win) return false
+  if (win.isMinimized()) win.restore()
+  win.show()
+  win.focus()
+  return true
+})
 ipcMain.handle('window:maximize', () => {
   if (!win) return false
   if (win.isMaximized()) win.unmaximize()
   else win.maximize()
   return win.isMaximized()
 })
-ipcMain.handle('window:close', () => win?.hide())
+ipcMain.handle('window:close', () => {
+  win?.webContents?.send('window:state', { hidden: true })
+  return win?.hide()
+})
 ipcMain.handle('window:isMaximized', () => win?.isMaximized() ?? false)
 ipcMain.handle('window:toggleFullScreen', () => {
   if (!win) return false
@@ -615,6 +702,82 @@ ipcMain.handle('window:setAlwaysOnTop', (_e, flag) => {
   if (!win) return false
   win.setAlwaysOnTop(Boolean(flag), 'screen-saver')
   return win.isAlwaysOnTop()
+})
+
+/* ── IPC: native PiP mini-widget morphing ───────────────── */
+let prePipState = null
+
+ipcMain.handle('pip:enter', async () => {
+  if (!win) return false
+  prePipState = {
+    bounds: win.getNormalBounds ? win.getNormalBounds() : win.getBounds(),
+    isFullScreen: win.isFullScreen(),
+    isMaximized: win.isMaximized(),
+  }
+
+  if (win.isFullScreen()) {
+    await new Promise((resolve) => {
+      let finished = false
+      const done = () => {
+        if (!finished) {
+          finished = true
+          resolve()
+        }
+      }
+      win.once('leave-full-screen', done)
+      win.setFullScreen(false)
+      setTimeout(done, 250)
+    })
+  } else if (win.isMaximized()) {
+    win.unmaximize()
+  }
+
+  win.setMinimumSize(240, 300)
+
+  const display = screen.getDisplayMatching(win.getBounds()) || screen.getPrimaryDisplay()
+  const { x: dx, y: dy, width: dw, height: dh } = display.workArea
+
+  const pipW = 300
+  const pipH = 380
+  const pipX = Math.round(dx + dw - pipW - 24)
+  const pipY = Math.round(dy + dh - pipH - 24)
+
+  win.setBounds({ x: pipX, y: pipY, width: pipW, height: pipH })
+  try {
+    win.setAlwaysOnTop(true, 'screen-saver')
+  } catch {
+    win.setAlwaysOnTop(true)
+  }
+  win.show()
+  win.focus()
+  return true
+})
+
+ipcMain.handle('pip:exit', () => {
+  if (!win) return false
+  win.setAlwaysOnTop(false)
+  win.setMinimumSize(940, 600)
+
+  if (prePipState) {
+    const { bounds, isMaximized, isFullScreen } = prePipState
+    prePipState = null
+    if (bounds) {
+      win.setBounds(bounds)
+    }
+    if (isMaximized) {
+      win.maximize()
+    }
+    if (isFullScreen) {
+      win.setFullScreen(true)
+    }
+  } else {
+    win.setSize(1280, 820)
+    win.center()
+  }
+
+  win.show()
+  win.focus()
+  return true
 })
 
 /* ── IPC: OS-encrypted session storage (safeStorage) ────── */

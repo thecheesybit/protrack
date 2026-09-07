@@ -1,4 +1,4 @@
-import { createContext, useCallback, useEffect, useState } from 'react'
+import { createContext, useCallback, useEffect, useMemo, useState } from 'react'
 import {
   onAuthStateChanged,
   signOut as firebaseSignOut,
@@ -8,6 +8,7 @@ import { auth, googleProvider, isFirebaseConfigured } from '@/lib/firebase'
 import { ensureUserDocument } from '@/services/userService'
 import { signInWithGooglePopup, completePendingRedirect, friendlyAuthError } from '@/lib/authPopup'
 import { isDesktop } from '@/desktop/isDesktop'
+import { clearSessionCrypto } from '@/services/cryptoService'
 
 function withTimeout(promise, ms, errorMessage) {
   return new Promise((resolve, reject) => {
@@ -59,11 +60,14 @@ export function AuthProvider({ children }) {
       setLoadingStatus('Network is slow — verifying connection…')
     }, 3000)
 
-    // If this load is returning from a signIn() redirect fallback (web/mobile
-    // only — see signIn below), let Firebase process it. Either way,
-    // onAuthStateChanged below picks up the resulting session on its own —
-    // this call exists only to consume the pending redirect state.
-    completePendingRedirect(auth)
+    // If this load is returning from a signIn() redirect fallback, let Firebase
+    // process it. Web/mobile only: the redirect fallback never runs in the
+    // desktop shell (signIn passes allowRedirectFallback:false there), and
+    // getRedirectResult eagerly spins up the Google auth iframe (apis.google.com)
+    // — pointless overhead and an extra failure point during the desktop QR
+    // handshake, which is pure REST. onAuthStateChanged handles the session
+    // either way.
+    if (!isDesktop) completePendingRedirect(auth)
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       let profileSlowTimer = null
@@ -140,6 +144,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   const signOut = useCallback(async () => {
+    clearSessionCrypto()
     if (!isFirebaseConfigured) return
     await firebaseSignOut(auth)
   }, [])
@@ -147,28 +152,32 @@ export function AuthProvider({ children }) {
   const deleteAccount = useCallback(async () => {
     if (!auth.currentUser) return
     try {
+      clearSessionCrypto()
       await deleteUser(auth.currentUser)
     } catch (err) {
       if (err.code === 'auth/requires-recent-login') {
-        throw new Error('Please sign out and sign back in to verify your identity before deleting your account.')
+        throw new Error('Please sign out and sign back in to verify your identity before deleting your account.', { cause: err })
       }
       throw err
     }
   }, [])
 
+  const value = useMemo(
+    () => ({
+      user,
+      loading,
+      loadingStatus,
+      error,
+      signIn,
+      signOut,
+      deleteAccount,
+      configured: isFirebaseConfigured,
+    }),
+    [user, loading, loadingStatus, error, signIn, signOut, deleteAccount]
+  )
+
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        loadingStatus,
-        error,
-        signIn,
-        signOut,
-        deleteAccount,
-        configured: isFirebaseConfigured,
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )

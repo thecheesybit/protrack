@@ -1,8 +1,12 @@
-import { useEffect, useRef } from 'react'
+import React, { useEffect, useRef } from 'react'
+import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
 import { useHabits } from '@/hooks/useWellness'
+import { useStore } from '@/store/useStore'
 import { notify } from '@/lib/notify'
-import { toggleHabitToday } from '@/services/habitService'
+import { playHabitChime } from '@/lib/audioFX'
+import { HabitReminderToast } from '@/components/wellness/HabitReminderToast'
+import { recordHabitCompletion, toggleHabitToday } from '@/services/habitService'
 import { ymd } from '@/lib/dates'
 
 /**
@@ -18,11 +22,18 @@ import { ymd } from '@/lib/dates'
  * scheduled timer is cleared on rebuild or unmount.
  */
 
-const INTERVAL_MIN = {
+export const INTERVAL_MIN = {
+  'every-20m': 20,
+  'every-30m': 30,
+  'every-45m': 45,
   'every-1h': 60,
+  'every-90m': 90,
   'every-2h': 120,
   'every-3h': 180,
   'every-4h': 240,
+  'every-6h': 360,
+  'every-8h': 480,
+  'every-12h': 720,
 }
 
 /** Minutes-from-midnight when a "morning" / "evening" cue should fire. */
@@ -33,7 +44,7 @@ const FIXED_TIMES_MIN = {
 }
 
 function nextFireFor(habit, now = new Date()) {
-  const intervalMin = INTERVAL_MIN[habit.interval]
+  const intervalMin = habit.customIntervalMin || INTERVAL_MIN[habit.interval]
   if (intervalMin) {
     // Anchored to start-of-day so reminders fall on tidy hour-marks
     // (e.g. 9am/11am for every-2h) instead of drifting across sessions.
@@ -55,11 +66,68 @@ function nextFireFor(habit, now = new Date()) {
 }
 
 function completionsToday(habit) {
-  // Habits store completions per-day, not per-occurrence. We treat the
-  // checkbox as "any completion today counts" for reminder suppression; users
-  // who want multiple-per-day pings should keep firing until they toggle it
-  // (which is the conventional habit-tracker behavior).
-  return (habit.doneDates || []).includes(ymd()) ? 1 : 0
+  const today = ymd()
+  if (habit?.dayLogs && typeof habit.dayLogs[today] === 'number') {
+    return habit.dayLogs[today]
+  }
+  return (habit?.doneDates || []).includes(today) ? 1 : 0
+}
+
+/**
+ * Fires the interactive toast, audio chime, and Dynamic Island notification
+ * for a habit reminder.
+ */
+export function triggerHabitCue(uid, habit) {
+  if (!uid || !habit) return
+
+  // 1. Auditory Chime (if sound not disabled)
+  if (habit.reminderSound !== false) {
+    playHabitChime()
+  }
+
+  const target = Math.max(1, habit.timesPerDay || 1)
+  const current = completionsToday(habit)
+
+  // 2. Interactive In-App Toast
+  if (habit.reminderToast !== false) {
+    toast.custom(
+      (t) =>
+        React.createElement(HabitReminderToast, {
+          toastId: t.id,
+          habit,
+          targetCount: target,
+          currentCount: current,
+          onDone: async (h) => {
+            await recordHabitCompletion(uid, h)
+          },
+          onSnooze: () => {
+            setTimeout(() => {
+              triggerHabitCue(uid, habit)
+            }, 10 * 60 * 1000)
+          },
+        }),
+      {
+        duration: 28000,
+        id: `habit-reminder-${habit.id}`,
+      },
+    )
+  }
+
+  // 3. Dynamic Island Banner
+  useStore.getState().pushIsland({
+    kind: habit.icon === 'Droplets' ? 'water' : 'info',
+    title: `Time to ${habit.name}`,
+    detail: habit.scienceRationale
+      ? `${habit.scienceRationale.slice(0, 75)}…`
+      : 'Click Done on the reminder toast to track.',
+    duration: 6500,
+  })
+
+  // 4. Background OS Native Notification
+  notify(
+    `Habit Reminder · ${habit.name}`,
+    habit.scienceRationale || `Time to ${habit.name.toLowerCase()}. Open PRO TRACK to track response.`,
+  )
 }
 
 export function useHabitReminders() {
@@ -88,10 +156,8 @@ export function useHabitReminders() {
             armNext()
             return
           }
-          notify(
-            `Habit reminder · ${habit.name}`,
-            `Time to ${habit.name.toLowerCase()}. Open PRO TRACK to log it.`,
-          )
+
+          triggerHabitCue(user.uid, habit)
           armNext()
         }, delay)
         scheduled.push(id)
@@ -113,7 +179,7 @@ export function missedToday(habit, now = new Date()) {
   const done = completionsToday(habit)
   if (done >= goal) return 0
 
-  const intervalMin = INTERVAL_MIN[habit.interval]
+  const intervalMin = habit.customIntervalMin || INTERVAL_MIN[habit.interval]
   if (!intervalMin) {
     // Fixed time-of-day cues: missed iff target time has passed and not done.
     const fixed = FIXED_TIMES_MIN[habit.interval]

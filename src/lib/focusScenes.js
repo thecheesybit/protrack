@@ -21,13 +21,33 @@ export const VIDEO_PRESETS = [
 // Default scene for new users (Forest River ambient)
 export const DEFAULT_FOCUS_SCENE = VIDEO_PRESETS[0]
 
-/** Matches a YouTube watch/share/embed URL and captures the 11-char video id. */
+/** Matches any YouTube URL or path and captures the 11-char video id. */
 export const YT_PATTERN =
-  /(?:youtube\.fr\/|youtube\.com\/(?:watch\?v=|embed\/|v\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i
+  /(?:youtu\.be\/|youtube(?:-nocookie)?\.[a-z.]+\/(?:.*[?&]v=|embed\/|v\/|shorts\/|live\/))([a-zA-Z0-9_-]{11})/i
 
-/** Extract the YouTube video id from any supported URL, or null. */
+/** Extract the YouTube video id from any supported URL, ID string, or null. */
 export function youtubeId(url) {
-  return url?.match(YT_PATTERN)?.[1] || null
+  if (!url || typeof url !== 'string') return null
+  const trimmed = url.trim()
+  if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
+    return trimmed
+  }
+  const match = trimmed.match(YT_PATTERN)
+  if (match?.[1]) return match[1]
+
+  const paramMatch = trimmed.match(/[?&]v=([a-zA-Z0-9_-]{11})/i)
+  if (paramMatch?.[1]) return paramMatch[1]
+
+  return null
+}
+
+/**
+ * Normalizes any YouTube URL or video ID to the canonical preset format:
+ * `https://youtu.be/<videoId>`. Returns null if input is not a valid YouTube reference.
+ */
+export function toCanonicalYouTubeUrl(urlOrId) {
+  const id = youtubeId(urlOrId)
+  return id ? `https://youtu.be/${id}` : null
 }
 
 /**

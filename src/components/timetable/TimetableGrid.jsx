@@ -1,6 +1,8 @@
-import { useState } from 'react'
-import { Pencil, Flag, Sparkles } from 'lucide-react'
+import { useState, useRef, useEffect, useMemo, memo } from 'react'
+import { Pencil, Sparkles, X, Check, ChevronLeft, ChevronRight } from 'lucide-react'
 import { classifyDeadline } from '@/lib/deadlines'
+import { getWeekDate, ymd } from '@/lib/dates'
+import { DayGrove } from '@/components/focus/CalendarForest'
 import {
   DAYS,
   DAY_START_MIN,
@@ -41,21 +43,11 @@ function hexA(hex, a) {
   return `rgba(${r}, ${g}, ${b}, ${a})`
 }
 
-/** Return the Date for dayIndex (0=Mon) of the current week. */
-function getWeekDate(dayIndex) {
-  const now = new Date()
-  const nowDow = (now.getDay() + 6) % 7
-  const d = new Date(now)
-  d.setDate(now.getDate() + (dayIndex - nowDow))
-  d.setHours(0, 0, 0, 0)
-  return d
-}
-
 // ── Block components ──────────────────────────────────────────────────────────
 
-function SlotBlock({ slot, onOpen, onEdit }) {
+const SlotBlock = memo(function SlotBlock({ slot, onOpen, onEdit }) {
   const top = (slot.startMin - DAY_START_MIN) * PX_PER_MIN
-  const height = (slot.endMin - slot.startMin) * PX_PER_MIN
+  const height = Math.max(26, (slot.endMin - slot.startMin) * PX_PER_MIN)
 
   const isStriped =
     slot.tagStyle === 'striped' ||
@@ -65,26 +57,33 @@ function SlotBlock({ slot, onOpen, onEdit }) {
     (!slot.tagStyle && slot.tag?.toLowerCase().includes('revision'))
   const isDotted = slot.tagStyle === 'dotted'
 
+  const accent = slot.color || '#6366f1'
+
   const bgStyle = isStriped
-    ? `repeating-linear-gradient(45deg, ${hexA(slot.color, 0.7)}, ${hexA(slot.color, 0.7)} 10px, ${hexA(slot.color, 0.9)} 10px, ${hexA(slot.color, 0.9)} 20px)`
-    : hexA(slot.color, 0.85)
+    ? `repeating-linear-gradient(45deg, ${hexA(accent, 0.7)}, ${hexA(accent, 0.7)} 10px, ${hexA(accent, 0.9)} 10px, ${hexA(accent, 0.9)} 20px)`
+    : hexA(accent, 0.82)
 
   return (
     <div
       onPointerDown={(e) => e.stopPropagation()}
       onClick={onOpen}
       className={cn(
-        'group/slot absolute inset-x-1 cursor-pointer overflow-hidden rounded-lg border-l-4 px-2 py-1 text-white shadow-sm transition-transform hover:z-10 hover:scale-[1.02]',
+        'group/slot absolute inset-x-1 cursor-pointer overflow-hidden rounded-xl px-2.5 py-1.5 text-white shadow-sm transition-all hover:z-30 hover:scale-[1.02] hover:shadow-glow-sm backdrop-blur-md select-none',
         isDashed && 'border-2 border-dashed',
         isDotted && 'border-2 border-dotted',
       )}
-      style={{ top, height, background: bgStyle, borderColor: slot.color }}
+      style={{
+        top,
+        height,
+        background: bgStyle,
+        borderLeft: `4px solid ${accent}`,
+      }}
     >
       <div className="flex items-start justify-between gap-1">
-        <span className="truncate text-xs font-semibold leading-tight">
+        <span className="truncate text-xs font-semibold leading-tight text-white drop-shadow-xs">
           {slot.label || 'Session'}
           {slot.tag && (
-            <span className="ml-1.5 inline-block rounded bg-black/30 px-1 text-[9px] font-normal uppercase tracking-wider text-white">
+            <span className="ml-1.5 inline-block rounded-md bg-black/35 px-1.5 py-0.2 text-[9px] font-medium tracking-wider text-white">
               {slot.tag}
             </span>
           )}
@@ -95,77 +94,137 @@ function SlotBlock({ slot, onOpen, onEdit }) {
             e.stopPropagation()
             onEdit()
           }}
-          className="shrink-0 opacity-0 transition-opacity group-hover/slot:opacity-100"
+          className="shrink-0 opacity-0 transition-opacity group-hover/slot:opacity-100 text-white/80 hover:text-white"
           aria-label="Edit session"
         >
           <Pencil className="h-3 w-3" />
         </button>
       </div>
       {height > 30 && (
-        <span className="text-[10px] opacity-90">{minutesToLabel(slot.startMin)}</span>
+        <span className="text-[10px] font-medium text-white/80 mt-0.5 block tabular-nums">
+          {minutesToLabel(slot.startMin)} – {minutesToLabel(slot.endMin)}
+        </span>
       )}
     </div>
   )
-}
+})
 
 /** One-time event block (todo with type='event'). */
-function EventBlock({ event }) {
-  const startMin = event.eventStartMin ?? 0
+const EventBlock = memo(function EventBlock({ event, onDelete, onOpen }) {
+  const startMin =
+    event.eventStartMin ??
+    (event.dueAt ? (event.dueAt?.toDate ? event.dueAt.toDate() : new Date(event.dueAt)).getHours() * 60 : 0)
   const endMin = event.eventEndMin ?? startMin + 60
   const top = (startMin - DAY_START_MIN) * PX_PER_MIN
-  const height = Math.max(20, (endMin - startMin) * PX_PER_MIN)
+  const height = Math.max(26, (endMin - startMin) * PX_PER_MIN)
 
   return (
     <div
-      className="pointer-events-none absolute inset-x-1 z-10 flex flex-col overflow-hidden rounded-lg border border-violet-500/40 bg-violet-500/15 px-2 py-1"
-      style={{ top, height }}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={() => onOpen?.(event)}
+      className="group/event absolute inset-x-1 z-25 flex flex-col justify-between overflow-hidden rounded-xl border border-violet-400/35 bg-violet-500/20 px-2.5 py-1.5 shadow-sm backdrop-blur-md transition-all hover:z-30 hover:scale-[1.02] hover:border-violet-400 hover:bg-violet-500/30 cursor-pointer select-none"
+      style={{ top, height, borderLeft: '4px solid #a855f7' }}
+      title={`${event.text} · ${minutesToLabel(startMin)} – ${minutesToLabel(endMin)} · click to focus`}
     >
-      <span className="flex items-center gap-1 truncate text-[10px] font-semibold text-violet-300">
-        <Sparkles className="h-2.5 w-2.5 shrink-0" />
-        {event.text}
-      </span>
+      <div className="flex items-center justify-between gap-1">
+        <span className="flex min-w-0 items-center gap-1.5 truncate text-xs font-semibold text-violet-100">
+          <Sparkles className="h-3 w-3 shrink-0 text-violet-400" />
+          <span className="truncate">{event.text}</span>
+        </span>
+        {onDelete && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onDelete(event.id)
+            }}
+            className="rounded p-0.5 text-violet-300 opacity-0 transition-opacity hover:text-white group-hover/event:opacity-100"
+            title="Delete event"
+            aria-label="Delete event"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
+      </div>
       {height > 30 && (
-        <span className="text-[9px] text-violet-300/70">{minutesToLabel(startMin)}</span>
+        <span className="text-[10px] text-violet-300/80 font-medium tabular-nums">
+          {minutesToLabel(startMin)} – {minutesToLabel(endMin)}
+        </span>
       )}
     </div>
   )
-}
+})
 
 /** Deadline chip for a todo/task — shows on any day column it falls on. */
-function TodoChip({ item, topPx }) {
+const TodoChip = memo(function TodoChip({ item, topPx, onToggle, onDelete }) {
   const urgency = classifyDeadline(item.dueAt)
   const isOverdue = urgency === 'overdue'
   return (
     <div
-      title={item.text || item.title}
+      onPointerDown={(e) => e.stopPropagation()}
+      title={`${item.text || item.title} (due)`}
       className={cn(
-        'absolute right-0.5 z-10 flex max-w-[90%] cursor-default items-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] font-semibold shadow-sm',
-        isOverdue ? 'bg-rose-500/90 text-white' : 'bg-amber-400/90 text-black',
+        'group/chip absolute right-0.5 z-10 flex max-w-[92%] items-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] font-semibold shadow-sm transition-all hover:scale-105 cursor-pointer',
+        isOverdue ? 'bg-rose-500/95 text-white' : 'bg-amber-400/95 text-black',
       )}
-      style={{ top: topPx - 8 }}
+      style={{ top: Math.max(0, topPx - 8) }}
     >
-      <Flag className="h-2.5 w-2.5 shrink-0" />
-      <span className="truncate">{item.text || item.title}</span>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggle?.(item)
+        }}
+        className="shrink-0 hover:opacity-80"
+        title={item.done ? 'Mark incomplete' : 'Mark complete'}
+        aria-label={item.done ? 'Mark incomplete' : 'Mark complete'}
+      >
+        <Check
+          className={cn(
+            'h-2.5 w-2.5',
+            item.done ? 'opacity-100' : 'opacity-40 hover:opacity-100',
+          )}
+        />
+      </button>
+      <span className={cn('truncate', item.done && 'line-through opacity-70')}>
+        {item.text || item.title}
+      </span>
+      {onDelete && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onDelete(item.id)
+          }}
+          className="ml-0.5 rounded p-0.5 opacity-0 transition-opacity hover:text-rose-700 group-hover/chip:opacity-100"
+          title="Delete task"
+          aria-label="Delete task"
+        >
+          <X className="h-2.5 w-2.5" />
+        </button>
+      )}
     </div>
   )
-}
+})
 
 // ── Main grid ─────────────────────────────────────────────────────────────────
 
 /**
  * Full weekly grid.
  *
- * Drag to select a range → `onSelect({ dayIndex, startMin, endMin })`.
- * Tap (no drag) → `onQuickCapture({ dayOfWeek, startMin })`.
+ * Drag to select a range or tap a slot → `onSelect({ dayIndex, startMin, endMin })`.
  *
  * Props:
- *   slots      — recurring timetable slots
- *   events     — todos with type='event' (one-time blocks)
- *   dateTasks  — todos with dueAt (shown as chips on their matching day)
- *   onSelect   — called on drag-release with { dayIndex, startMin, endMin }
- *   onOpenSlot — called when a slot block is clicked (open focus)
- *   onEditSlot — called on the edit pencil inside a slot
- *   onQuickCapture — called on tap
+ *   slots         — recurring timetable slots
+ *   events        — todos with type='event' (one-time blocks)
+ *   dateTasks     — todos with dueAt (shown as chips on their matching day)
+ *   onSelect      — called with { dayIndex, startMin, endMin }
+ *   onOpenSlot    — called when a slot block is clicked (open focus)
+ *   onEditSlot    — called on the edit pencil inside a slot
+ *   onToggleTask  — called when checking off a task on the calendar
+ *   onDeleteTask  — called when deleting a task on the calendar
+ *   onDeleteEvent — called when deleting an event on the calendar
+ *   compact       — render without bottom help text and with tight margins for dashboard widgets
  */
 export function TimetableGrid({
   slots,
@@ -175,19 +234,66 @@ export function TimetableGrid({
   onOpenSlot,
   onEditSlot,
   onQuickCapture,
+  onToggleTask,
+  onDeleteTask,
+  onDeleteEvent,
   dateTasks = [],
+  allTodos = [],
+  sessions = [],
+  compact = false,
 }) {
   const [drag, setDrag] = useState(null)
+  const [weekOffset, setWeekOffset] = useState(0)
+  const scrollRef = useRef(null)
   const today = todayDow()
   const nowMin = useNowMinutes()
-  const nowVisible = nowMin >= DAY_START_MIN && nowMin <= DAY_END_MIN
+  const nowVisible = nowMin >= DAY_START_MIN && nowMin <= DAY_END_MIN && weekOffset === 0
+
+  const activeRefDate = useMemo(() => {
+    const d = new Date()
+    if (weekOffset !== 0) {
+      d.setDate(d.getDate() + weekOffset * 7)
+    }
+    return d
+  }, [weekOffset])
+
+  const currentMonthYear = useMemo(() => {
+    const thurs = getWeekDate(3, activeRefDate)
+    return thurs.toLocaleDateString([], { month: 'long', year: 'numeric' })
+  }, [activeRefDate])
+
+  // Auto-scroll so current hour or earliest session is comfortably in view
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    if (nowVisible) {
+      const nowTop = (nowMin - DAY_START_MIN) * PX_PER_MIN
+      el.scrollTop = Math.max(0, nowTop - el.clientHeight / 3)
+    } else if (slots.length > 0) {
+      const minStart = Math.min(...slots.map((s) => s.startMin))
+      const top = (minStart - DAY_START_MIN) * PX_PER_MIN
+      el.scrollTop = Math.max(0, top - 30)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nowVisible, slots])
 
   const onDown = (day) => (e) => {
     if (e.button !== 0) return
-    e.currentTarget.setPointerCapture(e.pointerId)
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch {
+      /* ignore pointer capture errors */
+    }
     const rect = e.currentTarget.getBoundingClientRect()
     const min = yToMin(e.clientY, rect)
-    setDrag({ day, start: min, current: min, active: false })
+    setDrag({
+      day,
+      start: min,
+      current: min,
+      active: false,
+      pointerId: e.pointerId,
+      target: e.currentTarget,
+    })
   }
 
   const onMove = (e) => {
@@ -198,8 +304,13 @@ export function TimetableGrid({
     setDrag((d) => (d ? { ...d, current: min, active: d.active || moved } : d))
   }
 
-  const onUp = () => {
+  const onUp = (e) => {
     if (!drag) return
+    try {
+      (drag.target || e?.currentTarget)?.releasePointerCapture?.(drag.pointerId ?? e?.pointerId)
+    } catch {
+      /* ignore pointer capture errors */
+    }
     const startMin = Math.min(drag.start, drag.current)
     const endMin = Math.max(drag.start, drag.current)
     const day = drag.day
@@ -207,7 +318,9 @@ export function TimetableGrid({
     if (endMin - startMin >= MIN_SLOT) {
       onSelect?.({ dayIndex: day, startMin, endMin })
     } else {
-      onQuickCapture?.({ dayOfWeek: day, startMin })
+      // Single tap/click on a cell: select a clean 1-hour slot at the clicked time
+      const clickEnd = Math.min(startMin + 60, DAY_END_MIN)
+      onSelect?.({ dayIndex: day, startMin, endMin: clickEnd })
     }
   }
 
@@ -220,23 +333,156 @@ export function TimetableGrid({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Day headers */}
-      <div className="flex border-b border-line/60 pb-2 pl-12">
-        {DAYS.map((d, i) => (
-          <div
-            key={d}
+      {/* Month & Week Navigation Bar (Inspired by calendar.me & ToDoTimeline) */}
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/[0.08] bg-surface/30 backdrop-blur-md shrink-0">
+        <div className="flex items-center gap-2">
+          <span className="font-display text-sm font-bold tracking-tight text-ink">
+            {currentMonthYear}
+          </span>
+          <button
+            type="button"
+            onClick={() => setWeekOffset(0)}
             className={cn(
-              'flex-1 text-center text-xs font-medium',
-              i === today ? 'text-accent' : 'text-muted',
+              'rounded-lg border px-2 py-0.5 text-[10px] font-semibold transition-all',
+              weekOffset === 0
+                ? 'bg-accent/15 text-accent border-accent/30'
+                : 'border-white/10 bg-surface-2/30 text-muted hover:text-ink',
             )}
           >
-            {d}
-          </div>
-        ))}
+            Today
+          </button>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setWeekOffset((o) => o - 1)}
+            className="flex h-6 w-6 items-center justify-center rounded-lg border border-white/10 bg-surface-2/30 text-muted hover:bg-surface-2/60 hover:text-ink transition-all active:scale-95"
+            title="Previous week"
+            aria-label="Previous week"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setWeekOffset((o) => o + 1)}
+            className="flex h-6 w-6 items-center justify-center rounded-lg border border-white/10 bg-surface-2/30 text-muted hover:bg-surface-2/60 hover:text-ink transition-all active:scale-95"
+            title="Next week"
+            aria-label="Next week"
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Tactile Day Header Strip (Inspired by calendar.me) */}
+      <div className="flex border-b border-white/[0.08] pb-2 pt-1.5 pl-12 pr-1 gap-1.5 shrink-0 bg-surface/20">
+        {DAYS.map((d, i) => {
+          const colDate = getWeekDate(i, activeRefDate)
+          const dateNum = colDate.getDate()
+          const isToday = i === today && weekOffset === 0
+          return (
+            <div
+              key={d}
+              onClick={() => onSelect?.({ dayIndex: i, startMin: 9 * 60, endMin: 10 * 60 })}
+              className={cn(
+                'flex flex-1 flex-col items-center justify-center py-1.5 px-1 rounded-2xl border transition-all cursor-pointer select-none',
+                isToday
+                  ? 'bg-gradient-to-b from-emerald-400 to-emerald-500 text-slate-950 font-bold shadow-glow-sm border-emerald-300 ring-2 ring-emerald-400/30'
+                  : 'border-white/[0.06] bg-surface-2/25 text-muted hover:bg-surface-2/50 hover:text-ink hover:border-white/15',
+              )}
+            >
+              <span className={cn('text-[10px] uppercase font-bold tracking-wider', isToday ? 'text-slate-950/80' : 'text-muted')}>
+                {d}
+              </span>
+              <span className={cn('text-base font-black tracking-tight tabular-nums mt-0.5', isToday ? 'text-slate-950' : 'text-ink')}>
+                {dateNum}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* All-Day / Tasks shelf across the week */}
+      <div className="flex border-b border-line/50 pl-12 bg-surface-2/20 shrink-0 min-h-[30px] max-h-[76px] overflow-y-auto">
+        {DAYS.map((d, day) => {
+          const colDate = getWeekDate(day)
+          const colDateStr = ymd(colDate)
+          const isCurrentToday = day === today
+
+          // Tasks for this day's top tray:
+          // 1. All-day tasks due on this day or tasks with midnight deadline
+          // 2. Unscheduled tasks (no dueAt) when day is today
+          const dayTopTasks = allTodos.filter((t) => {
+            if (t.type === 'event') return false
+            if (!t.dueAt) return isCurrentToday
+            const d2 = t.dueAt?.toDate ? t.dueAt.toDate() : new Date(t.dueAt)
+            if (isNaN(d2.getTime())) return false
+            if (ymd(d2) !== colDateStr) return false
+            const mins = d2.getHours() * 60 + d2.getMinutes()
+            return t.allDay || mins === 0 || mins < DAY_START_MIN
+          })
+
+          return (
+            <div
+              key={`tray-${d}`}
+              onClick={() => onSelect?.({ dayIndex: day, startMin: 9 * 60, endMin: 10 * 60 })}
+              className={cn(
+                'flex-1 border-l border-line/30 p-1 flex flex-col gap-1 min-h-[30px] cursor-pointer hover:bg-surface-2/40 transition-colors',
+                isCurrentToday && 'bg-accent/5',
+              )}
+              title={`Click to add task on ${d}`}
+            >
+              {dayTopTasks.map((t) => (
+                <div
+                  key={t.id}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onOpenSlot?.({
+                      label: t.text || t.title,
+                      startMin: nowMin,
+                      endMin: Math.min(nowMin + 30, DAY_END_MIN),
+                      color: '#f59e0b',
+                    })
+                  }}
+                  className="group/task flex items-center gap-1 rounded bg-amber-500/15 border border-amber-500/35 px-1 py-0.5 text-[9px] font-medium text-amber-200 hover:bg-amber-500/25 transition-all shadow-xs"
+                  title={`${t.text || t.title} · click to focus`}
+                >
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onToggleTask?.(t)
+                    }}
+                    className="shrink-0 hover:opacity-80"
+                    title={t.done ? 'Mark incomplete' : 'Mark complete'}
+                  >
+                    <Check className={cn('h-2.5 w-2.5', t.done ? 'text-emerald-400' : 'text-amber-300 opacity-60 hover:opacity-100')} />
+                  </button>
+                  <span className={cn('truncate flex-1', t.done && 'line-through opacity-60')}>
+                    {t.text || t.title}
+                  </span>
+                  {onDeleteTask && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onDeleteTask(t.id)
+                      }}
+                      className="rounded p-0.5 text-amber-300 opacity-0 transition-opacity hover:text-white group-hover/task:opacity-100"
+                      title="Delete task"
+                    >
+                      <X className="h-2 w-2" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )
+        })}
       </div>
 
       {/* Scrollable grid body */}
-      <div className="relative flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="relative flex-1 overflow-y-auto">
         <div className="relative flex" style={{ height: GRID_H }}>
 
           {/* Time axis */}
@@ -279,8 +525,9 @@ export function TimetableGrid({
             ))}
 
             {DAYS.map((d, day) => {
-              const colDate = getWeekDate(day)
-              const colDateStr = colDate.toISOString().split('T')[0]
+              const colDate = getWeekDate(day, activeRefDate)
+              const colDateStr = ymd(colDate)
+              const isCurrentDayToday = day === today && weekOffset === 0
 
               return (
                 <div
@@ -288,10 +535,11 @@ export function TimetableGrid({
                   onPointerDown={onDown(day)}
                   onPointerMove={onMove}
                   onPointerUp={onUp}
+                  onPointerCancel={onUp}
                   onContextMenu={onContextMenu(day)}
                   className={cn(
-                    'relative flex-1 touch-none border-l border-line/30',
-                    day === today && 'bg-accent/5',
+                    'relative flex-1 touch-none border-l border-line/30 flex flex-col justify-between overflow-visible',
+                    isCurrentDayToday && 'bg-accent/5',
                   )}
                 >
                   {/* Recurring slots */}
@@ -308,28 +556,49 @@ export function TimetableGrid({
 
                   {/* One-time event blocks */}
                   {events
-                    .filter((e) => e.eventDate === colDateStr && e.eventStartMin != null)
+                    .filter((e) => {
+                      const eDateStr =
+                        e.eventDate ||
+                        (e.dueAt ? ymd(e.dueAt?.toDate ? e.dueAt.toDate() : new Date(e.dueAt)) : null)
+                      return eDateStr === colDateStr
+                    })
                     .map((e) => (
-                      <EventBlock key={e.id} event={e} />
+                      <EventBlock
+                        key={e.id}
+                        event={e}
+                        onDelete={onDeleteEvent}
+                        onOpen={(ev) =>
+                          onOpenSlot?.({
+                            label: ev.text,
+                            startMin: ev.eventStartMin ?? 0,
+                            endMin: ev.eventEndMin ?? 60,
+                            color: '#8b5cf6',
+                          })
+                        }
+                      />
                     ))}
 
-                  {/* Deadline chips — any day that has a matching todo */}
+                  {/* Deadline chips — any day that has a matching todo with a specific time */}
                   {dateTasks
                     .filter((t) => {
                       if (!t.dueAt) return false
                       const d2 = t.dueAt?.toDate ? t.dueAt.toDate() : new Date(t.dueAt)
-                      if (isNaN(d2)) return false
-                      return (d2.getDay() + 6) % 7 === day
-                    })
-                    .map((t) => {
-                      const d2 = t.dueAt?.toDate ? t.dueAt.toDate() : new Date(t.dueAt)
+                      if (isNaN(d2.getTime())) return false
+                      if (ymd(d2) !== colDateStr) return false
                       const mins = d2.getHours() * 60 + d2.getMinutes()
-                      if (mins < DAY_START_MIN || mins > DAY_END_MIN) return null
+                      return !t.allDay && mins >= DAY_START_MIN
+                    })
+                    .map((t, idx) => {
+                      const d2 = t.dueAt?.toDate ? t.dueAt.toDate() : new Date(t.dueAt)
+                      let mins = d2.getHours() * 60 + d2.getMinutes()
+                      if (mins > DAY_END_MIN) mins = DAY_END_MIN - 15
                       return (
                         <TodoChip
                           key={t.id}
                           item={t}
-                          topPx={(mins - DAY_START_MIN) * PX_PER_MIN}
+                          topPx={(mins - DAY_START_MIN) * PX_PER_MIN + (idx % 2 === 1 ? 12 : 0)}
+                          onToggle={onToggleTask}
+                          onDelete={onDeleteTask}
                         />
                       )
                     })}
@@ -354,6 +623,14 @@ export function TimetableGrid({
                       )}
                     </div>
                   )}
+
+                  {/* ── Illustrated Calendar Forest Grove (User's hand-drawn trees & bushes) ── */}
+                  <DayGrove
+                    sessions={sessions}
+                    dateStr={colDateStr}
+                    dayIndex={day}
+                    isToday={isCurrentDayToday}
+                  />
                 </div>
               )
             })}
@@ -378,7 +655,7 @@ export function TimetableGrid({
                     }}
                   />
                   <div
-                    className="pointer-events-none absolute left-0 right-0 z-20 flex items-center gap-1"
+                    className="pointer-events-none absolute left-0 right-0 z-25 flex items-center gap-1"
                     style={{ top: nowTop }}
                   >
                     <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.7)]" />
@@ -394,9 +671,15 @@ export function TimetableGrid({
         </div>
       </div>
 
-      <p className="border-t border-line/60 pt-2 text-center text-[11px] text-muted">
-        Drag to select · tap to capture · click a session to focus
-      </p>
+      {!compact && (
+        <div className="flex items-center justify-between border-t border-white/[0.08] px-4 py-2 bg-surface/30 backdrop-blur-sm text-[11px] text-muted shrink-0">
+          <span className="flex items-center gap-1.5 font-medium">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Trees at the bottom of each day grow with your completed focus sessions</span>
+          </span>
+          <span className="text-[10px] text-muted/75">Click session to focus · Drag to schedule</span>
+        </div>
+      )}
     </div>
   )
 }

@@ -13,6 +13,7 @@ import { useStore } from '@/store/useStore'
 export function TitleBar() {
   const [maximized, setMaximized] = useState(false)
   const fullscreen = useStore((s) => s.fullscreen)
+  const pipActive = useStore((s) => s.pipActive)
 
   const ctrl = desktopBridge?.window
 
@@ -32,7 +33,7 @@ export function TitleBar() {
   const onFullscreen = async () => ctrl?.toggleFullScreen()
   const onClose = () => ctrl?.close()
 
-  if (fullscreen) return null
+  if (fullscreen || pipActive) return null
 
   return (
     <div className="shrink-0">

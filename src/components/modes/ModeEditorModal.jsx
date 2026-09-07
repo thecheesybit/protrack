@@ -16,7 +16,7 @@ const EMPTY = { name: '', icon: 'Layers', accentColor: MODE_PALETTE[0] }
 /**
  * Create or edit a workspace mode. `mode === null` => create flow.
  */
-export function ModeEditorModal({ open, onClose, mode }) {
+export function ModeEditorModal({ open, onClose, mode, onDeleteRequest }) {
   const { user } = useAuth()
   const modes = useStore((s) => s.modes)
   const activeModeId = useStore((s) => s.activeModeId)
@@ -25,12 +25,14 @@ export function ModeEditorModal({ open, onClose, mode }) {
   const [draft, setDraft] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleteTypedText, setDeleteTypedText] = useState('')
 
   const isEdit = Boolean(mode)
 
   useEffect(() => {
     if (!open) return
     setConfirmingDelete(false)
+    setDeleteTypedText('')
     setDraft(
       mode
         ? { name: mode.name, icon: mode.icon, accentColor: mode.accentColor }
@@ -72,6 +74,9 @@ export function ModeEditorModal({ open, onClose, mode }) {
 
   const remove = async () => {
     if (modes.length <= 1) return toast.error('Keep at least one mode')
+    if (deleteTypedText.trim().toLowerCase() !== 'delete') {
+      return toast.error('Type "delete" to confirm')
+    }
     setSaving(true)
     try {
       await deleteMode(user.uid, mode.id)
@@ -96,24 +101,60 @@ export function ModeEditorModal({ open, onClose, mode }) {
     <Modal
       open={open}
       onClose={onClose}
-      title={isEdit ? 'Edit mode' : 'New mode'}
+      title={isEdit ? 'Rename & Edit mode' : 'New mode'}
       footer={
         <>
           {isEdit &&
-            (confirmingDelete ? (
+            (onDeleteRequest ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="mr-auto text-rose-500 hover:bg-rose-500/10 hover:text-rose-600"
+                onClick={() => {
+                  onClose()
+                  onDeleteRequest(mode)
+                }}
+                disabled={modes.length <= 1}
+                title={modes.length <= 1 ? 'Keep at least one mode' : `Delete ${mode.name}`}
+              >
+                <Trash2 className="h-4 w-4" /> Delete
+              </Button>
+            ) : confirmingDelete ? (
               <div className="mr-auto flex items-center gap-2">
-                <span className="text-xs text-muted">Delete this mode?</span>
-                <Button size="sm" variant="danger" onClick={remove} disabled={saving}>
+                <input
+                  autoFocus
+                  value={deleteTypedText}
+                  onChange={(e) => setDeleteTypedText(e.target.value)}
+                  placeholder='Type "delete"'
+                  className="w-24 rounded-lg border border-line bg-surface-2 px-2 py-1 text-xs font-mono outline-none focus:border-rose-500"
+                />
+                <Button
+                  size="sm"
+                  variant="danger"
+                  onClick={remove}
+                  disabled={saving || deleteTypedText.trim().toLowerCase() !== 'delete'}
+                >
                   Confirm
                 </Button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfirmingDelete(false)
+                    setDeleteTypedText('')
+                  }}
+                  className="text-xs text-muted hover:text-ink"
+                >
+                  Cancel
+                </button>
               </div>
             ) : (
               <Button
                 size="sm"
                 variant="ghost"
-                className="mr-auto text-red-400"
+                className="mr-auto text-rose-500 hover:bg-rose-500/10 hover:text-rose-600"
                 onClick={() => setConfirmingDelete(true)}
                 disabled={modes.length <= 1}
+                title={modes.length <= 1 ? 'Keep at least one mode' : `Delete ${mode.name}`}
               >
                 <Trash2 className="h-4 w-4" /> Delete
               </Button>
@@ -122,13 +163,15 @@ export function ModeEditorModal({ open, onClose, mode }) {
             Cancel
           </Button>
           <Button size="sm" onClick={save} disabled={saving}>
-            {isEdit ? 'Save' : 'Create'}
+            {isEdit ? 'Save Changes' : 'Create Mode'}
           </Button>
         </>
       }
     >
-      {/* Name */}
-      <label className="mb-1.5 block text-xs font-medium text-muted">Name</label>
+      {/* Name / Rename */}
+      <label className="mb-1.5 block text-xs font-medium text-muted">
+        {isEdit ? 'Mode name (rename)' : 'Mode name'}
+      </label>
       <input
         autoFocus
         value={draft.name}

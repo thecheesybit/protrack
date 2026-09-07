@@ -60,7 +60,7 @@ export function WidgetFrame({
       layoutId={`widget-${widget.id}`}
       transition={{ type: 'spring', stiffness: 380, damping: 34 }}
       className={cn(
-        'edge-light group relative flex flex-col overflow-hidden rounded-3xl border border-line/70 bg-surface/60 backdrop-blur-2xl transition-colors hover:border-accent/40',
+        'edge-light group relative flex flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-surface/70 backdrop-blur-2xl transition-all duration-200 hover:border-accent/40',
         isHero
           ? 'h-full shadow-glass-lg'
           : collapsed
@@ -68,20 +68,20 @@ export function WidgetFrame({
             : 'h-full shadow-glass',
       )}
     >
-      <div className="flex w-full items-center gap-3 px-4 pb-2 pt-4">
+      <div className="flex w-full items-center gap-3 px-4 pb-2 pt-3.5">
         <button
           onClick={() => !isHero && !collapsed && toggleWidget(widget.id)}
           className="flex min-w-0 flex-1 items-center gap-3 text-left"
         >
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-accent/20 to-accent/8 text-accent shadow-glow-sm ring-1 ring-accent/15">
-            <Icon className="h-6 w-6" />
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-accent/25 to-accent/10 text-accent shadow-glow-sm ring-1 ring-accent/20 transition-transform group-hover:scale-105">
+            <Icon className="h-5 w-5" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate font-display text-xl font-semibold leading-tight tracking-tight">
+            <span className="block truncate font-display text-lg font-semibold leading-tight tracking-tight text-ink">
               {widget.title}
             </span>
             {subtitle && (
-              <span className="block truncate font-mono text-[11px] uppercase tracking-[0.08em] text-muted">
+              <span className="block truncate font-mono text-[10px] uppercase tracking-[0.08em] text-muted/80">
                 {subtitle}
               </span>
             )}
@@ -98,7 +98,7 @@ export function WidgetFrame({
           {!isHero && (
             <button
               onClick={toggleCollapse}
-              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted opacity-0 transition-opacity hover:text-ink group-hover:opacity-100"
+              className="flex h-7 w-7 items-center justify-center rounded-xl text-muted opacity-0 transition-all hover:bg-white/5 hover:text-ink group-hover:opacity-100"
               aria-label={collapsed ? 'Expand widget' : 'Minimize widget'}
               title={collapsed ? 'Expand' : 'Minimize'}
             >
@@ -111,7 +111,7 @@ export function WidgetFrame({
           <button
             onClick={() => isHero ? toggleWidget(widget.id) : (!collapsed && toggleWidget(widget.id))}
             className={cn(
-              'flex h-7 w-7 items-center justify-center rounded-lg text-muted transition-opacity hover:text-ink',
+              'flex h-7 w-7 items-center justify-center rounded-xl text-muted transition-all hover:bg-white/5 hover:text-ink',
               isHero ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
             )}
             aria-label={isHero ? 'Minimize widget' : 'Maximize widget'}

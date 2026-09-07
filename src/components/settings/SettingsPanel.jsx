@@ -23,6 +23,10 @@ import {
   ChevronDown,
   X,
   ShieldCheck,
+  RotateCcw,
+  Loader2,
+  Lock,
+  Shield,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import toast from 'react-hot-toast'
@@ -31,6 +35,15 @@ import { useTheme } from '@/hooks/useTheme'
 import { useStore } from '@/store/useStore'
 import { Button } from '@/components/ui/Button'
 import {
+  setLockConfig,
+  disableLock,
+  changePin,
+  updateLockTriggers,
+  isValidPin,
+} from '@/services/lockService'
+import { deriveUniqueCode, initSessionFromAccount } from '@/services/cryptoService'
+import lockImg from '@/assets/lock.gif'
+import {
   getGeminiKey, setGeminiKey,
   getElevenLabsKey, setElevenLabsKey,
   getOpenAIKey, setOpenAIKey,
@@ -38,7 +51,7 @@ import {
   getDeepSeekKey, setDeepSeekKey,
   hasApiKey
 } from '@/services/geminiService'
-import { updateSettings, updateProfile } from '@/services/userService'
+import { updateSettings, updateProfile, resetAllUserData } from '@/services/userService'
 import {
   CHRONO_SLOTS,
   CHRONO_OVERRIDE_KEY,
@@ -50,7 +63,7 @@ import { isDesktop, desktopBridge } from '@/desktop/isDesktop'
 import { CHANGELOG } from '@/content/changelog'
 import { CREATOR } from '@/lib/constants'
 import { APP_VERSION } from '@/lib/version'
-import { VIDEO_PRESETS } from '@/lib/focusScenes'
+import { VIDEO_PRESETS, youtubeId, toCanonicalYouTubeUrl } from '@/lib/focusScenes'
 import { cn } from '@/utils/cn'
 import { isCalendarConnected, connectCalendar, clearCalToken } from '@/services/calendarService'
 
@@ -211,9 +224,14 @@ export function SettingsPanel() {
   // Google Calendar Connection state
   const [calConnected, setCalConnected] = useState(isCalendarConnected())
 
-  // Double confirmation deletion state
+  // Double confirmation deletion state (System wipe)
   const [deleteStage, setDeleteStage] = useState(0)
   const [deleteInput, setDeleteInput] = useState('')
+
+  // Reset account data state (Account tab)
+  const [resetStage, setResetStage] = useState(0)
+  const [resetInput, setResetInput] = useState('')
+  const [resetting, setResetting] = useState(false)
 
   // Profile fields state
   const [profileFirstName, setProfileFirstName] = useState('')
@@ -229,6 +247,21 @@ export function SettingsPanel() {
   const [deepseekInput, setDeepseekInput] = useState('')
   const [expandedProvider, setExpandedProvider] = useState(null)
   const [aiPreferred, setAiPreferred] = useState('auto')
+
+  // App Lock State
+  const lockConfig = useStore((s) => s.lockConfig)
+  const refreshLockConfig = useStore((s) => s.refreshLockConfig)
+  const lockApp = useStore((s) => s.lockApp)
+
+  const [lockModalMode, setLockModalMode] = useState(null) // 'enable' | 'change' | 'disable' | null
+  const [lockCurrentPin, setLockCurrentPin] = useState('')
+  const [lockNewPin, setLockNewPin] = useState('')
+  const [lockConfirmPin, setLockConfirmPin] = useState('')
+  const [lockHint, setLockHint] = useState('')
+  const [lockOnMinPref, setLockOnMinPref] = useState(true)
+  const [lockOnClosePref, setLockOnClosePref] = useState(true)
+  const [lockError, setLockError] = useState('')
+  const [lockSubmitting, setLockSubmitting] = useState(false)
 
   useEffect(() => {
     if (open) {
@@ -279,8 +312,33 @@ export function SettingsPanel() {
     } else {
       setDeleteStage(0)
       setDeleteInput('')
+      setResetStage(0)
+      setResetInput('')
     }
   }, [open, settings, userDoc, user])
+
+  const handleResetAccount = async () => {
+    if (resetInput.trim() !== 'RESET') {
+      toast.error("Please type 'RESET' to confirm.")
+      return
+    }
+    setResetting(true)
+    try {
+      await resetAllUserData(user.uid, user)
+      toast.success('Account data wiped. Starting brand new!')
+      setResetStage(0)
+      setResetInput('')
+      setSettingsOpen(false)
+      useStore.getState().reset?.()
+      useStore.getState().setModes?.([])
+      useStore.getState().setActiveModeId?.(null)
+    } catch (err) {
+      console.error('[settings] reset account failed', err)
+      toast.error('Failed to reset account data: ' + (err.message || 'Unknown error'))
+    } finally {
+      setResetting(false)
+    }
+  }
 
   const saveProfile = async () => {
     try {
@@ -403,16 +461,18 @@ export function SettingsPanel() {
   }
 
   const saveFocusAudio = async (url) => {
-    setFocusUrlInput(url)
+    const canonical = url ? (toCanonicalYouTubeUrl(url) || url) : ''
+    setFocusUrlInput(canonical)
     // Selecting a non-empty URL implicitly enables the video background
     // (in case it was previously turned off).
-    if (url) setFocusVideoEnabled(true)
+    const nextVideoEnabled = Boolean(canonical)
+    setFocusVideoEnabled(nextVideoEnabled)
     try {
       await updateSettings(
         user.uid,
-        url
-          ? { focusAudioUrl: url, focusVideoEnabled: true }
-          : { focusAudioUrl: '' },
+        canonical
+          ? { focusAudioUrl: canonical, focusVideoEnabled: true }
+          : { focusAudioUrl: '', focusVideoEnabled: false },
       )
     } catch (err) {
       console.error('[settings] focusAudio save failed', err)
@@ -430,35 +490,65 @@ export function SettingsPanel() {
   }
 
   const addCustomPreset = async () => {
-    if (!newPresetUrl.trim()) {
-      toast.error('Please enter a video URL')
+    const rawInput = newPresetUrl.trim()
+    if (!rawInput) {
+      toast.error('Please enter a YouTube video URL or ID')
+      return
+    }
+    const id = youtubeId(rawInput)
+    if (!id) {
+      toast.error('Please enter a valid YouTube video URL or 11-character video ID')
       return
     }
     if (customPresets.length >= 5) {
       toast.error('You can add a maximum of 5 custom scenes')
       return
     }
-    
+
+    const canonicalUrl = toCanonicalYouTubeUrl(id)
+
+    // Check if already in default presets
+    const inDefault = VIDEO_PRESETS.find((p) => youtubeId(p.url) === id)
+    if (inDefault) {
+      toast.info(`Already in presets as "${inDefault.label}"`)
+      saveFocusAudio(inDefault.url)
+      setNewPresetUrl('')
+      setNewPresetLabel('')
+      return
+    }
+
+    // Check if already in custom presets
+    const inCustom = customPresets.find((p) => youtubeId(p.url) === id)
+    if (inCustom) {
+      toast.info(`Already in your custom scenes as "${inCustom.label}"`)
+      saveFocusAudio(inCustom.url)
+      setNewPresetUrl('')
+      setNewPresetLabel('')
+      return
+    }
+
     let label = newPresetLabel.trim()
     if (!label) {
       label = `Custom Scene ${customPresets.length + 1}`
     }
-    
+
     const newPreset = {
       label,
-      url: newPresetUrl.trim(),
+      url: canonicalUrl,
     }
-    
+
     const updated = [...customPresets, newPreset]
     setCustomPresets(updated)
     setNewPresetUrl('')
     setNewPresetLabel('')
-    
+    setFocusUrlInput(canonicalUrl)
+    setFocusVideoEnabled(true)
+
     try {
       await updateSettings(user.uid, {
         customPresets: updated,
-        focusAudioUrl: newPreset.url,
-        focusVideoEnabled: true
+        focusAudioUrl: canonicalUrl,
+        focusVideoEnabled: true,
       })
       toast.success('Custom focus scene added')
     } catch (err) {
@@ -471,13 +561,17 @@ export function SettingsPanel() {
     const presetToDelete = customPresets[index]
     const updated = customPresets.filter((_, i) => i !== index)
     setCustomPresets(updated)
-    
-    const wasActive = focusUrlInput === presetToDelete.url
+
+    const wasActive =
+      focusUrlInput === presetToDelete.url ||
+      (focusUrlInput && youtubeId(focusUrlInput) === youtubeId(presetToDelete.url))
+
     const patch = { customPresets: updated }
     if (wasActive) {
       patch.focusAudioUrl = ''
+      setFocusUrlInput('')
     }
-    
+
     try {
       await updateSettings(user.uid, patch)
       toast.success('Custom focus scene deleted')
@@ -556,10 +650,118 @@ export function SettingsPanel() {
     }
   }
 
+  const openEnableLockModal = () => {
+    setLockModalMode('enable')
+    setLockCurrentPin('')
+    setLockNewPin('')
+    setLockConfirmPin('')
+    setLockHint('')
+    setLockError('')
+    setLockOnMinPref(true)
+    setLockOnClosePref(true)
+  }
+
+  const openChangePinModal = () => {
+    setLockModalMode('change')
+    setLockCurrentPin('')
+    setLockNewPin('')
+    setLockConfirmPin('')
+    setLockHint(lockConfig?.hint || '')
+    setLockError('')
+  }
+
+  const openDisableLockModal = () => {
+    setLockModalMode('disable')
+    setLockCurrentPin('')
+    setLockError('')
+  }
+
+  const handleSaveLock = async () => {
+    setLockError('')
+    setLockSubmitting(true)
+
+    try {
+      if (lockModalMode === 'enable') {
+        if (!isValidPin(lockNewPin)) {
+          throw new Error('PIN must be 4 to 6 numeric digits')
+        }
+        if (lockNewPin !== lockConfirmPin) {
+          throw new Error('PIN and Confirm PIN do not match')
+        }
+        if (!lockHint.trim()) {
+          throw new Error('Please provide a hint for your PIN')
+        }
+        await setLockConfig({
+          pin: lockNewPin,
+          hint: lockHint.trim(),
+          lockOnMinimize: lockOnMinPref,
+          lockOnClose: lockOnClosePref,
+          uid: user?.uid,
+        })
+        const uniqueCode = userDoc?.profile?.uniqueCode || deriveUniqueCode(user?.uid)
+        await initSessionFromAccount(user?.uid, uniqueCode, lockNewPin)
+        refreshLockConfig()
+        toast.success('App Lock enabled successfully!')
+        setLockModalMode(null)
+      } else if (lockModalMode === 'change') {
+        if (!isValidPin(lockNewPin)) {
+          throw new Error('New PIN must be 4 to 6 numeric digits')
+        }
+        if (lockNewPin !== lockConfirmPin) {
+          throw new Error('New PIN and Confirm PIN do not match')
+        }
+        if (!lockHint.trim()) {
+          throw new Error('Please provide a hint for your PIN')
+        }
+        await changePin(lockCurrentPin, lockNewPin, lockHint.trim(), user?.uid)
+        const uniqueCode = userDoc?.profile?.uniqueCode || deriveUniqueCode(user?.uid)
+        await initSessionFromAccount(user?.uid, uniqueCode, lockNewPin)
+        refreshLockConfig()
+        toast.success('PIN and Hint updated successfully!')
+        setLockModalMode(null)
+      } else if (lockModalMode === 'disable') {
+        await disableLock(lockCurrentPin, user?.uid)
+        const uniqueCode = userDoc?.profile?.uniqueCode || deriveUniqueCode(user?.uid)
+        await initSessionFromAccount(user?.uid, uniqueCode, null)
+        refreshLockConfig()
+        toast.success('App Lock disabled.')
+        setLockModalMode(null)
+      }
+    } catch (err) {
+      setLockError(err.message || 'Action failed')
+    } finally {
+      setLockSubmitting(false)
+    }
+  }
+
+  const handleToggleLockOnMinimize = async () => {
+    if (!lockConfig) return
+    const next = !(lockConfig.lockOnMinimize ?? true)
+    await updateLockTriggers({ lockOnMinimize: next, uid: user?.uid })
+    refreshLockConfig()
+    toast.success(next ? 'Lock on minimize enabled' : 'Lock on minimize disabled')
+  }
+
+  const handleToggleLockOnClose = async () => {
+    if (!lockConfig) return
+    const next = !(lockConfig.lockOnClose ?? true)
+    await updateLockTriggers({ lockOnClose: next, uid: user?.uid })
+    refreshLockConfig()
+    toast.success(next ? 'Lock on close enabled' : 'Lock on close disabled')
+  }
+
+  const handleLockNow = () => {
+    setSettingsOpen(false)
+    setTimeout(() => {
+      lockApp()
+    }, 120)
+  }
+
   if (!open) return null
 
   const tabs = [
     { id: 'account', label: 'Account', icon: Settings },
+    { id: 'security', label: 'Security & Lock', icon: Lock },
     { id: 'appearance', label: 'Appearance', icon: Sun },
     { id: 'audio', label: 'Sound & Alerts', icon: Volume2 },
     { id: 'scene', label: 'Focus Scene', icon: Film },
@@ -653,11 +855,6 @@ export function SettingsPanel() {
               {/* Scrollable Content Area */}
               <div className="min-h-0 flex-1 overflow-y-auto pr-2">
                 {activeTab === 'account' && (() => {
-                  const deriveUniqueCode = (uid) => {
-                    if (!uid) return '0000000'
-                    const hash = Array.from(uid).reduce((acc, char) => (acc << 5) - acc + char.charCodeAt(0), 0)
-                    return String(Math.abs(hash) % 9000000 + 1000000)
-                  }
                   const uniqueCode = userDoc?.profile?.uniqueCode || deriveUniqueCode(user?.uid)
                   const fullName = `${profileFirstName} ${profileLastName}`.trim() || 'Explorer'
 
@@ -769,9 +966,283 @@ export function SettingsPanel() {
                           Save Profile
                         </button>
                       </div>
+
+                      {/* Reset Account Data Section */}
+                      <div className="space-y-4 rounded-2xl border border-rose-500/25 bg-rose-500/5 p-5 shadow-sm">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-500/10 text-rose-500">
+                            <RotateCcw className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-bold uppercase tracking-widest text-rose-500">Reset Account Data</h4>
+                            <p className="text-[11px] text-muted mt-0.5">Wipe all data and start completely fresh like brand new</p>
+                          </div>
+                        </div>
+
+                        <p className="text-xs leading-relaxed text-muted/90">
+                          Permanently delete all modes, subjects, tasks, timetable schedules, habits, todos, and focus history from your account. Your account will start like brand new with no modes.
+                        </p>
+
+                        {resetStage === 1 && (
+                          <div className="space-y-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs text-rose-400">
+                            <div className="font-semibold text-rose-300">
+                              ⚠️ Confirmation required: this action is irreversible. All data will be permanently wiped.
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="block text-[11px] font-medium text-muted">
+                                To proceed, type <span className="font-mono font-bold text-rose-400 bg-black/30 px-1.5 py-0.5 rounded">RESET</span> below:
+                              </label>
+                              <input
+                                type="text"
+                                value={resetInput}
+                                onChange={(e) => setResetInput(e.target.value)}
+                                placeholder="RESET"
+                                autoFocus
+                                className="w-full rounded-xl border border-rose-500/40 bg-surface px-3 py-2 text-xs text-ink outline-none focus:border-rose-500 font-semibold uppercase placeholder:normal-case"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex flex-col gap-2 pt-1">
+                          {resetStage === 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setResetStage(1)
+                                setResetInput('')
+                              }}
+                              className="flex w-full items-center justify-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-rose-500 hover:bg-rose-500/20 transition-all active:scale-[0.98]"
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" />
+                              Reset Account Data
+                            </button>
+                          ) : (
+                            <div className="flex items-center gap-3">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setResetStage(0)
+                                  setResetInput('')
+                                }}
+                                disabled={resetting}
+                                className="flex-1 rounded-xl border border-line bg-surface/50 px-4 py-2.5 text-xs font-semibold text-muted hover:text-ink hover:bg-surface-2 transition-colors disabled:opacity-50"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleResetAccount}
+                                disabled={resetInput.trim() !== 'RESET' || resetting}
+                                className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-glow-sm hover:bg-rose-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98]"
+                              >
+                                {resetting ? (
+                                  <>
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Resetting…
+                                  </>
+                                ) : (
+                                  'Confirm & Wipe All Data'
+                                )}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   )
                 })()}
+
+                {activeTab === 'security' && (
+                  <div className="space-y-6">
+                    {/* Hero Card showcasing the Enter Door Artwork */}
+                    <div className="relative overflow-hidden rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/10 via-surface-2/30 to-surface-2/10 p-5 shadow-sm">
+                      <div className="flex flex-col sm:flex-row items-center gap-5">
+                        {/* Thumbnail with warm ambient backlight */}
+                        <div className="relative shrink-0">
+                          <div className="relative h-24 w-24 overflow-hidden rounded-2xl border border-amber-500/40 shadow-[0_0_25px_rgba(251,191,36,0.25)]">
+                            <img
+                              src={lockImg}
+                              alt="App Lock"
+                              className="h-full w-full object-cover"
+                              onError={(e) => {
+                                e.target.src = '/lock.gif'
+                              }}
+                            />
+                          </div>
+                          <div className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-surface bg-amber-500 text-black shadow-sm">
+                            <Lock className="h-3 w-3" />
+                          </div>
+                        </div>
+
+                        {/* Description & Status */}
+                        <div className="flex-1 text-center sm:text-left">
+                          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mb-1.5">
+                            <h3 className="text-base font-bold text-ink">App Lock & PIN Security</h3>
+                            {lockConfig?.enabled ? (
+                              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                PIN Protected
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface-2/60 px-2.5 py-0.5 text-[11px] font-medium text-muted">
+                                Unprotected
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted leading-relaxed">
+                            Keep your workspace private. When active, Pro Track requires your 4–6 digit PIN whenever the app is minimized, closed to tray, or launched.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Main Configuration Controls */}
+                    {!lockConfig?.enabled ? (
+                      /* Unprotected State Banner & Setup CTA */
+                      <div className="rounded-2xl border border-line/60 bg-surface-2/20 p-5 text-center sm:text-left flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div>
+                          <h4 className="text-sm font-bold text-ink mb-1">Set Up PIN Protection</h4>
+                          <p className="text-xs text-muted">
+                            Configure a 4–6 digit security PIN and a recovery hint to lock your workspace on demand and on minimize/close.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={openEnableLockModal}
+                          className="shrink-0 flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-5 py-2.5 text-xs font-bold text-black shadow-glow-sm hover:brightness-110 active:scale-95 transition-all"
+                        >
+                          <Lock className="h-3.5 w-3.5" />
+                          <span>Enable App Lock</span>
+                        </button>
+                      </div>
+                    ) : (
+                      /* Protected State Configuration */
+                      <div className="space-y-4">
+                        {/* Active Status & Quick Lock Now Card */}
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              <Shield className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-ink">App Lock is Active</p>
+                              <p className="text-[11px] text-muted">
+                                PIN length: {lockConfig.pinLength || 4} digits &bull; Hint:{' '}
+                                <span className="text-ink/80 italic font-medium">"{lockConfig.hint}"</span>
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleLockNow}
+                            className="flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-black shadow-glow-sm hover:bg-amber-400 active:scale-95 transition-all"
+                          >
+                            <Lock className="h-3.5 w-3.5" />
+                            <span>Lock Workspace Now</span>
+                          </button>
+                        </div>
+
+                        {/* Lock Triggers Section */}
+                        <div className="rounded-2xl border border-line/60 bg-surface-2/15 p-4 space-y-3">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-muted mb-2">Lock Triggers</h4>
+
+                          {/* Trigger 1: Lock on Minimize */}
+                          <div className="flex items-center justify-between gap-3 py-1">
+                            <div>
+                              <p className="text-xs font-semibold text-ink">Lock when Minimized</p>
+                              <p className="text-[11px] text-muted">
+                                Locks the workspace immediately when Pro Track is minimized or hidden.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleToggleLockOnMinimize}
+                              className={cn(
+                                'relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200',
+                                (lockConfig.lockOnMinimize ?? true) ? 'bg-accent' : 'bg-surface-2 border border-line'
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  'block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200',
+                                  (lockConfig.lockOnMinimize ?? true) ? 'translate-x-6' : 'translate-x-1'
+                                )}
+                              />
+                            </button>
+                          </div>
+
+                          {/* Trigger 2: Lock on Close */}
+                          <div className="flex items-center justify-between gap-3 border-t border-line/40 pt-3">
+                            <div>
+                              <p className="text-xs font-semibold text-ink">Lock when Closed to Tray</p>
+                              <p className="text-[11px] text-muted">
+                                Requires PIN when restoring the app from the system tray or desktop shortcut.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleToggleLockOnClose}
+                              className={cn(
+                                'relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200',
+                                (lockConfig.lockOnClose ?? true) ? 'bg-accent' : 'bg-surface-2 border border-line'
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  'block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200',
+                                  (lockConfig.lockOnClose ?? true) ? 'translate-x-6' : 'translate-x-1'
+                                )}
+                              />
+                            </button>
+                          </div>
+
+                          {/* Trigger 3: Startup (Always Active) */}
+                          <div className="flex items-center justify-between gap-3 border-t border-line/40 pt-3">
+                            <div>
+                              <p className="text-xs font-semibold text-ink">Lock on App Startup</p>
+                              <p className="text-[11px] text-muted">
+                                Every fresh open or application launch requires your PIN to enter.
+                              </p>
+                            </div>
+                            <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold text-emerald-400">
+                              Always Active
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Management Actions */}
+                        <div className="flex flex-wrap items-center gap-3 pt-2">
+                          <button
+                            type="button"
+                            onClick={openChangePinModal}
+                            className="rounded-xl border border-line bg-surface px-4 py-2 text-xs font-semibold text-ink hover:bg-surface-2 hover:border-accent transition-colors"
+                          >
+                            Change PIN & Hint
+                          </button>
+                          <button
+                            type="button"
+                            onClick={openDisableLockModal}
+                            className="rounded-xl border border-rose-500/30 bg-rose-500/5 px-4 py-2 text-xs font-semibold text-rose-400 hover:bg-rose-500/10 transition-colors"
+                          >
+                            Disable App Lock
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Security & Privacy Notice */}
+                    <div className="rounded-2xl border border-line/40 bg-surface-2/10 p-4 text-xs text-muted space-y-1">
+                      <p className="font-semibold text-ink/80 flex items-center gap-1.5">
+                        <ShieldCheck className="h-4 w-4 text-accent" />
+                        Cryptographic Security
+                      </p>
+                      <p className="text-[11px] leading-relaxed">
+                        Your PIN is protected using salted SHA-256 one-way hashing and never stored in plain text.
+                        Your custom hint is displayed on the lock screen if you ever need a memory jog.
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {activeTab === 'updates' && (
                   <div className="space-y-6">
@@ -1074,43 +1545,53 @@ export function SettingsPanel() {
 
                       {/* Preset grid */}
                       <div className="grid grid-cols-2 gap-2.5 mb-4">
-                        {VIDEO_PRESETS.map((p) => (
-                          <button
-                            key={p.url}
-                            onClick={() => saveFocusAudio(p.url)}
-                            className={cn(
-                              'rounded-xl border px-4 py-3 text-left text-xs font-semibold transition-colors',
-                              focusUrlInput === p.url
-                                ? 'border-accent/50 bg-accent/15 text-accent shadow-glow-sm'
-                                : 'border-line bg-surface-2/40 text-muted hover:border-accent/40 hover:text-ink',
-                            )}
-                          >
-                            {p.label}
-                          </button>
-                        ))}
-
-                        {customPresets.map((p, idx) => (
-                          <div key={p.url + idx} className="relative group">
+                        {VIDEO_PRESETS.map((p) => {
+                          const isSelected =
+                            focusUrlInput === p.url ||
+                            (Boolean(focusUrlInput) && youtubeId(focusUrlInput) === youtubeId(p.url))
+                          return (
                             <button
+                              key={p.url}
                               onClick={() => saveFocusAudio(p.url)}
                               className={cn(
-                                'w-full rounded-xl border pl-4 pr-10 py-3 text-left text-xs font-semibold transition-colors truncate',
-                                focusUrlInput === p.url
+                                'rounded-xl border px-4 py-3 text-left text-xs font-semibold transition-colors',
+                                isSelected
                                   ? 'border-accent/50 bg-accent/15 text-accent shadow-glow-sm'
                                   : 'border-line bg-surface-2/40 text-muted hover:border-accent/40 hover:text-ink',
                               )}
                             >
                               {p.label}
                             </button>
-                            <button
-                              onClick={(e) => deleteCustomPreset(idx, e)}
-                              className="absolute right-2.5 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-lg border border-line/60 bg-surface/80 text-muted hover:text-rose-500 hover:border-rose-500/30 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                              title="Delete custom scene"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
-                        ))}
+                          )
+                        })}
+
+                        {customPresets.map((p, idx) => {
+                          const isSelected =
+                            focusUrlInput === p.url ||
+                            (Boolean(focusUrlInput) && youtubeId(focusUrlInput) === youtubeId(p.url))
+                          return (
+                            <div key={p.url + idx} className="relative group">
+                              <button
+                                onClick={() => saveFocusAudio(p.url)}
+                                className={cn(
+                                  'w-full rounded-xl border pl-4 pr-10 py-3 text-left text-xs font-semibold transition-colors truncate',
+                                  isSelected
+                                    ? 'border-accent/50 bg-accent/15 text-accent shadow-glow-sm'
+                                    : 'border-line bg-surface-2/40 text-muted hover:border-accent/40 hover:text-ink',
+                                )}
+                              >
+                                {p.label}
+                              </button>
+                              <button
+                                onClick={(e) => deleteCustomPreset(idx, e)}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-lg border border-line/60 bg-surface/80 text-muted hover:text-rose-500 hover:border-rose-500/30 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                title="Delete custom scene"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          )
+                        })}
 
                         <button
                           onClick={() => saveFocusAudio('')}
@@ -1563,6 +2044,191 @@ export function SettingsPanel() {
                 PRO TRACK · Active Account: {user?.email}
               </div>
             </div>
+
+            {/* App Lock PIN Setup / Change / Disable Modal */}
+            <AnimatePresence>
+              {lockModalMode && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-md p-4"
+                >
+                  <div className="absolute inset-0" onClick={() => !lockSubmitting && setLockModalMode(null)} />
+                  <motion.div
+                    initial={{ scale: 0.95, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.95, opacity: 0 }}
+                    className="relative w-full max-w-md overflow-hidden rounded-3xl border border-line bg-surface p-6 shadow-2xl z-10"
+                  >
+                    <div className="mb-4 flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                          <Lock className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-ink">
+                            {lockModalMode === 'enable' && 'Set Up App Lock'}
+                            {lockModalMode === 'change' && 'Change PIN & Hint'}
+                            {lockModalMode === 'disable' && 'Disable App Lock'}
+                          </h3>
+                          <p className="text-[11px] text-muted">
+                            {lockModalMode === 'disable'
+                              ? 'Confirm your current PIN to turn off lock'
+                              : 'Configure your 4 to 6 digit security PIN'}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => !lockSubmitting && setLockModalMode(null)}
+                        className="rounded-lg p-1.5 text-muted hover:bg-surface-2 hover:text-ink transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    {/* Form Inputs */}
+                    <div className="space-y-3.5">
+                      {/* Current PIN (required when changing or disabling) */}
+                      {(lockModalMode === 'change' || lockModalMode === 'disable') && (
+                        <div>
+                          <label className="mb-1 block text-xs font-semibold text-ink">
+                            Current PIN <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="password"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            maxLength={6}
+                            value={lockCurrentPin}
+                            onChange={(e) => setLockCurrentPin(e.target.value.replace(/\D/g, ''))}
+                            placeholder="Enter current PIN"
+                            autoFocus
+                            className="w-full rounded-xl border border-line bg-surface-2/30 px-3.5 py-2.5 text-xs text-ink outline-none focus:border-accent"
+                          />
+                        </div>
+                      )}
+
+                      {/* New PIN & Confirmation (when enabling or changing) */}
+                      {lockModalMode !== 'disable' && (
+                        <>
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold text-ink">
+                              New PIN (4 to 6 digits) <span className="text-rose-500">*</span>
+                            </label>
+                            <input
+                              type="password"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              maxLength={6}
+                              value={lockNewPin}
+                              onChange={(e) => setLockNewPin(e.target.value.replace(/\D/g, ''))}
+                              placeholder="Enter 4–6 digit numeric PIN"
+                              autoFocus={lockModalMode === 'enable'}
+                              className="w-full rounded-xl border border-line bg-surface-2/30 px-3.5 py-2.5 text-xs text-ink outline-none focus:border-accent"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold text-ink">
+                              Confirm PIN <span className="text-rose-500">*</span>
+                            </label>
+                            <input
+                              type="password"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              maxLength={6}
+                              value={lockConfirmPin}
+                              onChange={(e) => setLockConfirmPin(e.target.value.replace(/\D/g, ''))}
+                              placeholder="Re-enter your PIN"
+                              className="w-full rounded-xl border border-line bg-surface-2/30 px-3.5 py-2.5 text-xs text-ink outline-none focus:border-accent"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold text-ink">
+                              PIN Reminder Hint <span className="text-rose-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              maxLength={80}
+                              value={lockHint}
+                              onChange={(e) => setLockHint(e.target.value)}
+                              placeholder="e.g. Year I graduated, favorite 4 digits..."
+                              className="w-full rounded-xl border border-line bg-surface-2/30 px-3.5 py-2.5 text-xs text-ink outline-none focus:border-accent"
+                            />
+                            <p className="mt-1 text-[10px] text-muted">
+                              Required. Displayed on the lock screen if you ever forget your PIN.
+                            </p>
+                          </div>
+
+                          {lockModalMode === 'enable' && (
+                            <div className="space-y-2 pt-1">
+                              <label className="flex items-center gap-2 text-xs text-ink cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={lockOnMinPref}
+                                  onChange={(e) => setLockOnMinPref(e.target.checked)}
+                                  className="accent-accent rounded"
+                                />
+                                <span>Lock app when minimized</span>
+                              </label>
+                              <label className="flex items-center gap-2 text-xs text-ink cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={lockOnClosePref}
+                                  onChange={(e) => setLockOnClosePref(e.target.checked)}
+                                  className="accent-accent rounded"
+                                />
+                                <span>Lock app when closed to tray</span>
+                              </label>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {/* Error Banner */}
+                      {lockError && (
+                        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-2.5 text-xs font-semibold text-rose-500">
+                          {lockError}
+                        </div>
+                      )}
+
+                      {/* Action Buttons */}
+                      <div className="flex items-center justify-end gap-2.5 pt-3">
+                        <button
+                          type="button"
+                          onClick={() => setLockModalMode(null)}
+                          disabled={lockSubmitting}
+                          className="rounded-xl border border-line bg-surface-2/30 px-4 py-2 text-xs font-semibold text-muted hover:text-ink transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveLock}
+                          disabled={lockSubmitting}
+                          className={cn(
+                            'flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold text-white shadow-glow-sm transition-all active:scale-95',
+                            lockModalMode === 'disable'
+                              ? 'bg-rose-600 hover:bg-rose-700'
+                              : 'bg-accent hover:bg-accent/90'
+                          )}
+                        >
+                          {lockSubmitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                          <span>
+                            {lockModalMode === 'enable' && 'Enable Lock'}
+                            {lockModalMode === 'change' && 'Save New PIN'}
+                            {lockModalMode === 'disable' && 'Disable Lock'}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         </motion.div>
       )}

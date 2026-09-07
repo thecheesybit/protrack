@@ -7,19 +7,34 @@ import { useStore } from '@/store/useStore'
 import { getIcon } from '@/lib/icons'
 import { updateActiveMode } from '@/services/userService'
 import { ModeEditorModal } from '@/components/modes/ModeEditorModal'
+import { DeleteModeModal } from '@/components/modes/DeleteModeModal'
+import { ModeContextMenu } from '@/components/modes/ModeContextMenu'
 import { cn } from '@/utils/cn'
 
 /**
  * Vertical mode pill — compact icon button with a colored indicator and tooltip.
  */
-function VerticalModePill({ mode, active, onSelect, onEdit }) {
+function VerticalModePill({ mode, active, onSelect, onEdit, onContextMenu }) {
   const Icon = getIcon(mode.icon)
   const accentColor = mode.accentColor || 'rgb(var(--accent))'
+  const isEditable = mode.id !== 'all'
 
   return (
     <div className="group relative">
       <button
         onClick={onSelect}
+        onContextMenu={(e) => {
+          if (isEditable) {
+            e.preventDefault()
+            onContextMenu?.(e, mode)
+          }
+        }}
+        onDoubleClick={(e) => {
+          if (isEditable) {
+            e.stopPropagation()
+            onEdit()
+          }
+        }}
         className={cn(
           'relative flex h-12 w-12 items-center justify-center rounded-2xl transition-all duration-200',
           active
@@ -28,6 +43,7 @@ function VerticalModePill({ mode, active, onSelect, onEdit }) {
         )}
         style={active ? { backgroundColor: `${mode.accentColor || '#6366f1'}1f` } : {}}
         aria-label={mode.name}
+        title={isEditable ? `${mode.name} (Right-click for options)` : mode.name}
       >
         {/* Sliding accent indicator — one per rail, glides between actives. */}
         {active && (
@@ -48,19 +64,25 @@ function VerticalModePill({ mode, active, onSelect, onEdit }) {
         <Icon className="h-6 w-6" style={active ? { color: accentColor } : {}} />
       </button>
 
-      {/* Tooltip */}
-      <span className="pointer-events-none absolute left-14 top-1/2 z-20 -translate-y-1/2 whitespace-nowrap rounded-lg border border-line/60 bg-surface px-2.5 py-1.5 text-xs font-medium opacity-0 shadow-glass transition-opacity group-hover:opacity-100">
-        {mode.name}
-        {active && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onEdit() }}
-            className="ml-2 inline-flex text-muted hover:text-ink"
-            aria-label="Edit mode"
-          >
-            <Settings2 className="h-3 w-3" />
-          </button>
-        )}
-      </span>
+      {/* Tooltip & Edit Action Popover — seamlessly attached with pl-2 to avoid dead zone */}
+      <div className="pointer-events-none absolute left-full top-1/2 z-30 -translate-y-1/2 pl-2 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
+        <div className="flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-line/60 bg-surface/95 px-2.5 py-1.5 text-xs font-semibold text-ink shadow-glass backdrop-blur-md">
+          <span>{mode.name}</span>
+          {isEditable && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onEdit()
+              }}
+              title={`Edit or delete ${mode.name}`}
+              className="ml-1 flex h-5 w-5 items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-ink transition-colors cursor-pointer"
+              aria-label={`Edit ${mode.name}`}
+            >
+              <Settings2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -68,13 +90,27 @@ function VerticalModePill({ mode, active, onSelect, onEdit }) {
 /**
  * Horizontal mode pill (original layout, for fallback).
  */
-function ModePill({ mode, active, onSelect, onEdit }) {
+function ModePill({ mode, active, onSelect, onEdit, onContextMenu }) {
   const Icon = getIcon(mode.icon)
+  const isEditable = mode.id !== 'all'
 
   return (
     <div className="relative shrink-0">
       <button
         onClick={onSelect}
+        onContextMenu={(e) => {
+          if (isEditable) {
+            e.preventDefault()
+            onContextMenu?.(e, mode)
+          }
+        }}
+        onDoubleClick={(e) => {
+          if (isEditable) {
+            e.stopPropagation()
+            onEdit()
+          }
+        }}
+        title={isEditable ? `${mode.name} (Right-click for options)` : mode.name}
         className={cn(
           'group flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition-colors',
           active
@@ -88,7 +124,7 @@ function ModePill({ mode, active, onSelect, onEdit }) {
         />
         <Icon className="h-4 w-4" />
         <span className="whitespace-nowrap">{mode.name}</span>
-        {active && (
+        {isEditable && (
           <span
             role="button"
             tabIndex={0}
@@ -96,8 +132,9 @@ function ModePill({ mode, active, onSelect, onEdit }) {
               e.stopPropagation()
               onEdit()
             }}
-            className="-mr-1 ml-0.5 flex h-5 w-5 items-center justify-center rounded-md text-muted opacity-0 transition-opacity hover:text-ink group-hover:opacity-100"
-            aria-label="Edit mode"
+            className="-mr-1 ml-0.5 flex h-5 w-5 items-center justify-center rounded-md text-muted opacity-0 transition-opacity hover:text-ink group-hover:opacity-100 cursor-pointer"
+            aria-label={`Edit ${mode.name}`}
+            title={`Edit ${mode.name}`}
           >
             <Settings2 className="h-3.5 w-3.5" />
           </span>
@@ -120,6 +157,9 @@ export function ModeSwitcher({ vertical = false }) {
 
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingMode, setEditingMode] = useState(null)
+  const [contextMenu, setContextMenu] = useState({ open: false, position: null, mode: null })
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [deletingMode, setDeletingMode] = useState(null)
 
   const firstName = (user?.displayName || 'Explorer').split(' ')[0]
 
@@ -150,6 +190,53 @@ export function ModeSwitcher({ vertical = false }) {
     setEditorOpen(true)
   }
 
+  const handleContextMenu = (e, mode) => {
+    if (mode.id === 'all') return
+    e.preventDefault()
+    e.stopPropagation()
+    setContextMenu({
+      open: true,
+      position: { x: e.clientX, y: e.clientY },
+      mode,
+    })
+  }
+
+  const handleRequestDelete = (mode) => {
+    setContextMenu({ open: false, position: null, mode: null })
+    setDeletingMode(mode)
+    setDeleteModalOpen(true)
+  }
+
+  const sharedDialogs = (
+    <>
+      <ModeEditorModal
+        open={editorOpen}
+        onClose={() => setEditorOpen(false)}
+        mode={editingMode}
+        onDeleteRequest={handleRequestDelete}
+      />
+
+      <DeleteModeModal
+        open={deleteModalOpen}
+        onClose={() => {
+          setDeleteModalOpen(false)
+          setDeletingMode(null)
+        }}
+        mode={deletingMode}
+      />
+
+      <ModeContextMenu
+        open={contextMenu.open}
+        position={contextMenu.position}
+        mode={contextMenu.mode}
+        onClose={() => setContextMenu({ open: false, position: null, mode: null })}
+        onEdit={(m) => openEdit(m)}
+        onDelete={(m) => handleRequestDelete(m)}
+        canDelete={modes.length > 1}
+      />
+    </>
+  )
+
   // ── Vertical: unified sidebar rail (DESIGN_SYSTEM.md §5) ──────────────────
   // One continuous glass rail — modes on top, utilities below a hairline —
   // instead of a stack of disconnected chips.
@@ -175,6 +262,7 @@ export function ModeSwitcher({ vertical = false }) {
               active={mode.id === activeModeId}
               onSelect={() => selectMode(mode.id)}
               onEdit={() => openEdit(mode)}
+              onContextMenu={handleContextMenu}
             />
           ))}
 
@@ -224,11 +312,7 @@ export function ModeSwitcher({ vertical = false }) {
           </button>
         </div>
 
-        <ModeEditorModal
-          open={editorOpen}
-          onClose={() => setEditorOpen(false)}
-          mode={editingMode}
-        />
+        {sharedDialogs}
       </>
     )
   }
@@ -251,6 +335,7 @@ export function ModeSwitcher({ vertical = false }) {
             active={mode.id === activeModeId}
             onSelect={() => selectMode(mode.id)}
             onEdit={() => openEdit(mode)}
+            onContextMenu={handleContextMenu}
           />
         ))}
 
@@ -263,11 +348,7 @@ export function ModeSwitcher({ vertical = false }) {
         </button>
       </div>
 
-      <ModeEditorModal
-        open={editorOpen}
-        onClose={() => setEditorOpen(false)}
-        mode={editingMode}
-      />
+      {sharedDialogs}
     </>
   )
 }

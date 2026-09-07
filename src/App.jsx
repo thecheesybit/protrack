@@ -1,19 +1,24 @@
+import { lazy, Suspense } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Toaster } from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
 import { AppLoader } from '@/components/common/AppLoader'
-import { LandingPage } from '@/components/marketing/LandingPage'
-import { QrLoginScreen } from '@/components/auth/QrLoginScreen'
-import { LinkDevicePage } from '@/components/auth/LinkDevicePage'
-import { LinkGcalPage } from '@/components/auth/LinkGcalPage'
-import { PatreonApprovePage } from '@/components/patreon/PatreonApprovePage'
-import { Workspace } from '@/components/layout/Workspace'
 import { FirestoreSyncProvider } from '@/providers/FirestoreSyncProvider'
 import { SetupRequired } from '@/components/common/SetupRequired'
 import { useAutoUpdate } from '@/hooks/useAutoUpdate'
 import { useFontScale } from '@/hooks/useFontScale'
 import { TitleBar } from '@/desktop/TitleBar'
 import { isDesktop, isWorkspaceHost } from '@/desktop/isDesktop'
+import { AppLockOverlay } from '@/components/lock/AppLockOverlay'
+import { useAppLock } from '@/hooks/useAppLock'
+import { useStore } from '@/store/useStore'
+
+const LandingPage = lazy(() => import('@/components/marketing/LandingPage').then((m) => ({ default: m.LandingPage })))
+const QrLoginScreen = lazy(() => import('@/components/auth/QrLoginScreen').then((m) => ({ default: m.QrLoginScreen })))
+const LinkDevicePage = lazy(() => import('@/components/auth/LinkDevicePage').then((m) => ({ default: m.LinkDevicePage })))
+const LinkGcalPage = lazy(() => import('@/components/auth/LinkGcalPage').then((m) => ({ default: m.LinkGcalPage })))
+const PatreonApprovePage = lazy(() => import('@/components/patreon/PatreonApprovePage').then((m) => ({ default: m.PatreonApprovePage })))
+const Workspace = lazy(() => import('@/components/layout/Workspace').then((m) => ({ default: m.Workspace })))
 
 function Routes() {
   const { user, loading, configured } = useAuth()
@@ -26,24 +31,40 @@ function Routes() {
 
   // Google Calendar auth gateway: /link-gcal?uid=<uid>
   if (pathname.startsWith('/link-gcal')) {
-    return <LinkGcalPage key="link-gcal" />
+    return (
+      <Suspense fallback={<AppLoader />}>
+        <LinkGcalPage key="link-gcal" />
+      </Suspense>
+    )
   }
 
   // Mobile auth gateway: /link?s=<sessionId> — the only authenticated surface
   // the web build exposes (used by the QR handshake).
   if (pathname.startsWith('/link')) {
-    return <LinkDevicePage key="link" />
+    return (
+      <Suspense fallback={<AppLoader />}>
+        <LinkDevicePage key="link" />
+      </Suspense>
+    )
   }
 
   // Admin-only contribution approval dashboard (its own Google sign-in + lock).
   if (pathname.startsWith('/patreon-approve')) {
-    return <PatreonApprovePage key="patreon-approve" />
+    return (
+      <Suspense fallback={<AppLoader />}>
+        <PatreonApprovePage key="patreon-approve" />
+      </Suspense>
+    )
   }
 
   // The Netlify web domain is a gateway only — never the functional workspace.
   // Only the Electron app (or a DEV preview) renders the dashboard.
   if (!isWorkspaceHost) {
-    return <LandingPage key="landing" />
+    return (
+      <Suspense fallback={<AppLoader />}>
+        <LandingPage key="landing" />
+      </Suspense>
+    )
   }
 
   // Anonymous = desktop QR-handshake bootstrap only; treat as "not signed in".
@@ -63,11 +84,15 @@ function Routes() {
           className="h-full"
         >
           <FirestoreSyncProvider>
-            <Workspace />
+            <Suspense fallback={<AppLoader />}>
+              <Workspace />
+            </Suspense>
           </FirestoreSyncProvider>
         </motion.div>
       ) : (
-        <QrLoginScreen key="qr" />
+        <Suspense fallback={<AppLoader />}>
+          <QrLoginScreen key="qr" />
+        </Suspense>
       )}
     </AnimatePresence>
   )
@@ -76,6 +101,8 @@ function Routes() {
 export default function App() {
   useAutoUpdate() // desktop-only: bridges Electron autoUpdater → Dynamic Island
   useFontScale() // mirrors uiSlice.fontScale → <html data-font-scale>
+  useAppLock() // manages app lock triggers (cold start, minimize, close, storage sync)
+  const isLocked = useStore((s) => s.isLocked)
 
   return (
     <div className="flex h-full flex-col">
@@ -92,9 +119,15 @@ export default function App() {
         }}
       />
       {isDesktop && <TitleBar />}
-      <div className="min-h-0 flex-1">
+      <div
+        className={`min-h-0 flex-1 ${
+          isLocked ? 'pointer-events-none select-none invisible' : ''
+        }`}
+        aria-hidden={isLocked}
+      >
         <Routes />
       </div>
+      <AppLockOverlay />
     </div>
   )
 }

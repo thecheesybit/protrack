@@ -1,8 +1,5 @@
-// Seeded for every new user so the board is alive on first login.
-export const DEFAULT_MODES = [
-  { name: 'UPSC Mode', icon: 'BookOpen', accentColor: '#6366f1' },
-  { name: 'M.Tech Mode', icon: 'GraduationCap', accentColor: '#8b5cf6' },
-]
+// Default modes seeded on first login (empty by default for a clean slate).
+export const DEFAULT_MODES = []
 
 // A rotating palette used when the user creates a fresh mode.
 export const MODE_PALETTE = [
@@ -40,16 +37,99 @@ export const CREATOR = {
   githubUrl: 'https://github.com/thecheesybit',
 }
 
-// Evidence-based starter habits offered as one-tap adds. Icons resolve via
-// lib/icons getIcon().
-export const HABIT_PRESETS = [
-  { name: 'Hydration', icon: 'Droplets', color: '#06b6d4' },
-  { name: 'Core Reading', icon: 'BookOpen', color: '#6366f1' },
-  { name: 'Review Session', icon: 'Brain', color: '#8b5cf6' },
-  { name: 'Exercise', icon: 'Dumbbell', color: '#ef4444' },
-  { name: 'Mindfulness', icon: 'Heart', color: '#ec4899' },
-  { name: 'Sleep Schedule', icon: 'Moon', color: '#f59e0b' },
+// Evidence-based scientific starter habits offered with physiological and cognitive rationale.
+export const SCIENTIFIC_HABIT_PRESETS = [
+  {
+    name: 'Hydration',
+    icon: 'Droplets',
+    color: '#06b6d4',
+    interval: 'every-2h',
+    timesPerDay: 8,
+    timesPerWeek: 7,
+    recommendedIntervalLabel: 'Every 2 hours',
+    scienceRationale: 'Mild fluid deficit (1-2%) impairs prefrontal cortex perfusion, degrading working memory and alertness. Drinking 200-250ml every 2 hours preserves cellular osmotic equilibrium and renal clearance.',
+    scienceDomain: 'Renal Physiology & Cognition',
+  },
+  {
+    name: 'Screen & Eye Reset (20-20-20)',
+    icon: 'Sparkles',
+    color: '#3b82f6',
+    interval: 'every-30m',
+    timesPerDay: 12,
+    timesPerWeek: 7,
+    recommendedIntervalLabel: 'Every 30 minutes',
+    scienceRationale: 'Looking 20 feet away for 20 seconds relaxes sustained ciliary muscle spasm, stimulates tear film blink rate, and prevents Computer Vision Syndrome (CVS) and headaches.',
+    scienceDomain: 'Ophthalmology',
+  },
+  {
+    name: 'Posture & Mobility Break',
+    icon: 'Trees',
+    color: '#10b981',
+    interval: 'every-1h',
+    timesPerDay: 8,
+    timesPerWeek: 7,
+    recommendedIntervalLabel: 'Every 1 hour',
+    scienceRationale: 'Prolonged sitting compresses intervertebral discs and slows metabolic glucose clearance. 60 seconds of standing or stretching re-hydrates discs and reactivates venous blood return.',
+    scienceDomain: 'Biomechanics & Ergonomics',
+  },
+  {
+    name: 'Mindfulness & Box Breathing',
+    icon: 'Heart',
+    color: '#ec4899',
+    interval: 'every-3h',
+    timesPerDay: 4,
+    timesPerWeek: 7,
+    recommendedIntervalLabel: 'Every 3 hours',
+    scienceRationale: 'Rhythmic diaphragmatic breathing stimulates the vagus nerve, rapidly initiating parasympathetic tone to suppress elevated cortisol and mental fatigue.',
+    scienceDomain: 'Autonomic Neuroscience',
+  },
+  {
+    name: 'Core Reading & Study',
+    icon: 'BookOpen',
+    color: '#6366f1',
+    interval: 'every-4h',
+    timesPerDay: 2,
+    timesPerWeek: 6,
+    recommendedIntervalLabel: 'Every 4 hours',
+    scienceRationale: 'Focused cognitive blocks paired with diffuse downtime maximize synaptic long-term potentiation (LTP) and working memory consolidation.',
+    scienceDomain: 'Cognitive Psychology',
+  },
+  {
+    name: 'Review & Spaced Retrieval',
+    icon: 'Brain',
+    color: '#8b5cf6',
+    interval: 'evening',
+    timesPerDay: 1,
+    timesPerWeek: 7,
+    recommendedIntervalLabel: 'Every evening',
+    scienceRationale: 'Active recall testing before sleep leverages subsequent slow-wave and REM sleep for memory consolidation, counteracting the Ebbinghaus forgetting curve.',
+    scienceDomain: 'Memory Science',
+  },
+  {
+    name: 'Physical Exercise',
+    icon: 'Dumbbell',
+    color: '#ef4444',
+    interval: 'morning',
+    timesPerDay: 1,
+    timesPerWeek: 5,
+    recommendedIntervalLabel: 'Once daily (morning)',
+    scienceRationale: 'Aerobic and resistance exertion stimulates systemic BDNF (brain-derived neurotrophic factor) release, promoting neurogenesis and sustained dopamine regulation.',
+    scienceDomain: 'Exercise Physiology',
+  },
+  {
+    name: 'Sleep Wind-Down',
+    icon: 'Moon',
+    color: '#f59e0b',
+    interval: 'evening',
+    timesPerDay: 1,
+    timesPerWeek: 7,
+    recommendedIntervalLabel: 'Every evening',
+    scienceRationale: 'Minimizing screens and blue light 60 minutes before bed prevents suprachiasmatic nucleus suppression of melatonin, protecting deep restorative sleep stages.',
+    scienceDomain: 'Circadian Biology',
+  },
 ]
+
+export const HABIT_PRESETS = SCIENTIFIC_HABIT_PRESETS
 
 export const APP_LINKS = {
   repo: 'https://github.com/thecheesybit/protrack',

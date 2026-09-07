@@ -37,6 +37,16 @@ import {
   Calculator,
   Languages,
   Trees,
+  StickyNote,
+  NotebookPen,
+  FileText,
+  Bookmark,
+  Mic,
+  Play,
+  Pause,
+  Volume2,
+  ExternalLink,
+  Pin,
 } from 'lucide-react'
 
 export const ICONS = {
@@ -76,6 +86,16 @@ export const ICONS = {
   Calculator,
   Languages,
   Trees,
+  StickyNote,
+  NotebookPen,
+  FileText,
+  Bookmark,
+  Mic,
+  Play,
+  Pause,
+  Volume2,
+  ExternalLink,
+  Pin,
 }
 
 /** Curated set offered in the mode icon picker. */

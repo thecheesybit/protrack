@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { SpaceObjects } from './SpaceObjects'
 
 /**
@@ -29,7 +30,7 @@ const STARS = (() => {
  * dusk/evening/deep night via --stars-opacity). Pure CSS/SVG, GPU-friendly,
  * sits at -z-10. Tinted by the chrono accent (--accent), by useChronoTheme.
  */
-export function AuroraBackground() {
+export const AuroraBackground = memo(function AuroraBackground() {
   return (
     <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
       <div className="absolute inset-0 bg-bg" />
@@ -81,4 +82,4 @@ export function AuroraBackground() {
       <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/20 to-transparent dark:from-black/40" />
     </div>
   )
-}
+})

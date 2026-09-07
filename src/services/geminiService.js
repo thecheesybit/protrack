@@ -1,9 +1,10 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { TOOL_DECLARATIONS, executeTool } from '@/services/geminiTools'
+import { secureStorage } from '@/services/cryptoService'
 
 /**
- * Gemini integration. The user's API key lives ONLY in localStorage — it is
- * never written to Firestore or sent anywhere except Google's API.
+ * Gemini integration. The user's API key lives ONLY in localStorage — encrypted
+ * at rest with the account's inherent encryption key.
  */
 // `gemini-flash-latest` is a stable alias that always points at the current
 // fast Gemini model — survives the periodic deprecation cycles (e.g. the
@@ -11,14 +12,14 @@ import { TOOL_DECLARATIONS, executeTool } from '@/services/geminiTools'
 const MODEL = 'gemini-flash-latest'
 
 export function getApiKey(provider) {
-  return localStorage.getItem(`protrack:${provider}_key`) || ''
+  return secureStorage.getItemSync(`protrack:${provider}_key`) || ''
 }
 export function hasApiKey(provider) {
   return Boolean(getApiKey(provider))
 }
 export function setApiKey(provider, value) {
-  if (value) localStorage.setItem(`protrack:${provider}_key`, value.trim())
-  else localStorage.removeItem(`protrack:${provider}_key`)
+  if (value) secureStorage.setItem(`protrack:${provider}_key`, value.trim())
+  else secureStorage.removeItem(`protrack:${provider}_key`)
 }
 
 export function getGeminiKey() {

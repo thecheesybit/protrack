@@ -57,10 +57,12 @@ function speakHandsFree(text, voiceEnabled, onStart, onEnd) {
           window.activeHandsFreeAudio = audio
           audio.onplay = () => onStart?.()
           audio.onended = () => {
+            try { URL.revokeObjectURL(audioUrl) } catch { /* noop */ }
             window.activeHandsFreeAudio = null
             onEnd?.()
           }
           audio.onerror = () => {
+            try { URL.revokeObjectURL(audioUrl) } catch { /* noop */ }
             window.activeHandsFreeAudio = null
             onEnd?.()
           }
@@ -114,6 +116,9 @@ function stopHandsFreeSpeaking() {
     activeSpeechUtterance = null
     if (window.activeHandsFreeAudio) {
       window.activeHandsFreeAudio.pause()
+      if (window.activeHandsFreeAudio.src) {
+        try { URL.revokeObjectURL(window.activeHandsFreeAudio.src) } catch { /* noop */ }
+      }
       window.activeHandsFreeAudio = null
     }
   }

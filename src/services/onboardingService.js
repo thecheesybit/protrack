@@ -48,13 +48,11 @@ export async function completeOnboarding(uid, { selectedPresets, existingModes }
   await setDoc(
     doc(db, 'users', uid),
     {
-      settings: {
-        ...(activeModeId ? { activeModeId } : {}),
-        onboarding: {
-          version: LEGAL_VERSION,
-          acceptedLegalAt: serverTimestamp(),
-          completedAt: serverTimestamp(),
-        },
+      'settings.activeModeId': activeModeId || 'all',
+      'settings.onboarding': {
+        version: LEGAL_VERSION,
+        acceptedLegalAt: serverTimestamp(),
+        completedAt: serverTimestamp(),
       },
     },
     { merge: true },

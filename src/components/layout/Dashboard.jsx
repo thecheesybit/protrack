@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, Suspense } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '@/store/useStore'
 import { useFocusEngine } from '@/hooks/useFocusEngine'
@@ -24,15 +24,30 @@ import { BoardCanvas } from './BoardCanvas'
 import { FocusPanel } from '@/components/focus/FocusPanel'
 import { FocusMiniOverlay } from '@/components/focus/FocusMiniOverlay'
 import { FocusLockScreen } from '@/components/focus/FocusLockScreen'
-import { AIAssistant } from '@/components/ai/AIAssistant'
-import { BackgroundHandsFree } from '@/components/ai/BackgroundHandsFree'
-import { SettingsPanel } from '@/components/settings/SettingsPanel'
+import { PipFocusWindow } from '@/components/focus/PipFocusWindow'
+import { FloatingFocusPip } from '@/components/focus/FloatingFocusPip'
+import { PipAppView } from '@/components/focus/PipAppView'
+import { SessionCompleteModal } from '@/components/focus/SessionCompleteModal'
 import { HydrationReminder } from '@/components/wellness/HydrationReminder'
 import { CheckInCard } from '@/components/checkin/CheckInCard'
-import { SupportModal } from '@/components/support/SupportModal'
+
+const SettingsPanel = React.lazy(() =>
+  import('@/components/settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel }))
+)
+const AIAssistant = React.lazy(() =>
+  import('@/components/ai/AIAssistant').then((m) => ({ default: m.AIAssistant }))
+)
+const BackgroundHandsFree = React.lazy(() =>
+  import('@/components/ai/BackgroundHandsFree').then((m) => ({ default: m.BackgroundHandsFree }))
+)
+const SupportModal = React.lazy(() =>
+  import('@/components/support/SupportModal').then((m) => ({ default: m.SupportModal }))
+)
 import aiGif from '@/assets/ai.gif'
 import { APP_VERSION } from '@/lib/version'
 import { DEFAULT_FOCUS_SCENE, youtubeId, buildSceneEmbedUrl } from '@/lib/focusScenes'
+import { exitPip } from '@/lib/pip'
+import { useYouTubeVolume } from '@/hooks/useYouTubeVolume'
 import { cn } from '@/utils/cn'
 
 /**
@@ -46,6 +61,7 @@ export function Dashboard() {
   const setSupportOpen = useStore((s) => s.setSupportOpen)
   const fullscreen = useStore((s) => s.fullscreen)
   const focusLocked = useStore((s) => s.focusLocked)
+  const pipActive = useStore((s) => s.pipActive)
   const immersive = useStore((s) => s.status === 'running')
   const firstName = (user?.displayName || 'Explorer').split(' ')[0]
   const handsFreeActive = useStore((s) => s.handsFreeActive)
@@ -96,6 +112,10 @@ export function Dashboard() {
 
       // When focus is locked, block almost everything
       if (st.focusLocked) {
+        if (st.pipActive && e.key === 'Escape') {
+          exitPip()
+          return
+        }
         // Allow Escape only to trigger the quit confirmation (handled by FocusWidget)
         if (e.key === 'Escape') return
         // Block Ctrl+K, F, and other navigation shortcuts
@@ -140,6 +160,17 @@ export function Dashboard() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  // In desktop Electron, entering PiP morphs the native window down to a 300x380
+  // always-on-top box at the screen corner. Render the dedicated PiP view directly.
+  if (typeof window !== 'undefined' && window.protrack?.isDesktop && pipActive) {
+    return (
+      <div className="relative h-screen w-screen overflow-hidden select-none bg-slate-950 font-sans text-white antialiased">
+        <PipAppView />
+        <BackgroundAudioPlayer />
+      </div>
+    )
+  }
+
   return (
     <div className="relative flex h-full flex-col">
       <AuroraBackground />
@@ -161,7 +192,7 @@ export function Dashboard() {
             {/* User Profile / Welcome Section — fixed on the top left */}
             <div className="fixed left-3.5 top-3.5 z-20 flex items-center gap-3 select-none">
               <Logo className="h-10 w-10 shrink-0 drop-shadow-sm" />
-              <DynamicBranding firstName={firstName} />
+              <DynamicBranding firstName={firstName} displayName={user?.displayName} />
             </div>
 
             {/* Floating scope switcher — fixed on the far left, vertically centered */}
@@ -256,13 +287,19 @@ export function Dashboard() {
 
       <FocusPanel />
       <FocusMiniOverlay />
-      <AIAssistant />
-      <BackgroundHandsFree />
-      <SettingsPanel />
+      <PipFocusWindow />
+      <FloatingFocusPip />
+      <SessionCompleteModal />
       <HydrationReminder />
       <CheckInCard />
-      <SupportModal open={supportOpen} onClose={() => setSupportOpen(false)} />
       <BackgroundAudioPlayer />
+
+      <Suspense fallback={null}>
+        <AIAssistant />
+        {handsFreeActive && <BackgroundHandsFree />}
+        <SettingsPanel />
+        {supportOpen && <SupportModal open={supportOpen} onClose={() => setSupportOpen(false)} />}
+      </Suspense>
     </div>
   )
 }
@@ -270,138 +307,74 @@ export function Dashboard() {
 function BackgroundAudioPlayer() {
   const status = useStore((s) => s.status)
   const userFocusAudioUrl = useStore((s) => s.settings?.focusAudioUrl || '')
-  const muted = useStore((s) => s.muted)
   const volume = useStore((s) => s.volume)
+  const muted = useStore((s) => s.muted)
   const focusLocked = useStore((s) => s.focusLocked)
+  const pipActive = useStore((s) => s.pipActive)
   const focusVideoEnabled = useStore((s) => s.settings?.focusVideoEnabled !== false)
   const iframeRef = useRef(null)
   const audioRef = useRef(null)
 
+  const onIframeLoad = useYouTubeVolume(iframeRef, volume, muted)
+
   // Use default scene if no user preference is set
   const focusAudioUrl = userFocusAudioUrl || DEFAULT_FOCUS_SCENE.url
 
-  if (status !== 'running' || !focusAudioUrl || muted) return null
+  // Audio plays only while session is actively running, scene is enabled and unmuted
+  if (status !== 'running' || !focusAudioUrl || muted || !focusVideoEnabled) return null
 
   const videoId = youtubeId(focusAudioUrl)
 
-  // When FocusLockScreen is showing the video iframe (which also carries audio),
-  // this hidden player would duplicate playback — skip it.
-  if (focusLocked && focusVideoEnabled && videoId) return null
+  // When FocusLockScreen is actively showing the video iframe (which also carries audio),
+  // this hidden player would duplicate playback — skip it. When in PiP mode, FocusLockScreen
+  // is unmounted, so this player keeps the scene audio playing seamlessly.
+  if (focusLocked && !pipActive && focusVideoEnabled && videoId) return null
 
   if (videoId) {
-    // Shared builder — same origin/autoplay handling as the lock screen.
     const embedUrl = buildSceneEmbedUrl(videoId)
     return (
-      <YTVolumeSync iframeRef={iframeRef} volume={volume}>
-        <iframe
-          ref={iframeRef}
-          src={embedUrl}
-          className="sr-only pointer-events-none"
-          allow="autoplay"
-          title="Background Audio Stream"
-          style={{ width: 1, height: 1, border: 0 }}
-        />
-      </YTVolumeSync>
+      <iframe
+        key={videoId}
+        ref={iframeRef}
+        src={embedUrl}
+        onLoad={onIframeLoad}
+        className="sr-only pointer-events-none"
+        allow="autoplay"
+        title="Background Audio Stream"
+        style={{ width: 1, height: 1, border: 0 }}
+      />
     )
   }
 
   return (
-    <AudioVolumeSync audioRef={audioRef} volume={volume}>
-      <audio
-        ref={audioRef}
-        src={focusAudioUrl}
-        autoPlay
-        loop
-        className="sr-only"
-      />
-    </AudioVolumeSync>
+    <audio
+      ref={(el) => {
+        audioRef.current = el
+        if (el) el.volume = volume ?? 0.5
+      }}
+      src={focusAudioUrl}
+      autoPlay
+      loop
+      className="sr-only"
+    />
   )
 }
 
-/** Syncs volume to YouTube iframe via the IFrame Player API postMessage protocol. */
-function YTVolumeSync({ iframeRef, volume, children }) {
-  const apiReadyRef = useRef(false)
-
-  const postCommand = useCallback((func, args = []) => {
-    const iframe = iframeRef.current
-    if (!iframe?.contentWindow) return
-    try {
-      iframe.contentWindow.postMessage(
-        JSON.stringify({ event: 'command', func, args }),
-        'https://www.youtube.com',
-      )
-    } catch {
-      /* cross-origin until YT API initialises */
-    }
-  }, [iframeRef])
-
-  const postVolume = useCallback((vol) => {
-    postCommand('setVolume', [Math.round(vol * 100)])
-    // unMute explicitly — embed starts muted (mute=1) for reliable autoplay;
-    // this is the only way to restore audio without reloading the iframe.
-    postCommand('unMute')
-  }, [postCommand])
-
-  // Listen for the YT API ready signal, then sync the current volume
-  useEffect(() => {
-    const onMessage = (e) => {
-      if (e.origin !== 'https://www.youtube.com') return
-      try {
-        const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
-        if (data?.event === 'onReady') {
-          apiReadyRef.current = true
-          postVolume(volume)
-        }
-      } catch { /* not JSON */ }
-    }
-    window.addEventListener('message', onMessage)
-    return () => window.removeEventListener('message', onMessage)
-  }, [volume, postVolume])
-
-  // On iframe load, register the listener with the YT IFrame API
-  const handleLoad = () => {
-    const iframe = iframeRef.current
-    if (!iframe?.contentWindow) return
-    try {
-      iframe.contentWindow.postMessage(JSON.stringify({
-        event: 'listening',
-        id: 1,
-        channel: 'widget',
-      }), 'https://www.youtube.com')
-    } catch { /* noop */ }
-  }
-
-  useEffect(() => {
-    if (apiReadyRef.current) postVolume(volume)
-  }, [volume, postVolume])
-
-  return React.cloneElement(children, { onLoad: handleLoad })
-}
-
-/** Syncs volume to a regular <audio> element */
-function AudioVolumeSync({ audioRef, volume, children }) {
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = volume
-    }
-  }, [volume, audioRef])
-  return children
-}
-
 /**
- * Dynamic welcome branding component.
- * Displays "Welcome back, {firstName}", then deletes it after 3.5 seconds
- * and types out "PRO TRACK" letter-by-letter, which stays permanently.
+ * Dynamic branding component.
+ * Displays "PRO TRACK Workspace" with version badge initially.
+ * After a pause (3.5s), it deletes "PRO TRACK" character-by-character
+ * like a typewriter, and types out "{userName} Workspace", staying permanently.
  */
-function DynamicBranding({ firstName }) {
-  const welcomeText = `Welcome back, ${firstName}`
+function DynamicBranding({ firstName, displayName }) {
   const brandText = "PRO TRACK"
+  const userText = displayName?.trim() || firstName || "Explorer"
 
-  const [text, setText] = useState(welcomeText)
-  const [phase, setPhase] = useState('welcome') // 'welcome' | 'deleting' | 'typing' | 'done'
+  const [text, setText] = useState(brandText)
+  const [phase, setPhase] = useState('brand') // 'brand' | 'deleting' | 'typing' | 'done'
 
   useEffect(() => {
-    if (phase === 'welcome') {
+    if (phase === 'brand') {
       const timer = setTimeout(() => {
         setPhase('deleting')
       }, 3500)
@@ -412,7 +385,7 @@ function DynamicBranding({ firstName }) {
       if (text.length > 0) {
         const timer = setTimeout(() => {
           setText((prev) => prev.slice(0, -1))
-        }, 30)
+        }, 40)
         return () => clearTimeout(timer)
       } else {
         setPhase('typing')
@@ -420,56 +393,43 @@ function DynamicBranding({ firstName }) {
     }
 
     if (phase === 'typing') {
-      if (text.length < brandText.length) {
+      if (text.length < userText.length) {
         const timer = setTimeout(() => {
-          setText(brandText.slice(0, text.length + 1))
-        }, 85)
+          setText(userText.slice(0, text.length + 1))
+        }, 80)
         return () => clearTimeout(timer)
       } else {
         setPhase('done')
       }
     }
-  }, [phase, text, firstName])
+  }, [phase, text, userText])
 
-  const showWelcomeLayout = phase === 'welcome' || (phase === 'deleting' && text.length > 0 && !text.startsWith('PRO'))
-
-  if (showWelcomeLayout) {
-    const commaIndex = text.indexOf(',')
-    const line1 = commaIndex !== -1 ? text.slice(0, commaIndex) : text
-    const line2 = commaIndex !== -1 ? text.slice(commaIndex + 1).trim() : ''
-
-    return (
-      <div className="flex flex-col justify-center select-none">
-        <p className="text-[10px] font-semibold text-muted uppercase tracking-wider leading-none mb-1 flex items-center gap-1.5">
-          {line1}
-          {line1.toLowerCase().includes('welcome') && (
-            <span className="rounded bg-accent/10 px-1 py-0.2 text-[9px] font-bold text-accent normal-case tracking-normal">
-              v{APP_VERSION}
-            </span>
-          )}
-        </p>
-        <h1 className="text-base font-bold tracking-tight text-ink leading-none min-h-[1.25rem]">
-          {line2}
-        </h1>
-      </div>
-    )
+  const replay = () => {
+    if (phase === 'done') {
+      setText(brandText)
+      setPhase('brand')
+    }
   }
 
   return (
-    <div className="flex flex-col justify-center select-none">
-      <h1 className="text-base font-bold tracking-wide text-ink leading-none flex items-center gap-1.5 font-display">
+    <div
+      onClick={replay}
+      className="flex flex-col justify-center select-none cursor-default"
+      title={phase === 'done' ? 'Click to replay branding animation' : undefined}
+    >
+      <h1 className="text-lg font-bold tracking-wide text-ink leading-none flex items-center gap-2 font-display">
         {text}
-        {phase === 'done' && (
-          <span className="rounded bg-accent/10 px-1 py-0.2 text-[9px] font-bold text-accent normal-case tracking-normal">
+        {(phase === 'brand' || phase === 'done') && (
+          <span className="rounded-md border border-accent/40 bg-accent/20 px-2 py-0.5 font-mono text-[11px] font-bold text-accent tracking-wide shadow-sm">
             v{APP_VERSION}
           </span>
         )}
-        {phase === 'typing' && (
+        {(phase === 'deleting' || phase === 'typing') && (
           <span className="inline-block w-[2px] h-[1em] bg-accent animate-pulse" />
         )}
       </h1>
-      <p className="text-[9px] font-medium text-muted uppercase tracking-widest leading-none mt-1 min-h-[9px]">
-        {phase === 'done' ? 'Workspace' : ''}
+      <p className="text-[10px] font-semibold text-muted uppercase tracking-widest leading-none mt-1 min-h-[10px]">
+        Workspace
       </p>
     </div>
   )
