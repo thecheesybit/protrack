@@ -11,6 +11,7 @@ import {
 } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
+import http from 'node:http'
 import os from 'node:os'
 import crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
@@ -30,6 +31,111 @@ const ICON = path.join(__dirname, '../build/icon.png')
 let win = null
 let tray = null
 let isQuitting = false
+
+// ── Local static server (production) ───────────────────────────────────────
+// The packaged renderer is served over http://localhost instead of file://.
+// Why: YouTube's IFrame API (enablejsapi, used for the Deep Focus scene volume
+// control) refuses to play when the embedding page has the opaque file:// origin
+// — that's why the background video worked in dev (http://localhost:5173) but
+// not in the packaged build. A real localhost origin fixes it, and localhost is
+// already a Firebase-authorized domain, so auth + IndexedDB persistence keep
+// working. The port is FIXED so the origin is stable across launches (a changing
+// origin would log the user out and drop the offline cache every time).
+const LOCAL_HOST = '127.0.0.1'
+const LOCAL_PORT_BASE = 41730
+let localServer = null
+let localPort = null
+
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.map': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.wasm': 'application/wasm',
+  '.txt': 'text/plain; charset=utf-8',
+  '.webmanifest': 'application/manifest+json',
+}
+
+function serveIndex(res) {
+  fs.readFile(path.join(RENDERER_DIST, 'index.html'), (err, html) => {
+    if (err) {
+      res.writeHead(404)
+      res.end('Not found')
+      return
+    }
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+    res.end(html)
+  })
+}
+
+function handleLocalRequest(req, res) {
+  let rel
+  try {
+    rel = decodeURIComponent((req.url || '/').split('?')[0])
+  } catch {
+    rel = '/'
+  }
+  if (rel === '/' || rel === '') return serveIndex(res)
+
+  // Resolve inside RENDERER_DIST and refuse anything that escapes it.
+  const filePath = path.normalize(path.join(RENDERER_DIST, rel))
+  if (filePath !== RENDERER_DIST && !filePath.startsWith(RENDERER_DIST + path.sep)) {
+    res.writeHead(403)
+    res.end('Forbidden')
+    return
+  }
+  fs.readFile(filePath, (err, data) => {
+    if (err) return serveIndex(res) // SPA fallback for client routes
+    const ext = path.extname(filePath).toLowerCase()
+    res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream' })
+    res.end(data)
+  })
+}
+
+/**
+ * Start the static server on the fixed port, walking forward a few ports only
+ * if it is occupied. Resolves the chosen port, or null if none could bind (the
+ * caller then falls back to file://).
+ */
+function startLocalServer() {
+  return new Promise((resolve) => {
+    let attempt = 0
+    const tryListen = () => {
+      const port = LOCAL_PORT_BASE + attempt
+      const server = http.createServer(handleLocalRequest)
+      server.once('error', (err) => {
+        server.close?.()
+        if (err.code === 'EADDRINUSE' && attempt < 6) {
+          attempt += 1
+          tryListen()
+        } else {
+          resolve(null)
+        }
+      })
+      server.listen(port, LOCAL_HOST, () => {
+        localServer = server
+        localPort = port
+        resolve(port)
+      })
+    }
+    tryListen()
+  })
+}
 
 // True when running from a Microsoft Store (AppX/MSIX) install. Store builds
 // must never self-update — the Store owns delivery, and electron-updater
@@ -285,47 +391,26 @@ function createWindow() {
   )
   ses.setPermissionCheckHandler((_wc, permission) => GRANTED_PERMISSIONS.has(permission))
 
-  // PACKAGED (file://) ONLY. Over file:// the host page has a null/opaque origin
-  // and sends no Referer, so YouTube refuses to start the embed. Supplying a
-  // Referer for YouTube's own hosts lets the scene load. This must NOT run in
-  // dev: dev serves the app from http://localhost:5173, which already has a real
-  // origin + Referer, and spoofing `Origin: youtube.com` there collides with the
-  // IFrame API's enablejsapi handshake (its postMessage origin no longer matches)
-  // and makes YouTube reject the video with "unavailable, error 152". We spoof
-  // only Referer (not Origin) — the Origin override is what broke the handshake,
-  // and Referer alone is enough for file:// playback. Scoped by exact host suffix
-  // so it can never touch Firebase/Google auth.
-  if (!isDev) {
-    const YT_MEDIA_HOSTS =
-      /(^|\.)(youtube\.com|youtube-nocookie\.com|googlevideo\.com|ytimg\.com)$/i
-    ses.webRequest.onBeforeSendHeaders((details, callback) => {
-      let hostname
-      try {
-        hostname = new URL(details.url).hostname
-      } catch {
-        callback({ requestHeaders: details.requestHeaders })
-        return
-      }
-      if (YT_MEDIA_HOSTS.test(hostname)) {
-        callback({
-          requestHeaders: { ...details.requestHeaders, Referer: 'https://www.youtube.com/' },
-        })
-        return
-      }
-      callback({ requestHeaders: details.requestHeaders })
-    })
-  }
-
+  // No Referer/Origin spoofing. The packaged app is served over http://localhost
+  // (a real origin with a real Referer), so YouTube's enablejsapi handshake works
+  // exactly as it does in dev. The old file:// Referer spoof is intentionally
+  // gone — with a real origin it would only re-create the origin/referer mismatch
+  // that broke playback.
+  //
   // The app document's CSP is a build-time <meta> tag (vite.config.js,
-  // injectCspPlugin) — webRequest can't see file:// loads, so a header hook
-  // can never protect the packaged document. The previous session-wide
-  // onHeadersReceived injection stamped OUR policy onto every third-party
-  // response too, which silently killed YouTube embeds in packaged builds
-  // (their googlevideo.com streaming XHRs violated our connect-src) and
-  // risked the Google auth popup. Do not reintroduce it.
+  // injectCspPlugin) governing only our own document — never reintroduce a
+  // session-wide onHeadersReceived CSP: it would stamp our policy onto YouTube's
+  // own responses and kill the embed's streaming XHRs.
 
-  if (isDev && DEV_URL) win.loadURL(DEV_URL)
-  else win.loadFile(path.join(RENDERER_DIST, 'index.html'))
+  if (isDev && DEV_URL) {
+    win.loadURL(DEV_URL)
+  } else if (localPort) {
+    // Production: real localhost origin so YouTube + Firebase behave.
+    win.loadURL(`http://localhost:${localPort}/`)
+  } else {
+    // Last-resort fallback if the local server failed to bind.
+    win.loadFile(path.join(RENDERER_DIST, 'index.html'))
+  }
 
   win.once('ready-to-show', () => {
     win.show()
@@ -460,7 +545,11 @@ if (!gotLock) {
     }
   })
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
+    // Production: bring up the localhost static server before the first window so
+    // createWindow can load http://localhost instead of file:// (see the server
+    // block above for why). Dev uses the Vite server and skips this.
+    if (!isDev) await startLocalServer()
     createWindow()
     createTray()
 
@@ -494,6 +583,7 @@ if (!gotLock) {
   })
   app.on('will-quit', () => {
     globalShortcut.unregisterAll()
+    localServer?.close?.()
   })
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin' && isQuitting) app.quit()

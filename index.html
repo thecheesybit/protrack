@@ -22,7 +22,12 @@
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
-      if ('serviceWorker' in navigator) {
+      // Register the service worker for the WEB build only. The desktop app is
+      // served from an internal http://localhost server reading local files, so a
+      // SW adds no offline benefit and its stale-while-revalidate app-shell cache
+      // could serve an outdated index.html after an auto-update (asset names are
+      // hashed) — so skip it in Electron.
+      if ('serviceWorker' in navigator && !/electron/i.test(navigator.userAgent)) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js').catch(err => {
             console.warn('SW registration failed:', err)
