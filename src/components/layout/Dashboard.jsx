@@ -10,6 +10,7 @@ import { useHabitReminders } from '@/hooks/useHabitReminders'
 import { useDeadlines } from '@/hooks/useDeadlines'
 import { useNoteReminders } from '@/hooks/useNoteReminders'
 import { useCheckIns } from '@/hooks/useCheckIns'
+import { useCalendarSync } from '@/hooks/useCalendarSync'
 import { AuroraBackground } from '@/components/common/AuroraBackground'
 import { TimeHud } from '@/components/common/TimeHud'
 import { FlipClock } from '@/components/common/FlipClock'
@@ -108,6 +109,7 @@ export function Dashboard() {
   useDeadlines()     // fires island notifications for overdue/due-today todos
   useNoteReminders() // fires reminders for notes with a deadline (2 days ahead)
   useCheckIns()      // offers the occasional daily check-in question (lib/checkin)
+  useCalendarSync()  // two-way Google Calendar sync while the app is open (P2)
 
   // Global shortcuts: Esc unwinds overlays/maximize; ⌘/Ctrl+K opens the AI.
   // When focus is locked, suppress all shortcuts except focus-related ones.

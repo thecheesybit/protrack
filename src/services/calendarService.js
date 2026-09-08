@@ -3,22 +3,42 @@ import { doc, setDoc, onSnapshot, deleteDoc } from 'firebase/firestore'
 import { auth, db } from '@/lib/firebase'
 import { isDesktop } from '@/desktop/isDesktop'
 import { nextOccurrence } from '@/lib/time'
-import { addSlot, updateSlot } from '@/services/timetableService'
+import { addSlot, updateSlot, deleteSlot } from '@/services/timetableService'
+import { addTodo, updateTodo, deleteTodo } from '@/services/todoService'
 import { signInWithGooglePopup } from '@/lib/authPopup'
+import { eventToItem, itemToEvent, itemSignature, mergeStrategy } from '@/lib/gcalMap'
 
 /**
  * Google Calendar integration.
  *
  * Firebase's Google sign-in returns a short-lived OAuth access token (~1h) that
- * is NOT auto-refreshed, so we keep it in sessionStorage and ask the user to
+ * is NOT auto-refreshed, so we keep it in secureStorage and ask the user to
  * reconnect when it expires (401). The `calendar.events` scope is requested
  * on demand (separate consent) rather than at base login, to keep first-login
  * frictionless and avoid the sensitive-scope warning for non-calendar users.
+ *
+ * Because the token cannot refresh in the background on the Firebase Spark
+ * (free) plan, sync is "live while the app is open": `useCalendarSync` runs
+ * `syncEverything` on launch, on an interval, and on window focus, and surfaces
+ * a single user-initiated "Reconnect Google Calendar" prompt (never an
+ * automatic browser re-open) when the token lapses.
  */
 const CAL_SCOPE = 'https://www.googleapis.com/auth/calendar.events'
 const AUTH_CORE_KEY = 'protrack:auth_core'
+const SYNC_TOKEN_KEY = 'protrack:gcal_sync_token'
+const PUSH_SIGS_KEY = 'protrack:gcal_push_sigs'
+const LAST_SYNC_KEY = 'protrack:gcal_last_sync' // plain epoch ms — read by Settings
 
 import { secureStorage } from '@/services/cryptoService'
+
+/** Thrown when the Calendar token is missing/expired. The sync hook turns this
+ *  into a single reconnect prompt — callers must NOT auto-reconnect. */
+export class CalendarAuthError extends Error {
+  constructor(message = 'Calendar session expired — please reconnect') {
+    super(message)
+    this.name = 'CalendarAuthError'
+  }
+}
 
 export function getCalCredentials() {
   const data = secureStorage.getItemSync(AUTH_CORE_KEY)
@@ -56,6 +76,23 @@ export function clearCalToken() {
   clearCalCredentials()
 }
 
+/** Last successful sync, as epoch ms (or 0 if never). Cheap synchronous read. */
+export function getLastSyncAt() {
+  try {
+    return Number(localStorage.getItem(LAST_SYNC_KEY)) || 0
+  } catch {
+    return 0
+  }
+}
+
+function stampLastSync() {
+  try {
+    localStorage.setItem(LAST_SYNC_KEY, String(Date.now()))
+  } catch {
+    /* private mode — Settings just won't show a last-sync time */
+  }
+}
+
 export async function connectCalendar() {
   if (!auth) throw new Error('Firebase is not configured for this build.')
 
@@ -73,7 +110,7 @@ export async function connectCalendar() {
 
     return new Promise((resolve, reject) => {
       let unsubscribe = () => {}
-      
+
       const timeoutId = setTimeout(async () => {
         unsubscribe()
         await deleteDoc(handshakeRef).catch(() => {})
@@ -90,7 +127,7 @@ export async function connectCalendar() {
             unsubscribe()
             // Clean up from Firestore immediately
             await deleteDoc(handshakeRef).catch((e) => console.error('Error deleting handshake:', e))
-            
+
             const creds = {
               access_token: data.accessToken,
               expires_at: data.expiresAt || (Date.now() + 3599 * 1000),
@@ -128,7 +165,7 @@ export async function connectCalendar() {
   const credential = GoogleAuthProvider.credentialFromResult(result)
   const token = credential?.accessToken
   if (!token) throw new Error('No calendar access token returned')
-  
+
   // Store securely under protrack:auth_core
   saveCalCredentials({
     access_token: token,
@@ -138,31 +175,9 @@ export async function connectCalendar() {
   return token
 }
 
-async function callSyncFunction(action, extraPayload = {}) {
-  const token = getCalToken()
-  if (!token) throw new Error('Calendar not connected')
-  
-  const res = await fetch('/.netlify/functions/gcal-sync', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      action,
-      tokenPayload: { access_token: token },
-      ...extraPayload,
-    }),
-  })
-  
-  if (!res.ok) {
-    throw new Error(`Sync function error ${res.status}`)
-  }
-  return res.json()
-}
-
 async function calFetch(path, options = {}) {
   const token = getCalToken()
-  if (!token) throw new Error('Calendar not connected')
+  if (!token) throw new CalendarAuthError('Calendar not connected')
   const res = await fetch(`https://www.googleapis.com/calendar/v3${path}`, {
     ...options,
     headers: {
@@ -173,43 +188,29 @@ async function calFetch(path, options = {}) {
   })
   if (res.status === 401) {
     clearCalToken()
-    throw new Error('Calendar session expired — please reconnect')
+    throw new CalendarAuthError()
   }
-  if (!res.ok) throw new Error(`Calendar API error ${res.status}`)
+  if (res.status === 204) return {} // DELETE returns no body
+  if (!res.ok) {
+    const err = new Error(`Calendar API error ${res.status}`)
+    err.status = res.status
+    throw err
+  }
   return res.json()
 }
 
 /**
- * Auto-retry on 401: re-authenticate and retry the request once.
+ * Previously retried a 401 by silently calling connectCalendar() — on desktop
+ * that re-opened the browser in a loop. Now a 401 propagates as CalendarAuthError
+ * and the sync hook shows one reconnect prompt. Kept as a named wrapper so the
+ * existing call sites don't churn.
  */
 async function calFetchWithRetry(path, options = {}) {
-  try {
-    return await calFetch(path, options)
-  } catch (err) {
-    if (err.message.includes('expired')) {
-      // Try to re-authenticate silently
-      try {
-        await connectCalendar()
-        return await calFetch(path, options)
-      } catch {
-        throw err // re-throw original error if re-auth fails
-      }
-    }
-    throw err
-  }
+  return calFetch(path, options)
 }
 
-/** Pull — upcoming events from the primary calendar. */
+/** Pull — upcoming events from the primary calendar (direct API). */
 export async function listUpcomingEvents(maxResults = 8) {
-  try {
-    const data = await callSyncFunction('sync_down')
-    if (data.events && data.events.length) {
-      return data.events
-    }
-  } catch (err) {
-    console.warn('[calendar] sync_down function failed, falling back to direct API', err)
-  }
-
   const params = new URLSearchParams({
     timeMin: new Date().toISOString(),
     maxResults: String(maxResults),
@@ -222,16 +223,6 @@ export async function listUpcomingEvents(maxResults = 8) {
 
 /** Push — create/update a recurring weekly event for a slot. Returns eventId. */
 export async function pushSlotToCalendar(slot) {
-  try {
-    const data = await callSyncFunction('sync_up', { syncData: slot })
-    if (data && data.success) {
-      // In mock/cloud, it succeeded. If we need an event ID:
-      if (data.eventId) return data.eventId
-    }
-  } catch (err) {
-    console.warn('[calendar] sync_up function failed, falling back to direct API', err)
-  }
-
   const { startISO, endISO } = nextOccurrence(slot.dayOfWeek, slot.startMin, slot.endMin)
   const body = {
     summary: slot.label || 'PRO TRACK session',
@@ -310,7 +301,8 @@ export async function pullEventsToSlots(uid, modeId, existingSlots = [], default
 }
 
 /**
- * Bi-directional sync orchestrator.
+ * Bi-directional sync orchestrator (slots only — legacy entry point kept for
+ * the "Sync now" button in the widget). `syncEverything` is the full path.
  * 1. Pull Google Calendar events → create/update local slots
  * 2. Push local slots (without googleEventId) → Google Calendar
  */
@@ -338,4 +330,263 @@ export async function syncCalendar(uid, modeId, existingSlots = [], defaultColor
   }
 
   return results
+}
+
+/* ── Full two-way live sync (everything with a time) ─────── */
+
+async function readSyncToken() {
+  return (await secureStorage.getItem(SYNC_TOKEN_KEY)) || null
+}
+async function writeSyncToken(token) {
+  if (token) await secureStorage.setItem(SYNC_TOKEN_KEY, token)
+}
+async function clearSyncToken() {
+  secureStorage.removeItem(SYNC_TOKEN_KEY)
+}
+async function readPushSigs() {
+  try {
+    return JSON.parse((await secureStorage.getItem(PUSH_SIGS_KEY)) || '{}') || {}
+  } catch {
+    return {}
+  }
+}
+async function writePushSigs(sigs) {
+  await secureStorage.setItem(PUSH_SIGS_KEY, JSON.stringify(sigs))
+}
+
+/** One page of primary-calendar events. Handles the syncToken vs. timeMin split. */
+async function fetchEventsPage({ syncToken, pageToken }) {
+  const params = new URLSearchParams({ maxResults: '250' })
+  if (pageToken) params.set('pageToken', pageToken)
+  if (syncToken) {
+    params.set('syncToken', syncToken)
+  } else {
+    // Full sync window: a week back covers recently-moved items without an
+    // unbounded read. singleEvents expands recurrences to instances.
+    params.set('timeMin', new Date(Date.now() - 7 * 86400000).toISOString())
+    params.set('singleEvents', 'true')
+    params.set('showDeleted', 'true')
+  }
+  return calFetch(`/calendars/primary/events?${params}`)
+}
+
+/** Collect every changed event since the stored syncToken (or a full window). */
+async function pullChangedEvents() {
+  let syncToken = await readSyncToken()
+  let items = []
+  let pageToken = null
+  let nextSyncToken = null
+
+  for (let guard = 0; guard < 20; guard++) {
+    let page
+    try {
+      page = await fetchEventsPage({ syncToken, pageToken })
+    } catch (err) {
+      if (err.status === 410) {
+        // Token expired server-side — drop it and restart a full sync once.
+        await clearSyncToken()
+        syncToken = null
+        pageToken = null
+        items = []
+        continue
+      }
+      throw err
+    }
+    items = items.concat(page.items || [])
+    if (page.nextPageToken) {
+      pageToken = page.nextPageToken
+      continue
+    }
+    nextSyncToken = page.nextSyncToken || null
+    break
+  }
+
+  return { items, nextSyncToken }
+}
+
+/**
+ * Full bidirectional "live while open" sync for everything with a time —
+ * recurring slots, one-time events, and dated to-dos/tasks — in both directions,
+ * including deletes. All client-side direct Calendar API; no server.
+ *
+ * @param {string} uid
+ * @param {{ modes: Array, inboxModeId: string, slots: Array, todos: Array, tasks?: Array }} ctx
+ *        `slots` should be the cross-mode list (each tagged `_modeId`); `todos`
+ *        are the decrypted todos (events = those with `type:'event'`). `tasks`
+ *        has no app-wide source yet — pass [] (see TODO(P8) in TimetableWidget).
+ * @returns {Promise<{pulled:number, pushed:number, patched:number, deleted:number, errors:string[]}>}
+ */
+export async function syncEverything(uid, { modes = [], inboxModeId, slots = [], todos = [], tasks = [] }) {
+  if (!uid) return { pulled: 0, pushed: 0, patched: 0, deleted: 0, errors: ['no uid'] }
+  if (!isCalendarConnected()) throw new CalendarAuthError('Calendar not connected')
+
+  const inbox = inboxModeId || modes[0]?.id
+  const out = { pulled: 0, pushed: 0, patched: 0, deleted: 0, errors: [] }
+
+  const slotModeId = (s) => s._modeId || inbox
+  const findByEventId = (id) => ({
+    slot: slots.find((s) => s.googleEventId === id),
+    todo: todos.find((t) => t.googleEventId === id),
+  })
+
+  /* 1 ── PULL: apply remote changes locally ─────────────── */
+  let nextSyncToken = null
+  try {
+    const { items, nextSyncToken: tok } = await pullChangedEvents()
+    nextSyncToken = tok
+
+    for (const ev of items) {
+      const mapped = eventToItem(ev)
+      if (!mapped) continue
+      const { slot, todo } = findByEventId(mapped.googleEventId)
+
+      try {
+        if (mapped.kind === 'cancelled') {
+          if (slot) {
+            await deleteSlot(uid, slotModeId(slot), slot.id)
+            out.deleted++
+          } else if (todo) {
+            await deleteTodo(uid, todo.id)
+            out.deleted++
+          }
+          continue
+        }
+
+        if (mapped.kind === 'slot') {
+          const patch = {
+            label: mapped.label,
+            dayOfWeek: mapped.dayOfWeek,
+            startMin: mapped.startMin,
+            endMin: mapped.endMin,
+            googleEventId: mapped.googleEventId,
+            source: 'gcal',
+            recurrenceType: 'weekly',
+          }
+          if (slot) {
+            if (mergeStrategy(null, mapped.updated) === 'remote') {
+              await updateSlot(uid, slotModeId(slot), slot.id, patch)
+              out.pulled++
+            }
+          } else {
+            await addSlot(uid, inbox, {
+              ...patch,
+              color: modes.find((m) => m.id === inbox)?.accentColor || '#6366f1',
+              tag: 'Google Cal',
+              tagStyle: 'dashed',
+            })
+            out.pulled++
+          }
+          continue
+        }
+
+        // mapped.kind === 'todo'
+        if (todo) {
+          if (mergeStrategy(null, mapped.updated) === 'remote') {
+            const patch = mapped.type === 'event'
+              ? { text: mapped.text, type: 'event', eventDate: mapped.eventDate, eventStartMin: mapped.eventStartMin, eventEndMin: mapped.eventEndMin }
+              : { text: mapped.text, dueAt: mapped.dueAt }
+            await updateTodo(uid, todo.id, patch)
+            out.pulled++
+          }
+        } else {
+          const base = { text: mapped.text, modeId: inbox, googleEventId: mapped.googleEventId, source: 'gcal' }
+          if (mapped.type === 'event') {
+            await addTodo(uid, { ...base, type: 'event', eventDate: mapped.eventDate, eventStartMin: mapped.eventStartMin, eventEndMin: mapped.eventEndMin })
+          } else {
+            await addTodo(uid, { ...base, dueAt: mapped.dueAt })
+          }
+          out.pulled++
+        }
+      } catch (err) {
+        out.errors.push(`pull ${mapped.googleEventId}: ${err.message}`)
+      }
+    }
+  } catch (err) {
+    if (err instanceof CalendarAuthError) throw err
+    out.errors.push(`pull: ${err.message}`)
+  }
+
+  /* 2 ── PUSH: create/patch/delete remote from local ────── */
+  const sigs = await readPushSigs()
+  const seenEventIds = new Set()
+
+  const pushable = [
+    ...slots.map((s) => ({ item: s, write: (id) => updateSlot(uid, slotModeId(s), s.id, { googleEventId: id }) })),
+    ...todos
+      .filter((t) => !t.done && (t.type === 'event' || t.dueAt))
+      .map((t) => ({ item: t, write: (id) => updateTodo(uid, t.id, { googleEventId: id }) })),
+    ...tasks
+      .filter((t) => t.column !== 'done' && t.dueAt)
+      .map((t) => ({ item: t, write: null })), // no app-wide task writer yet
+  ]
+
+  for (const { item, write } of pushable) {
+    const body = itemToEvent(item)
+    if (!body) continue
+    try {
+      if (!item.googleEventId) {
+        if (!write) continue // can't persist the id back — skip silently
+        const created = await calFetch('/calendars/primary/events', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        })
+        if (created?.id) {
+          await write(created.id)
+          sigs[created.id] = itemSignature(item)
+          seenEventIds.add(created.id)
+          out.pushed++
+        }
+      } else {
+        seenEventIds.add(item.googleEventId)
+        const sig = itemSignature(item)
+        if (sigs[item.googleEventId] !== sig) {
+          // Skip re-pushing a copy that GCal itself just gave us this run.
+          if (item.source !== 'gcal' || sigs[item.googleEventId] !== undefined) {
+            await calFetch(`/calendars/primary/events/${item.googleEventId}`, {
+              method: 'PATCH',
+              body: JSON.stringify(body),
+            })
+            out.patched++
+          }
+          sigs[item.googleEventId] = sig
+        }
+      }
+    } catch (err) {
+      if (err instanceof CalendarAuthError) throw err
+      out.errors.push(`push ${item.id}: ${err.message}`)
+    }
+  }
+
+  /* 3 ── DELETE reconciliation: local gone → remove remote ─ */
+  for (const eventId of Object.keys(sigs)) {
+    if (seenEventIds.has(eventId)) continue
+    try {
+      await calFetch(`/calendars/primary/events/${eventId}`, { method: 'DELETE' })
+      out.deleted++
+    } catch (err) {
+      // 404/410 just means it's already gone — still drop the local signature.
+      if (err instanceof CalendarAuthError) throw err
+      if (err.status !== 404 && err.status !== 410) {
+        out.errors.push(`delete ${eventId}: ${err.message}`)
+      }
+    }
+    delete sigs[eventId]
+  }
+
+  await writePushSigs(sigs)
+  if (nextSyncToken) await writeSyncToken(nextSyncToken)
+  stampLastSync()
+  return out
+}
+
+/** Wipe all sync bookkeeping — call on disconnect so a reconnect starts clean. */
+export function resetCalendarSyncState() {
+  clearCalToken()
+  secureStorage.removeItem(SYNC_TOKEN_KEY)
+  secureStorage.removeItem(PUSH_SIGS_KEY)
+  try {
+    localStorage.removeItem(LAST_SYNC_KEY)
+  } catch {
+    /* ignore */
+  }
 }
