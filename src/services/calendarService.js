@@ -413,7 +413,8 @@ async function pullChangedEvents() {
  * @param {{ modes: Array, inboxModeId: string, slots: Array, todos: Array, tasks?: Array }} ctx
  *        `slots` should be the cross-mode list (each tagged `_modeId`); `todos`
  *        are the decrypted todos (events = those with `type:'event'`). `tasks`
- *        has no app-wide source yet — pass [] (see TODO(P8) in TimetableWidget).
+ *        has no app-wide source (free-tier: no collectionGroup listener) — pass
+ *        [] for now; see the `DAY_TASKS` note in TimetableWidget.
  * @returns {Promise<{pulled:number, pushed:number, patched:number, deleted:number, errors:string[]}>}
  */
 export async function syncEverything(uid, { modes = [], inboxModeId, slots = [], todos = [], tasks = [] }) {

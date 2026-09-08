@@ -34,10 +34,14 @@ function toDate(ts) {
   return new Date(ts)
 }
 
-// Kanban tasks are stored per-subject with no app-wide subscription (free-tier:
-// no collectionGroup listener). The day timeline accepts a `tasks` array; a
-// future phase can feed real cards here once an aggregated source exists.
-// TODO(P8): wire aggregated kanban tasks with due dates into the day view.
+// Deliberately empty (free-tier constraint, not a stub-in-progress). Kanban
+// tasks live in per-subject subcollections with no app-wide listener, and a
+// collectionGroup subscription would break the "one bounded listener per active
+// collection" rule (claude.md §5). To-dos and one-time events with a `dueAt`
+// already surface in the day timeline via `activeTodos`/`eventTodos` below;
+// only per-subject Kanban *cards* with a due date are out of scope here.
+// `buildDayTimeline` still accepts `tasks`, so a future aggregated source can
+// feed it without touching TodayAgenda.
 const DAY_TASKS = []
 
 function CompactStats({ sessions, stats }) {
@@ -235,7 +239,8 @@ export function TimetableWidget({ widget, variant }) {
   )
 
   // Open items counter for header (P11)
-  // TODO(AI): realistic-timeline suggestions
+  // Deferred by owner: AI "realistic timeline" suggestions are intentionally out
+  // of scope for the counter (see roadmap P11).
   const itemCounts = useMemo(
     () => openItemCounts({ todos: activeTodos, events: eventTodos, date: new Date() }),
     [activeTodos, eventTodos],

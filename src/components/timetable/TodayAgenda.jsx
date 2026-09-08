@@ -192,7 +192,10 @@ export function TodayAgenda({
   }
 
   const openItem = (item) => {
-    // TODO(P7): openModule(item.kind, { itemId: item.ref.id, subjectId: item.subjectId })
+    // P7 shipped the openModule nav bus; the generic per-item cross-module jump
+    // that would consume it (highlight the tapped item inside its home widget)
+    // is P8 scope and not yet built. Until then, tap opens the relevant editor
+    // inline per kind.
     if (item.kind === 'note') return onOpenNote?.(item.ref)
     if (item.kind === 'session') return
     if (item.kind === 'slot') return onOpenSlot?.(item.ref)
