@@ -276,8 +276,8 @@ export function TimetableWidget({ widget, variant }) {
         )}
       </button>
 
-      {/* View switcher: Day vs Week calendar */}
-      {!isHero && (
+      {/* View switcher: Week / Day / Month — available in every mode */}
+      {(
         <div className="flex items-center rounded-xl border border-white/10 bg-surface-2/40 p-0.5 text-[11px] font-medium backdrop-blur-md">
           <button
             onClick={() => handleSetViewMode('week')}
@@ -356,32 +356,61 @@ export function TimetableWidget({ widget, variant }) {
         {isHero ? (
           <div className="flex h-full gap-4">
             <div className="flex min-w-0 flex-1 flex-col">
-              <TimetableGrid
-                slots={slots}
-                events={eventTodos}
-                defaultColor={defaultColor}
-                onSelect={handleSelect}
-                onOpenSlot={openSlotFocus}
-                onEditSlot={openEditor}
-                onQuickCapture={setCaptureSeed}
-                onToggleTask={handleToggleTask}
-                onDeleteTask={handleDeleteTask}
-                onDeleteEvent={handleDeleteEvent}
-                dateTasks={chipTodos}
-                noteDeadlines={noteDeadlines}
-                onOpenNote={setPeekNote}
-                gcalEvents={gcalEvents}
-                onPickDay={pickDay}
-
-                subjectTasks={subjectDueTasks}
-
-                onToggleSubjectTask={handleToggleSubjectTask}
-                allTodos={activeTodos}
-                sessions={sessions}
-              />
+              {viewMode === 'month' ? (
+                <MonthGrid
+                  slots={slots}
+                  events={eventTodos}
+                  todos={activeTodos}
+                  tasks={subjectDueTasks}
+                  noteDeadlines={noteDeadlines}
+                  sessions={sessions}
+                  onPickDay={pickDay}
+                />
+              ) : viewMode === 'day' ? (
+                <TodayAgenda
+                  slots={slots}
+                  events={eventTodos}
+                  dateTasks={chipTodos}
+                  tasks={subjectDueTasks}
+                  gcalEvents={gcalEvents}
+                  initialDate={pickedDate}
+                  noteDeadlines={noteDeadlines}
+                  onOpenNote={setPeekNote}
+                  allTodos={activeTodos}
+                  sessions={sessions}
+                  onOpenSlot={openSlotFocus}
+                  onAdd={quickAdd}
+                  onSelect={handleSelect}
+                  onToggleTask={handleToggleTask}
+                  onDeleteTask={handleDeleteTask}
+                  onDeleteEvent={handleDeleteEvent}
+                />
+              ) : (
+                <TimetableGrid
+                  slots={slots}
+                  events={eventTodos}
+                  defaultColor={defaultColor}
+                  onSelect={handleSelect}
+                  onOpenSlot={openSlotFocus}
+                  onEditSlot={openEditor}
+                  onQuickCapture={setCaptureSeed}
+                  onToggleTask={handleToggleTask}
+                  onDeleteTask={handleDeleteTask}
+                  onDeleteEvent={handleDeleteEvent}
+                  dateTasks={chipTodos}
+                  noteDeadlines={noteDeadlines}
+                  onOpenNote={setPeekNote}
+                  gcalEvents={gcalEvents}
+                  onPickDay={pickDay}
+                  subjectTasks={subjectDueTasks}
+                  onToggleSubjectTask={handleToggleSubjectTask}
+                  allTodos={activeTodos}
+                  sessions={sessions}
+                />
+              )}
             </div>
 
-            {connected && (
+            {connected && viewMode === 'week' && (
               <div className="hidden w-56 shrink-0 flex-col xl:flex">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-xs font-medium text-muted">From Google</span>
