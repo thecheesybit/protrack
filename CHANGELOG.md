@@ -1,9 +1,12 @@
 # Changelog
 
-## v2.2.2 — 2026-09-08
+## v2.4.0 — 2026-09-08
+
+> Supersedes the intermediate v2.3.0 auto-release — same work, complete notes.
 
 ### Subjects ↔ Timetable — build your class schedule
-- The **subject editor** (create *and* edit, from the compact list or the fullscreen rail) now has a **Class / lab times** builder: per row — **type** (Lecture / Lab / Tutorial / Seminar; sets the on-grid style), **day**, **start–end**, **repeat** (weekly / every 2 weeks / every 4 weeks), **room**, a custom label, a **start date**, and an **end** condition (runs indefinitely / ends on a date / ends after *N* sessions). Same class twice a week → two rows.
+- The **subject editor** (create *and* edit, from the compact list or the fullscreen rail) now has a **Class / lab times** builder: per row — **type** (Lecture / Lab / Tutorial / Seminar; sets the on-grid style), **start–end**, **room**, a custom label, a **start date**, and an **end** (runs indefinitely / ends on a date / ends after *N* sessions).
+- **Smart repeats:** every week (weekday picker) · every weekday (Mon–Fri) · every day · every 2 / 3 / 4 weeks · specific days (7-chip multi-select) · just once (single date). The extra pickers appear only when they apply. Same class twice a week → two rows. `isSlotOnDay` honours all of these plus the term window using the column's real date, so a class stops showing once its term ends.
 - Saving a subject syncs those rows to timetable slots tagged with the subject (its colour + name), so your week fills in automatically. `SubjectDetail` also gets a quick "Class schedule" list to view / add / remove times.
 - Slots carry `recurrenceStartDate` + `recurrenceEndDate`; a class stops appearing on the grid once its term ends (`isSlotOnDay` now honours the real column date for every recurrence type).
 
