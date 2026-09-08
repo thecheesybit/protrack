@@ -46,6 +46,7 @@ src/
                           dates (ymd/streak/lastNDays), counts (openItemCounts),
                           bulkParse (pure range and list parser),
                           dayAgenda (pure day-timeline aggregator: buildDayTimeline/summarizeDay),
+                          tags (pure unified tag layer: parseHashtags/normalizeTag/deriveAutoTags/mergeTags — lowercase hyphen slugs, additive tags[]),
                           sound (unified 7-tone bank: playSound(name)/chimeForIslandKind; audioFX is a shim)
 electron/                 main.js, preload.js, (auto-update inline in main)
 functions/                mintDesktopToken
@@ -67,6 +68,7 @@ Single store (`store/useStore.js`) composed from pure slices. Components read vi
 | `updateSlice` | auto-update status/version/progress | fed by Electron IPC |
 | `checkinSlice` | recent check-ins | Firestore listener (checkins, limit 14); prompting now routes through `promptSlice` |
 | `promptSlice` | active center-blur prompt + FIFO queue | **local only** — pure blocking-prompt queue (check-ins, routine cues, quotes) |
+| `navSlice` | `moduleContext` + bounded `navStack` (last 10) | **local only** — pure cross-module nav/context bus: `openModule(widgetId, ctx)` / `navBack()` / `clearModuleContext()`. `BoardCanvas` reacts (maximise + `context` prop + Back chip); `uiSlice.openFocus` delegates here with `activate:false`. Tag/date/subject context for P8 widgets. |
 
 Orchestration that owns timers/side-effects lives in hooks, never slices: `useFocusEngine` (tick, chime, notify, persist, ledger), `useIslandCycle` (auto-dismiss + chime per new event via `chimeForIslandKind`), `useChronoTheme` (writes `data-chrono` on `<html>`), `useNowMinutes` (timeline flag), `useAutoUpdate`, `useDesktopIntegration` (fingerprint + hotkeys + window state listeners).
 

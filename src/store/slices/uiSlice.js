@@ -30,7 +30,7 @@ function readInitialFontFamily() {
   }
 }
 
-export const createUiSlice = (set) => ({
+export const createUiSlice = (set, get) => ({
   maximizedWidgetId: null,
   settingsOpen: false,
   aiOpen: false,
@@ -76,7 +76,27 @@ export const createUiSlice = (set) => ({
     set({ fontFamily })
   },
 
-  openFocus: (focusContext) => set({ focusContext }),
+  // Deep-link into Deep Focus. Sets the overlay context (read unchanged by
+  // FocusPanel, FocusMiniOverlay and useAutoHideChrome) and ALSO records the
+  // origin on the P7 nav bus via `openModule('focus', …)`. `activate: false`
+  // means the board is left untouched — FocusPanel's z-50 overlay stays the
+  // visible surface — so every existing caller behaves exactly as before.
+  openFocus: (focusContext) => {
+    set({ focusContext })
+    const openModule = get()?.openModule
+    if (typeof openModule === 'function') {
+      openModule('focus', {
+        itemType: focusContext?.subjectId
+          ? 'subject'
+          : focusContext?.slotId
+            ? 'slot'
+            : 'focus',
+        itemId: focusContext?.subjectId || focusContext?.slotId || null,
+        subjectId: focusContext?.subjectId || null,
+        activate: false,
+      })
+    }
+  },
   closeFocus: () => set({ focusContext: null }),
 
   // Hands-free Mode background loop states

@@ -28,6 +28,19 @@
   - Add subject from anywhere with global scope mode picker (`SubjectEditorModal`).
   - Persistent collapsible two-pane rail in hero view.
   - Double-click on empty subjects container to add.
+## v2.1.2 — 2026-09-07
+
+### Added
+- **Cross-module navigation / context bus (`navSlice`):** a single pure Zustand slice — `moduleContext` plus a bounded 10-entry `navStack` — lets any item hand context to another module. `openModule(widgetId, { itemType, itemId, subjectId?, date?, tag?, activate? })` records the target and `BoardCanvas` surfaces that widget (maximise + a Back chip in the dock) and passes the context down as a `context` prop for a widget to scroll-to / highlight the item; `navBack()` and `clearModuleContext()` round it out. `uiSlice.openFocus` now delegates to `openModule('focus', … , { activate: false })`, so the Subject→Focus / Slot→Focus / Zen→Focus deep-links additionally record their origin while the Focus overlay keeps driving the visible UI exactly as before.
+- **Unified tag layer (`src/lib/tags.js`):** pure, tested helpers for one tag taxonomy across todos / tasks / notes / slots / subjects — `parseHashtags(text)` (extracts `#hashtags`), `normalizeTag(s)` (lowercase hyphen slug), `deriveAutoTags({ text, subjectName, modeName })` (auto-tags a new item from its `#hashtags` + subject + mode) and `mergeTags(existing, derived)` (normalized, de-duped). Tags are additive metadata — a `tags[]` is only *added* where missing, mirroring the dormant `notes.tags[]`; the tag index is derived client-side with no new Firestore reads.
+- **Shared UI primitives:** `TagPill` (a `#tag` chip) and `ScopeChip` (a mode/scope indicator) in `src/components/common/` for P8 to consume.
+- **Google Calendar two-way live sync (P2):** `useCalendarSync` (mounted in `Dashboard`) runs `calendarService.syncEverything` on launch, every 5 min, on window focus and on the `protrack:gcal-sync-now` event. Pure `lib/gcalMap.js` maps events↔items (weekly RRULE→slot, one-off→`type:'event'` to-do, all-day→dated to-do; last-write-wins by `updated`). Delta pull via a persisted `syncToken`, `cancelled`→delete local, push creates/PATCHes/deletes remote; new Google items land in `settings.gcalInboxModeId`. A lapsed OAuth token raises `CalendarAuthError` → one sticky "Reconnect Google Calendar" prompt (no silent browser re-open). Settings → Schedules Sync gains last-sync time, Sync now, inbox-mode picker and an Auto-sync toggle.
+- **Natural assistant voice + centralized TTS (P6):** `src/lib/tts.js` is the single tiered speak path (ElevenLabs → OpenAI TTS → Web Speech) for Hands-Free replies and spoken quotes; `getPreferredVoice()` picks the most natural installed voice and speaks at rate/pitch ~1.0 (the old robotic 0.85/0.9 fallback is gone). Provider tier + device voice are pickable in Settings → AI → Assistant Voice.
+- **Finish Picture-in-Picture (P3):** double-click the PiP box to restore the exact prior window state; an always-visible `mm:ss` + pause bar (no hover needed); Expand vs Close are now distinct; the dead `FloatingFocusPip` variant is removed and `PipFocusWindow` is scoped to real browsers. Timer and audio never reset on enter/exit.
+- **Habit-reminder prompt dogpile fix (P4b):** habit cues now queue one at a time through `promptSlice`, snooze once instead of re-firing, and auto-mark missed after the window passes.
+
+### Notes
+- P7 primitives only — no user-visible cross-module wiring yet; P8 wires `moduleContext` and tags into the individual widgets.
 
 ## v2.1.1 — 2026-09-07
 
