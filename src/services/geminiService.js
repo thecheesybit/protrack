@@ -7,14 +7,20 @@ import { secureStorage } from '@/services/cryptoService'
  * and synced with OS keychain / DPAPI via Electron's secureStore on desktop.
  * It is NEVER cleared automatically unless manually removed by the user.
  */
+// Current, non-retired models, fastest → most-capable. The `-latest` aliases
+// auto-resolve to whatever Google is serving, so a hard-coded id going EOL
+// can't brick the assistant. (The 1.5 series is retired — never list it.)
 export const GEMINI_MODELS = [
+  'gemini-2.5-flash',
+  'gemini-flash-latest',
   'gemini-2.0-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-flash-lite-latest',
   'gemini-2.0-flash-lite',
-  'gemini-1.5-flash',
-  'gemini-1.5-pro',
+  'gemini-2.5-pro',
 ]
 
-let activeHealthyGeminiModel = 'gemini-2.0-flash'
+let activeHealthyGeminiModel = GEMINI_MODELS[0]
 const persistentKeyCache = new Map()
 
 // Safe accessor for desktop bridge
@@ -166,10 +172,17 @@ export function isRetryableGeminiError(err) {
   )
 }
 
+const _sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
 /**
- * Executes a Gemini operation with an automatic multi-model fallback cascade.
- * If gemini-2.0-flash hits a 503 (high demand) or 429 quota spike, it automatically
- * retries with gemini-1.5-flash, gemini-2.0-flash-lite, etc.
+ * Run a Gemini call with resilience against "model is overloaded / high demand":
+ *  1. try the last-known-good model, retrying it up to 2× with backoff
+ *     (a 503 on flash usually clears within a second or two);
+ *  2. if it's still failing, walk the model cascade (fast → capable), each with
+ *     one backoff retry;
+ *  3. remember whichever model succeeded so the next call starts there.
+ * Only genuinely fatal errors (bad key, safety block, malformed request) throw
+ * immediately without burning the whole cascade.
  */
 export async function executeGeminiWithModelFallback(apiKey, taskFn) {
   const key = apiKey || getGeminiKey()
@@ -184,19 +197,26 @@ export async function executeGeminiWithModelFallback(apiKey, taskFn) {
   let lastError = null
   for (let i = 0; i < modelsToTry.length; i++) {
     const modelName = modelsToTry[i]
-    try {
-      const res = await taskFn(ai, modelName)
-      activeHealthyGeminiModel = modelName
-      return res
-    } catch (err) {
-      lastError = err
-      if (isRetryableGeminiError(err) && i < modelsToTry.length - 1) {
+    const attempts = i === 0 ? 3 : 2 // give the preferred model a couple more tries
+    for (let a = 0; a < attempts; a++) {
+      try {
+        const res = await taskFn(ai, modelName)
+        activeHealthyGeminiModel = modelName
+        return res
+      } catch (err) {
+        lastError = err
+        if (!isRetryableGeminiError(err)) throw err // fatal — don't churn
+        const moreForThisModel = a < attempts - 1
+        const moreModels = i < modelsToTry.length - 1
+        if (!moreForThisModel && !moreModels) throw err
+        const delay = moreForThisModel ? [500, 1200, 2500][a] || 2500 : 300
         console.warn(
-          `[geminiService] Model '${modelName}' hit transient error (${err.message}). Falling back to '${modelsToTry[i + 1]}'...`
+          `[geminiService] '${modelName}' busy (${String(err?.message || err).slice(0, 80)}). ` +
+            (moreForThisModel ? `retry in ${delay}ms` : `falling back to '${modelsToTry[i + 1]}'`),
         )
-        continue
+        await _sleep(delay)
+        if (!moreForThisModel) break // move to the next model
       }
-      throw err
     }
   }
   throw lastError

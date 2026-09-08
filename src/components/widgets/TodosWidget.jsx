@@ -1178,7 +1178,7 @@ export function TodosWidget({ widget, variant }) {
             onDragEnd={onDragEnd}
             onDragCancel={onDragCancel}
           >
-            <div className={cn('flex min-h-0 flex-1 gap-2', isHero ? 'flex-row' : 'flex-col')}>
+            <div className={cn('flex min-h-0 flex-1 gap-2 overflow-hidden', isHero ? 'flex-row' : 'flex-col')}>
               <KanbanColumn
                 colId="backlog"
                 todos={columns.backlog}
@@ -1220,9 +1220,11 @@ export function TodosWidget({ widget, variant }) {
           </DndContext>
         )}
 
-        {/* Done section */}
+        {/* Done section — in normal flow below the board, never overlapping it.
+            Capped height with its own scroll so a long list can't push the
+            board out or float over it in the compact widget. */}
         {doneTodos.length > 0 && (
-          <div className="mt-1 shrink-0 rounded-3xl border border-white/[0.08] bg-surface-2/20 px-3 py-2.5 backdrop-blur-md">
+          <div className="mt-1 max-h-[40%] shrink-0 overflow-y-auto rounded-3xl border border-white/[0.08] bg-surface-2/40 px-3 py-2.5 backdrop-blur-md">
             <p className="mb-1.5 flex items-center gap-1.5 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
               <Check className="h-3 w-3 text-emerald-400" />
               <span>Completed</span>

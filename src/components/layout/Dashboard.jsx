@@ -34,6 +34,8 @@ import { PipAppView } from '@/components/focus/PipAppView'
 import { SessionCompleteModal } from '@/components/focus/SessionCompleteModal'
 import { HydrationReminder } from '@/components/wellness/HydrationReminder'
 import { CenterPrompt } from '@/components/prompt/CenterPrompt'
+import { HelpModal } from '@/components/common/HelpModal'
+import { HelpCircle } from 'lucide-react'
 
 const SettingsPanel = React.lazy(() =>
   import('@/components/settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel }))
@@ -73,6 +75,7 @@ export function Dashboard() {
   const handsFreeStatus = useStore((s) => s.handsFreeStatus)
   const handsFreeFeedback = useStore((s) => s.handsFreeFeedback)
   const clockCentered = useStore((s) => s.clockCentered)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   const clickCountRef = useRef(0)
   const clickTimerRef = useRef(null)
@@ -173,6 +176,17 @@ export function Dashboard() {
           e.preventDefault()
           window.protrack?.window?.toggleFullScreen?.()
         }
+      }
+      if (
+        e.key === '?' &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        e.target.tagName !== 'INPUT' &&
+        e.target.tagName !== 'TEXTAREA' &&
+        !e.target.isContentEditable
+      ) {
+        e.preventDefault()
+        setHelpOpen((v) => !v)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -329,6 +343,20 @@ export function Dashboard() {
       <SessionCompleteModal />
       <HydrationReminder />
       <CenterPrompt />
+
+      {/* Shortcuts / commands — transparent ? button, top-right */}
+      {!focusLocked && !clockCentered && (
+        <button
+          type="button"
+          onClick={() => setHelpOpen(true)}
+          title="Shortcuts & commands ( ? )"
+          aria-label="Open shortcuts and commands"
+          className="fixed right-4 top-4 z-30 flex h-8 w-8 items-center justify-center rounded-full border border-line/50 bg-surface/40 text-muted backdrop-blur-md transition-colors hover:border-accent/50 hover:text-ink"
+        >
+          <HelpCircle className="h-4 w-4" />
+        </button>
+      )}
+      <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
       <BackgroundAudioPlayer />
 
       <Suspense fallback={null}>
