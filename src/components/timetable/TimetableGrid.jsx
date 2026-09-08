@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, memo } from 'react'
-import { Pencil, Sparkles, X, Check, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Pencil, Sparkles, X, Check, ChevronLeft, ChevronRight, Plus, Minus } from 'lucide-react'
 import { classifyDeadline } from '@/lib/deadlines'
 import { NoteDeadlineChip } from './NoteDeadlineChip'
 import { ItemDetailPopover } from './ItemDetailPopover'
@@ -22,7 +22,6 @@ import { useNowMinutes } from '@/hooks/useNowMinutes'
 import { cn } from '@/utils/cn'
 
 const TOTAL_MIN = DAY_END_MIN - DAY_START_MIN
-const GRID_H = TOTAL_MIN * PX_PER_MIN
 
 // Tick arrays — computed once
 const hours = []
@@ -33,8 +32,8 @@ for (let m = DAY_START_MIN + 30; m < DAY_END_MIN; m += 60) halfHours.push(m)
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function yToMin(clientY, rect) {
-  return clampMin(snap(DAY_START_MIN + (clientY - rect.top) / PX_PER_MIN, 5))
+function yToMin(clientY, rect, ppm = PX_PER_MIN) {
+  return clampMin(snap(DAY_START_MIN + (clientY - rect.top) / ppm, 5))
 }
 
 function hexA(hex, a) {
@@ -47,9 +46,9 @@ function hexA(hex, a) {
 
 // ── Block components ──────────────────────────────────────────────────────────
 
-const SlotBlock = memo(function SlotBlock({ slot, onOpen, onEdit }) {
-  const top = (slot.startMin - DAY_START_MIN) * PX_PER_MIN
-  const height = Math.max(26, (slot.endMin - slot.startMin) * PX_PER_MIN)
+const SlotBlock = memo(function SlotBlock({ slot, onOpen, onEdit, ppm = PX_PER_MIN }) {
+  const top = (slot.startMin - DAY_START_MIN) * ppm
+  const height = Math.max(26, (slot.endMin - slot.startMin) * ppm)
 
   const isStriped =
     slot.tagStyle === 'striped' ||
@@ -112,13 +111,13 @@ const SlotBlock = memo(function SlotBlock({ slot, onOpen, onEdit }) {
 })
 
 /** One-time event block (todo with type='event'). */
-const EventBlock = memo(function EventBlock({ event, onDelete, onOpen }) {
+const EventBlock = memo(function EventBlock({ event, onDelete, onOpen, ppm = PX_PER_MIN }) {
   const startMin =
     event.eventStartMin ??
     (event.dueAt ? (event.dueAt?.toDate ? event.dueAt.toDate() : new Date(event.dueAt)).getHours() * 60 : 0)
   const endMin = event.eventEndMin ?? startMin + 60
-  const top = (startMin - DAY_START_MIN) * PX_PER_MIN
-  const height = Math.max(26, (endMin - startMin) * PX_PER_MIN)
+  const top = (startMin - DAY_START_MIN) * ppm
+  const height = Math.max(26, (endMin - startMin) * ppm)
 
   return (
     <div
@@ -318,6 +317,41 @@ export function TimetableGrid({
   const nowMin = useNowMinutes()
   const nowVisible = nowMin >= DAY_START_MIN && nowMin <= DAY_END_MIN && weekOffset === 0
 
+  // Zoom — pixels-per-minute multiplier. Persisted; 1× = the classic scale,
+  // up to 4× so 9–10 AM opens into a clean minute-by-minute view.
+  const ZOOM_STEPS = [0.75, 1, 1.5, 2, 3, 4]
+  const [zoom, setZoom] = useState(() => {
+    try {
+      return Number(localStorage.getItem('protrack:timetable_zoom')) || 1
+    } catch {
+      return 1
+    }
+  })
+  const ppm = PX_PER_MIN * zoom
+  const gridH = TOTAL_MIN * ppm
+  const setZoomAt = (z) => {
+    const next = Math.min(4, Math.max(0.75, z))
+    setZoom(next)
+    try {
+      localStorage.setItem('protrack:timetable_zoom', String(next))
+    } catch {
+      /* ignore */
+    }
+  }
+  const stepZoom = (dir) => {
+    const i = ZOOM_STEPS.findIndex((s) => s >= zoom - 0.001)
+    setZoomAt(ZOOM_STEPS[Math.min(ZOOM_STEPS.length - 1, Math.max(0, i + dir))])
+  }
+  // Sub-hour gridlines get denser as you zoom in.
+  const fineStep = zoom >= 3 ? 5 : zoom >= 1.5 ? 15 : 30
+  const fineLines = useMemo(() => {
+    const out = []
+    for (let m = DAY_START_MIN; m <= DAY_END_MIN; m += fineStep) {
+      if (m % 60 !== 0) out.push(m)
+    }
+    return out
+  }, [fineStep])
+
   const activeRefDate = useMemo(() => {
     const d = new Date()
     if (weekOffset !== 0) {
@@ -336,11 +370,11 @@ export function TimetableGrid({
     const el = scrollRef.current
     if (!el) return
     if (nowVisible) {
-      const nowTop = (nowMin - DAY_START_MIN) * PX_PER_MIN
+      const nowTop = (nowMin - DAY_START_MIN) * ppm
       el.scrollTop = Math.max(0, nowTop - el.clientHeight / 3)
     } else if (slots.length > 0) {
       const minStart = Math.min(...slots.map((s) => s.startMin))
-      const top = (minStart - DAY_START_MIN) * PX_PER_MIN
+      const top = (minStart - DAY_START_MIN) * ppm
       el.scrollTop = Math.max(0, top - 30)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -354,7 +388,7 @@ export function TimetableGrid({
       /* ignore pointer capture errors */
     }
     const rect = e.currentTarget.getBoundingClientRect()
-    const min = yToMin(e.clientY, rect)
+    const min = yToMin(e.clientY, rect, ppm)
     setDrag({
       day,
       start: min,
@@ -368,7 +402,7 @@ export function TimetableGrid({
   const onMove = (e) => {
     if (!drag) return
     const rect = e.currentTarget.getBoundingClientRect()
-    const min = yToMin(e.clientY, rect)
+    const min = yToMin(e.clientY, rect, ppm)
     const moved = Math.abs(min - drag.start) >= 5
     setDrag((d) => (d ? { ...d, current: min, active: d.active || moved } : d))
   }
@@ -395,7 +429,7 @@ export function TimetableGrid({
 
   const onContextMenu = (day) => (e) => {
     e.preventDefault()
-    const min = yToMin(e.clientY, e.currentTarget.getBoundingClientRect())
+    const min = yToMin(e.clientY, e.currentTarget.getBoundingClientRect(), ppm)
     const endMin = Math.min(min + 60, DAY_END_MIN)
     onSelect?.({ dayIndex: day, startMin: min, endMin })
   }
@@ -422,6 +456,37 @@ export function TimetableGrid({
           </button>
         </div>
         <div className="flex items-center gap-1">
+          {/* Zoom the time scale — up to 4× for a minute-level view */}
+          <div className="mr-1 flex items-center rounded-lg border border-white/10 bg-surface-2/30">
+            <button
+              type="button"
+              onClick={() => stepZoom(-1)}
+              disabled={zoom <= 0.75}
+              className="flex h-6 w-6 items-center justify-center text-muted hover:text-ink disabled:opacity-30"
+              title="Zoom out"
+              aria-label="Zoom out"
+            >
+              <Minus className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setZoomAt(1)}
+              className="px-1 text-[10px] font-mono tabular-nums text-muted hover:text-ink"
+              title="Reset zoom"
+            >
+              {zoom % 1 === 0 ? `${zoom}×` : `${zoom.toFixed(1)}×`}
+            </button>
+            <button
+              type="button"
+              onClick={() => stepZoom(1)}
+              disabled={zoom >= 4}
+              className="flex h-6 w-6 items-center justify-center text-muted hover:text-ink disabled:opacity-30"
+              title="Zoom in"
+              aria-label="Zoom in"
+            >
+              <Plus className="h-3 w-3" />
+            </button>
+          </div>
           <button
             type="button"
             onClick={() => setWeekOffset((o) => o - 1)}
@@ -599,7 +664,7 @@ export function TimetableGrid({
 
       {/* Scrollable grid body */}
       <div ref={scrollRef} className="relative flex-1 overflow-y-auto">
-        <div className="relative flex" style={{ height: GRID_H }}>
+        <div className="relative flex" style={{ height: gridH }}>
 
           {/* Time axis */}
           <div className="relative w-12 shrink-0">
@@ -607,18 +672,30 @@ export function TimetableGrid({
               <div
                 key={m}
                 className="absolute right-0 -translate-y-1/2 pr-2 text-right text-[10px] text-muted"
-                style={{ top: (m - DAY_START_MIN) * PX_PER_MIN }}
+                style={{ top: (m - DAY_START_MIN) * ppm }}
               >
                 {minutesToAxis(m)}
               </div>
             ))}
-            {halfHours.map((m) => (
+            {fineLines.map((m) => (
               <div
-                key={`hh-${m}`}
-                className="absolute right-2 w-1.5 border-t border-line/25"
-                style={{ top: (m - DAY_START_MIN) * PX_PER_MIN }}
+                key={`fl-${m}`}
+                className={cn('absolute right-2 border-t border-line/25', m % 30 === 0 ? 'w-1.5' : 'w-1')}
+                style={{ top: (m - DAY_START_MIN) * ppm }}
               />
             ))}
+            {zoom >= 2 &&
+              fineLines
+                .filter((m) => m % 15 === 0)
+                .map((m) => (
+                  <div
+                    key={`fll-${m}`}
+                    className="absolute right-3 -translate-y-1/2 text-right text-[8px] text-muted/60"
+                    style={{ top: (m - DAY_START_MIN) * ppm }}
+                  >
+                    {minutesToLabel(m)}
+                  </div>
+                ))}
           </div>
 
           {/* Grid columns */}
@@ -628,15 +705,18 @@ export function TimetableGrid({
               <div
                 key={m}
                 className="pointer-events-none absolute left-0 right-0 border-t border-line/40"
-                style={{ top: (m - DAY_START_MIN) * PX_PER_MIN }}
+                style={{ top: (m - DAY_START_MIN) * ppm }}
               />
             ))}
-            {/* Half-hour grid lines (lighter) */}
-            {halfHours.map((m) => (
+            {/* Sub-hour grid lines — denser as you zoom in */}
+            {fineLines.map((m) => (
               <div
-                key={`hh-${m}`}
-                className="pointer-events-none absolute left-0 right-0 border-t border-line/15"
-                style={{ top: (m - DAY_START_MIN) * PX_PER_MIN }}
+                key={`fl-${m}`}
+                className={cn(
+                  'pointer-events-none absolute left-0 right-0 border-t',
+                  m % 30 === 0 ? 'border-line/15' : 'border-line/[0.07]',
+                )}
+                style={{ top: (m - DAY_START_MIN) * ppm }}
               />
             ))}
 
@@ -665,6 +745,7 @@ export function TimetableGrid({
                       <SlotBlock
                         key={s.id}
                         slot={s}
+                        ppm={ppm}
                         onOpen={() => onOpenSlot(s)}
                         onEdit={() => onEditSlot(s)}
                       />
@@ -682,6 +763,7 @@ export function TimetableGrid({
                       <EventBlock
                         key={e.id}
                         event={e}
+                        ppm={ppm}
                         onDelete={onDeleteEvent}
                         onOpen={(ev) =>
                           onOpenSlot?.({
@@ -712,7 +794,7 @@ export function TimetableGrid({
                         <TodoChip
                           key={t.id}
                           item={t}
-                          topPx={(mins - DAY_START_MIN) * PX_PER_MIN + (idx % 2 === 1 ? 12 : 0)}
+                          topPx={(mins - DAY_START_MIN) * ppm + (idx % 2 === 1 ? 12 : 0)}
                           onToggle={onToggleTask}
                           onDelete={onDeleteTask}
                         />
@@ -736,7 +818,7 @@ export function TimetableGrid({
                         <NoteDeadlineChip
                           key={n.id}
                           note={n}
-                          topPx={(mins - DAY_START_MIN) * PX_PER_MIN + (idx % 2 === 1 ? 12 : 0)}
+                          topPx={(mins - DAY_START_MIN) * ppm + (idx % 2 === 1 ? 12 : 0)}
                           onOpen={onOpenNote}
                         />
                       )
@@ -759,7 +841,7 @@ export function TimetableGrid({
                         <TodoChip
                           key={`st-${t.id}`}
                           item={{ ...t, text: t.title || t.text }}
-                          topPx={(mins - DAY_START_MIN) * PX_PER_MIN + (idx % 2 === 1 ? 12 : 0)}
+                          topPx={(mins - DAY_START_MIN) * ppm + (idx % 2 === 1 ? 12 : 0)}
                           onToggle={onToggleSubjectTask}
                         />
                       )
@@ -776,7 +858,7 @@ export function TimetableGrid({
                         <GcalChip
                           key={ev.id}
                           ev={ev}
-                          topPx={(mins - DAY_START_MIN) * PX_PER_MIN + (idx % 2 === 1 ? 11 : 0)}
+                          topPx={(mins - DAY_START_MIN) * ppm + (idx % 2 === 1 ? 11 : 0)}
                         />
                       )
                     })}
@@ -807,7 +889,7 @@ export function TimetableGrid({
                             key={t.id}
                             item={t}
                             n={idx + 1}
-                            topPx={(mins - DAY_START_MIN) * PX_PER_MIN}
+                            topPx={(mins - DAY_START_MIN) * ppm}
                             onToggle={onToggleTask}
                             onDelete={onDeleteTask}
                           />
@@ -820,10 +902,10 @@ export function TimetableGrid({
                       className="pointer-events-none absolute inset-x-1 rounded-lg border-2 border-dashed border-accent bg-accent/15 transition-all"
                       style={{
                         top:
-                          (Math.min(drag.start, drag.current) - DAY_START_MIN) * PX_PER_MIN,
+                          (Math.min(drag.start, drag.current) - DAY_START_MIN) * ppm,
                         height: Math.max(
-                          MIN_SLOT * PX_PER_MIN,
-                          Math.abs(drag.current - drag.start) * PX_PER_MIN,
+                          MIN_SLOT * ppm,
+                          Math.abs(drag.current - drag.start) * ppm,
                         ),
                       }}
                     >
@@ -850,7 +932,7 @@ export function TimetableGrid({
             {nowVisible && (() => {
               const passedPercent = Math.round(((nowMin - DAY_START_MIN) / TOTAL_MIN) * 100)
               const remainingHours = ((DAY_END_MIN - nowMin) / 60).toFixed(1)
-              const nowTop = (nowMin - DAY_START_MIN) * PX_PER_MIN
+              const nowTop = (nowMin - DAY_START_MIN) * ppm
               return (
                 <>
                   <div
