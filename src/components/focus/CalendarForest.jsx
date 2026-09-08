@@ -4,7 +4,7 @@ import { ymd } from '@/lib/dates'
 import { cn } from '@/utils/cn'
 import { SpriteTree } from './ForestSprites'
 
-export { SpriteTree, SpriteShrub } from './ForestSprites'
+export { SpriteTree } from './ForestSprites'
 
 function toDate(ts) {
   if (!ts) return null
@@ -308,39 +308,6 @@ export const IllustratedBush = memo(function IllustratedBush({
 })
 
 /**
- * Young Sapling / Sprout (for days with short sessions or waiting for focus).
- */
-export const IllustratedSapling = memo(function IllustratedSapling({
-  width = 24,
-  height = 36,
-  className,
-  delay = 0,
-}) {
-  return (
-    <motion.svg
-      width={width}
-      height={height}
-      viewBox="0 0 24 36"
-      fill="none"
-      initial={{ scale: 0, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      transition={{ type: 'spring', stiffness: 320, damping: 20, delay }}
-      className={cn('shrink-0 drop-shadow-xs origin-bottom select-none', className)}
-    >
-      {/* Stem */}
-      <path d="M12 36V20C12 15 14 11 17 8" stroke="#854d0e" strokeWidth="2" strokeLinecap="round" />
-      {/* Leaf 1 */}
-      <path d="M17 8C14 8 11 11 12 14C15 15 18 13 17 8Z" fill="#10b981" />
-      <path d="M17 8C14 8 11 11 12 14" stroke="#34d399" strokeWidth="0.8" />
-      {/* Leaf 2 */}
-      <path d="M12 20C8 19 6 16 7 13C10 12 13 15 12 20Z" fill="#34d399" />
-      {/* Glow dot */}
-      <circle cx="15" cy="10" r="1" fill="#ecfdf5" />
-    </motion.svg>
-  )
-})
-
-/**
  * Helper to build rich, informative tooltips for planted focus trees.
  */
 export function getTreeTooltip(s, idx, total) {
@@ -390,7 +357,7 @@ export function DayGrove({
   sessions = [],
   dateStr,
   dayIndex: _dayIndex,
-  isToday = false,
+  isToday: _isToday = false,
   className,
 }) {
   const [hoveredTree, setHoveredTree] = useState(null)
@@ -435,23 +402,11 @@ export function DayGrove({
         )}
       </AnimatePresence>
 
-      {/* ── Forest Trees & Foliage Bushes (Hand-Drawn Composition) ── */}
+      {/* ── Raster focus trees — one per successful session, none on an empty day ── */}
       <div className="relative flex w-full items-end justify-center px-1 pb-1">
         {count === 0 ? (
-          /* Empty Day: Peaceful grassy mound with a tiny seedling */
-          <div
-            className="group/seedling relative flex flex-col items-center justify-end cursor-pointer pb-0.5 opacity-40 hover:opacity-85 transition-opacity"
-            onMouseEnter={() =>
-              setHoveredTree({
-                title: isToday ? 'Ready to Grow' : 'Rest Day',
-                detail: isToday ? 'Complete a focus session to plant your tree' : 'No focus sessions recorded',
-              })
-            }
-            onMouseLeave={() => setHoveredTree(null)}
-          >
-            <IllustratedSapling height={26} width={18} />
-            <div className="h-1 w-8 rounded-full bg-emerald-500/20 blur-[0.5px] mt-[-2px]" />
-          </div>
+          /* Empty day: nothing on the baseline (owner: no sapling placeholders). */
+          null
         ) : count === 1 ? (
           /* 1 Session: Center Stately Tree + Bush at its base */
           <div className="relative flex items-end justify-center">

@@ -151,16 +151,6 @@ describe('CalendarForest - Raster Forest Sprites', () => {
     })
   })
 
-  it('exports SHRUB_SPRITES with 3 valid shrub sprites', async () => {
-    const { SHRUB_SPRITES } = await import('../ForestSprites')
-    expect(SHRUB_SPRITES).toHaveLength(3)
-    SHRUB_SPRITES.forEach((shrub) => {
-      expect(shrub.id).toBeDefined()
-      expect(shrub.src).toBeDefined()
-      expect(shrub.aspect).toBeGreaterThan(0)
-    })
-  })
-
   it('resolves species and variants deterministically', async () => {
     const { resolveTreeSprite } = await import('../ForestSprites')
     const oak0 = resolveTreeSprite('oak', 0)
@@ -175,9 +165,8 @@ describe('CalendarForest - Raster Forest Sprites', () => {
     expect(blossom0.id).toBeDefined()
   })
 
-  it('re-exports SpriteTree and SpriteShrub from CalendarForest', async () => {
-    const { SpriteTree, SpriteShrub } = await import('../CalendarForest')
+  it('re-exports SpriteTree from CalendarForest', async () => {
+    const { SpriteTree } = await import('../CalendarForest')
     expect(SpriteTree).toBeDefined()
-    expect(SpriteShrub).toBeDefined()
   })
 })

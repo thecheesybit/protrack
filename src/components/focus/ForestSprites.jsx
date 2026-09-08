@@ -12,10 +12,6 @@ import tree07 from '@/assets/forest/trees/tree-07.png'
 import tree08 from '@/assets/forest/trees/tree-08.png'
 import tree09 from '@/assets/forest/trees/tree-09.png'
 
-import shrub01 from '@/assets/forest/shrubs/shrub-01.png'
-import shrub02 from '@/assets/forest/shrubs/shrub-02.png'
-import shrub03 from '@/assets/forest/shrubs/shrub-03.png'
-
 export const TREE_SPRITES = [
   { id: 'tree-01', src: tree01, w: 256, h: 298, aspect: 256 / 298, type: 'blossom' },
   { id: 'tree-02', src: tree02, w: 326, h: 299, aspect: 326 / 299, type: 'oak' },
@@ -26,12 +22,6 @@ export const TREE_SPRITES = [
   { id: 'tree-07', src: tree07, w: 428, h: 512, aspect: 428 / 512, type: 'oak' },
   { id: 'tree-08', src: tree08, w: 512, h: 479, aspect: 512 / 479, type: 'oak' },
   { id: 'tree-09', src: tree09, w: 234, h: 511, aspect: 234 / 511, type: 'pine' },
-]
-
-export const SHRUB_SPRITES = [
-  { id: 'shrub-01', src: shrub01, w: 151, h: 140, aspect: 151 / 140 },
-  { id: 'shrub-02', src: shrub02, w: 155, h: 140, aspect: 155 / 140 },
-  { id: 'shrub-03', src: shrub03, w: 151, h: 140, aspect: 151 / 140 },
 ]
 
 const SPECIES_MAP = {
@@ -83,43 +73,6 @@ export const SpriteTree = memo(function SpriteTree({
         ...style,
       }}
       className={cn('shrink-0 drop-shadow-md origin-bottom select-none pointer-events-none object-contain', className)}
-      draggable={false}
-    />
-  )
-})
-
-export const SpriteShrub = memo(function SpriteShrub({
-  variant = 0,
-  height = 20,
-  width,
-  delay = 0,
-  className,
-  style,
-  alt = 'Forest shrub',
-}) {
-  const sprite = SHRUB_SPRITES[Math.abs(variant) % SHRUB_SPRITES.length]
-  const computedWidth = width != null ? width : Math.round(height * sprite.aspect)
-
-  return (
-    <motion.img
-      src={sprite.src}
-      alt={alt}
-      width={computedWidth}
-      height={height}
-      initial={{ scale: 0, y: 8, opacity: 0 }}
-      animate={{ scale: 1, y: 0, opacity: 1 }}
-      transition={{
-        type: 'spring',
-        stiffness: 260,
-        damping: 20,
-        delay,
-      }}
-      style={{
-        height: `${height}px`,
-        width: `${computedWidth}px`,
-        ...style,
-      }}
-      className={cn('shrink-0 drop-shadow-sm origin-bottom select-none pointer-events-none object-contain', className)}
       draggable={false}
     />
   )
