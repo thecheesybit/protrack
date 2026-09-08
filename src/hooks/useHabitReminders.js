@@ -41,6 +41,39 @@ const FIXED_TIMES_MIN = {
   evening: 19 * 60,
 }
 
+/** A cue may be snoozed once per habit per day. habitId → ymd() it was spent. */
+const _snoozeUsed = new Map()
+const HABIT_SNOOZE_MS = 5 * 60 * 1000
+
+/** True once this habit's single daily snooze has been spent today. */
+export function habitSnoozeUsed(habitId) {
+  return _snoozeUsed.get(habitId) === ymd()
+}
+
+/** Test-only — forget the snooze ledger. */
+export function __resetHabitSnooze() {
+  _snoozeUsed.clear()
+}
+
+/**
+ * When an unanswered cue lapses to "missed". For a cadence habit that is the
+ * next interval tick, capped at 60 min so even a slow every-8h cue expires the
+ * same session; for a fixed morning/afternoon/evening cue it is ~3h after the
+ * band start (floored to now + 10 min). `missedToday` then counts the lapsed
+ * ping — no Firestore writes.
+ */
+export function habitCueExpiry(habit, now = new Date()) {
+  const intervalMin = habit?.customIntervalMin || INTERVAL_MIN[habit?.interval]
+  if (intervalMin) return now.getTime() + Math.min(intervalMin, 60) * 60_000
+  const fixed = FIXED_TIMES_MIN[habit?.interval]
+  if (fixed != null) {
+    const end = new Date(now)
+    end.setHours(Math.floor(fixed / 60) + 3, fixed % 60, 0, 0)
+    return Math.max(now.getTime() + 10 * 60_000, end.getTime())
+  }
+  return now.getTime() + 30 * 60_000
+}
+
 function nextFireFor(habit, now = new Date()) {
   const intervalMin = habit.customIntervalMin || INTERVAL_MIN[habit.interval]
   if (intervalMin) {
@@ -84,13 +117,34 @@ export function triggerHabitCue(uid, habit) {
     playHabitChime()
   }
 
-  // 2. Interactive center prompt — screen-center, blur, Mark done / Snooze.
+  // 2. Interactive center prompt — but NEVER stack habit blurs. If a routine
+  //    prompt is already active or queued, this cue only lands in the Island
+  //    below (missedToday still counts it). One habit prompt on screen at a
+  //    time; the same habit re-firing coalesces onto its own prompt.
   if (habit.reminderToast !== false) {
-    useStore.getState().pushPrompt({
-      type: 'routine',
-      payload: habit,
-      snoozeMs: 10 * 60 * 1000,
-    })
+    const st = useStore.getState()
+    const routineBusy =
+      st.activePrompt?.type === 'routine' ||
+      st.promptQueue.some((p) => p.type === 'routine')
+    if (!routineBusy) {
+      const expiresAt = habitCueExpiry(habit)
+      const id = st.pushPrompt({
+        type: 'routine',
+        payload: { ...habit, expiresAt, snoozeUsed: habitSnoozeUsed(habit.id) },
+        snoozeMs: HABIT_SNOOZE_MS,
+        coalesceKey: `habit:${habit.id}`,
+      })
+      // Close the prompt when its window lapses — the ping becomes "missed".
+      const ttl = expiresAt - Date.now()
+      if (ttl > 0 && ttl <= 6 * 60 * 60_000) {
+        setTimeout(() => {
+          const s = useStore.getState()
+          if (s.activePrompt?.id === id || s.promptQueue.some((p) => p.id === id)) {
+            s.dismissPrompt(id)
+          }
+        }, ttl)
+      }
+    }
   }
 
   // 3. Dynamic Island Banner
@@ -111,11 +165,15 @@ export function triggerHabitCue(uid, habit) {
 }
 
 /**
- * Re-fire a habit cue after `ms` (default 10 min). Used by the center prompt's
- * Snooze / dismiss path — mirrors the old toast's fire-and-forget timer.
+ * Re-fire a habit cue once, after `ms` (default 5 min). The center prompt's
+ * Snooze / dismiss path calls this. Capped at ONE snooze per habit per day —
+ * a second call is a no-op, so an ignored cue lapses to "missed" instead of
+ * nagging forever.
  */
-export function snoozeHabitCue(uid, habit, ms = 10 * 60 * 1000) {
+export function snoozeHabitCue(uid, habit, ms = HABIT_SNOOZE_MS) {
   if (!uid || !habit) return
+  if (habitSnoozeUsed(habit.id)) return
+  _snoozeUsed.set(habit.id, ymd())
   setTimeout(() => triggerHabitCue(uid, habit), ms)
 }
 

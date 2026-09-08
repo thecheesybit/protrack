@@ -12,7 +12,8 @@ function makeSlice() {
     const next = typeof patch === 'function' ? patch(state) : patch
     state = { ...state, ...next }
   }
-  state = createPromptSlice(set)
+  const get = () => state
+  state = createPromptSlice(set, get)
   return {
     get: () => state,
     api: () => state, // actions live on state
@@ -109,5 +110,49 @@ describe('promptSlice', () => {
     slice.get().pushPrompt({ type: 'routine' })
     const q2 = slice.get().promptQueue
     expect(q1).not.toBe(q2)
+  })
+
+  describe('coalesceKey', () => {
+    it('a same-key push while that prompt is active is a no-op returning its id', () => {
+      const id1 = slice.get().pushPrompt({ type: 'routine', coalesceKey: 'habit:h1' })
+      const again = slice.get().pushPrompt({
+        type: 'routine',
+        coalesceKey: 'habit:h1',
+        payload: { fresh: true },
+      })
+      expect(again).toBe(id1)
+      expect(slice.get().activePrompt.id).toBe(id1)
+      expect(slice.get().promptQueue).toHaveLength(0)
+    })
+
+    it('a same-key push replaces the queued prompt in place (no stacking)', () => {
+      slice.get().pushPrompt({ type: 'checkin' }) // occupies the active slot
+      const qId = slice.get().pushPrompt({
+        type: 'routine',
+        coalesceKey: 'habit:h1',
+        payload: { n: 1 },
+        snoozeMs: 1000,
+      })
+      const again = slice.get().pushPrompt({
+        type: 'routine',
+        coalesceKey: 'habit:h1',
+        payload: { n: 2 },
+      })
+      expect(again).toBe(qId)
+      expect(slice.get().promptQueue).toHaveLength(1)
+      expect(slice.get().promptQueue[0]).toMatchObject({ id: qId, payload: { n: 2 }, snoozeMs: 1000 })
+    })
+
+    it('different keys still queue independently', () => {
+      slice.get().pushPrompt({ type: 'checkin' })
+      slice.get().pushPrompt({ type: 'routine', coalesceKey: 'habit:h1' })
+      slice.get().pushPrompt({ type: 'routine', coalesceKey: 'habit:h2' })
+      expect(slice.get().promptQueue).toHaveLength(2)
+    })
+
+    it('pushes without a coalesceKey are unaffected (default null)', () => {
+      slice.get().pushPrompt({ type: 'checkin' })
+      expect(slice.get().activePrompt.coalesceKey).toBeNull()
+    })
   })
 })

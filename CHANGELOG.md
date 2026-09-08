@@ -28,6 +28,7 @@
   - Add subject from anywhere with global scope mode picker (`SubjectEditorModal`).
   - Persistent collapsible two-pane rail in hero view.
   - Double-click on empty subjects container to add.
+
 ## v2.1.2 — 2026-09-07
 
 ### Added
@@ -37,7 +38,11 @@
 - **Google Calendar two-way live sync (P2):** `useCalendarSync` (mounted in `Dashboard`) runs `calendarService.syncEverything` on launch, every 5 min, on window focus and on the `protrack:gcal-sync-now` event. Pure `lib/gcalMap.js` maps events↔items (weekly RRULE→slot, one-off→`type:'event'` to-do, all-day→dated to-do; last-write-wins by `updated`). Delta pull via a persisted `syncToken`, `cancelled`→delete local, push creates/PATCHes/deletes remote; new Google items land in `settings.gcalInboxModeId`. A lapsed OAuth token raises `CalendarAuthError` → one sticky "Reconnect Google Calendar" prompt (no silent browser re-open). Settings → Schedules Sync gains last-sync time, Sync now, inbox-mode picker and an Auto-sync toggle.
 - **Natural assistant voice + centralized TTS (P6):** `src/lib/tts.js` is the single tiered speak path (ElevenLabs → OpenAI TTS → Web Speech) for Hands-Free replies and spoken quotes; `getPreferredVoice()` picks the most natural installed voice and speaks at rate/pitch ~1.0 (the old robotic 0.85/0.9 fallback is gone). Provider tier + device voice are pickable in Settings → AI → Assistant Voice.
 - **Finish Picture-in-Picture (P3):** double-click the PiP box to restore the exact prior window state; an always-visible `mm:ss` + pause bar (no hover needed); Expand vs Close are now distinct; the dead `FloatingFocusPip` variant is removed and `PipFocusWindow` is scoped to real browsers. Timer and audio never reset on enter/exit.
-- **Habit-reminder prompt dogpile fix (P4b):** habit cues now queue one at a time through `promptSlice`, snooze once instead of re-firing, and auto-mark missed after the window passes.
+
+### Changed
+- **Habit reminders no longer dogpile (P4b).** Only one habit cue can hold the center-blur prompt at a time — if one is already open (or queued), further cues land in the Dynamic Island only instead of stacking behind it, so you never grind through 7–10 pop-ups in a row. A cue that keeps re-firing on its interval now folds onto its own prompt (`promptSlice` gained a pure `coalesceKey`) rather than enqueuing duplicates.
+- **One snooze per habit cue per day, and it's 5 minutes** (was unlimited, 10). After the single snooze the button disables to "Snoozed once".
+- **Skipped cues auto-mark missed.** Each cue carries a window (`habitCueExpiry` — next interval tick capped at 60 min, or ~3 h for a fixed morning/afternoon/evening cue); if it's still unanswered when the window closes it dismisses itself and the ping is counted by the existing `missedToday` backlog. The prompt shows "Auto-marks missed at H:MM". No new Firestore reads or writes.
 
 ### Notes
 - P7 primitives only — no user-visible cross-module wiring yet; P8 wires `moduleContext` and tags into the individual widgets.
