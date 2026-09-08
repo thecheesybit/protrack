@@ -2,24 +2,25 @@
 
 ## v2.2.2 — 2026-09-08
 
-### Google Calendar — comprehensive rework
-- **Persistent connection.** With `VITE_GOOGLE_OAUTH_CLIENT_ID` set, Google Identity Services refreshes the token silently in the background (proactive ~50-min timer + one silent retry on 401), so the connection behaves like a login — no more hourly "reconnect" prompts. `/link-gcal` tries a silent token before showing the consent button and auto-closes on `?silent=1`, making a background desktop re-handshake a flash-and-gone tab.
-- **Pull every calendar.** primary + secondary + subscribed + **holidays** + shared, plus Gmail-generated events (flights, tickets, reservations) — full `calendar` scope. Pulled events live in a **local cache** (`gcalSlice`), never Firestore, so hundreds of holidays cost zero write quota.
-- **Push is calendar-only.** Recurring timetable slots and one-time events sync to your Google primary calendar (with a 30-min popup reminder). Plain to-dos / notes / subject tasks are internal planning and are **no longer** pushed — anything a previous version pushed from a to-do is deleted from Google on the next sync.
-- **Month tab is a real month grid** — 6×7 day cells with each day's items + Google events; click a day to open it. Also available in fullscreen (hero) mode. Month view renders **without** a connection (local items only) and folds in Google data when connected.
-- **Robust errors.** 403 "API disabled" → a `CalendarSetupError` card with the Cloud Console link; 403 "insufficient scope" → non-destructive, falls back to the primary calendar with a one-time reconnect nudge; 429/5xx → exponential backoff.
-- **Subject Kanban tasks with a day/time** now flow to the timeline / day / month views (undated cards stay in their board); check one off from the calendar.
+### Subjects ↔ Timetable — build your class schedule
+- The **subject editor** (create *and* edit, from the compact list or the fullscreen rail) now has a **Class / lab times** builder: per row — **type** (Lecture / Lab / Tutorial / Seminar; sets the on-grid style), **day**, **start–end**, **repeat** (weekly / every 2 weeks / every 4 weeks), **room**, a custom label, a **start date**, and an **end** condition (runs indefinitely / ends on a date / ends after *N* sessions). Same class twice a week → two rows.
+- Saving a subject syncs those rows to timetable slots tagged with the subject (its colour + name), so your week fills in automatically. `SubjectDetail` also gets a quick "Class schedule" list to view / add / remove times.
+- Slots carry `recurrenceStartDate` + `recurrenceEndDate`; a class stops appearing on the grid once its term ends (`isSlotOnDay` now honours the real column date for every recurrence type).
 
 ### Timetable
+- **Zoom** the week grid 0.75×–4× (persisted) — a `+ / −` control in the nav; sub-hour gridlines densify (30 → 15 → 5 min) and the axis gains `:15` labels past 2×, so 9–10 AM opens into a clean minute view.
 - Clicking a weekday header opens that day in the Day view (was firing the add-task popup).
 - Undated to-dos created today render inline on the grid at their created time, numbered 1·2·3 — not piled in the top "+N" tray.
-- Week / Day / Month switcher is shown in every mode, including fullscreen.
+- **Week / Day / Month** switcher in every mode, including fullscreen; **Month** is a real 6×7 calendar grid (click a day → Day view), and works from local data with or without a Google connection.
+
+### Google Calendar — shipped as a hidden beta
+- The two-way sync plumbing is complete (GIS silent-refresh token, all-calendars pull incl. holidays, local-cache display, calendar-only push, robust 403/429 handling) but the OAuth/consent flow is too fiddly for the free tier, so **`GCAL_ENABLED = false`**: every connect/login affordance is hidden and the sync hook is inert. Flip `src/lib/flags.js` to re-expose it.
 
 ### AI
 - The Gemini model cascade listed retired 1.5-* models, so a "high demand" 503 fell through to 404s and gave up. Current ids only (2.5-flash → 2.0-flash → *-lite → 2.5-pro), one retry on the preferred model then a graceful walk down the list.
 
 ### Elsewhere
-- **`?` shortcuts sheet** — the `?` key or a top-right button opens a grouped reference of global, in-app and window shortcuts.
+- **`?` shortcuts sheet** — the `?` key or a top-right button (kept clear of the window controls) opens a grouped reference of global, in-app and window shortcuts.
 - Answered daily check-ins are also filed as all-scope **memory notes** so the AI can recall your mock status / intent / energy later.
 - Compact **To-dos** "Completed" panel no longer floats over the board.
 - **Zero ESLint warnings** (was ~73); forest source sheets (~5 MB) and unused shrub art removed.

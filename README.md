@@ -59,11 +59,14 @@ Pomodoro with ambient soundscapes, curated video presets (Forest River, Lo-fi Ja
 ### 🔔 Interactive Habit Reminders
 Habits with `every-1h`, `every-2h`, `every-4h`, `morning`, or `evening` intervals trigger interactive in-app toasts with 10-minute snooze and one-tap completion, synchronized with persistent native OS notifications.
 
-### 📅 Timetable & Today Agenda
-Click the grid and type natural language — *"Revise Polity tomorrow 5pm for 2h"* — to schedule slots. Real-time daily agenda timeline, slot status toggles, and dynamic day/week timetable grid views.
+### 📅 Timetable, Class Schedule & Agenda
+Build your week from a **subject**: lecture / lab / tutorial times with a repeat, room, start date and an end ("after N sessions" or a date) — they fill the grid coloured by subject. **Week / Day / Month** views (Month is a real calendar grid), a merged day-at-a-glance timeline, and **zoom 0.75×–4×** for a minute-level breakdown. Natural-language capture — *"Revise Polity tomorrow 5pm for 2h"* — still works.
 
-### ✅ Comprehensive Kanban & Todos
-Drag a task to *Done* → syllabus % recalculates instantly. Tasks support priority, inline notes, drag-and-drop column reordering, empty column drops, glowing hover states, and double-click-to-edit.
+### ✅ Kanban, To-dos & Exam Scorecards
+Drag a task to *Done* → syllabus % recalculates instantly. Priority, inline notes, DnD reordering, double-click-to-edit. A dedicated **Scorecard** widget tracks mock-exam attempts (paste a raw result or log sectionals) with score / accuracy / percentile trends and a Gemini error-pattern coach.
+
+### 🌅 Daily Check-ins
+Morning / midday / evening prompts take over screen-centre behind a blur, ask one question, then hand the screen back — snooze if unanswered. Answers file themselves as all-scope memory notes the AI can recall.
 
 ### 🤖 AI Companion with Write Access
 The Gemini chat assistant can complete tasks, set subject progress, add to-dos (with priority + notes), schedule timetable slots, toggle habits, and create subjects via natural language.
@@ -151,10 +154,10 @@ Draggable, scroll-to-scale (0.5x to 3.0x) split-flap clock with position/scale p
 | **Drag & Drop** | @dnd-kit/core + sortable | Kanban + todo reorder |
 | **State** | Zustand | Feature slices, no boilerplate |
 | **Backend** | Firebase Auth + Firestore | Google Auth, persistent local cache |
-| **AI** | `@google/generative-ai` (`gemini-flash-latest`) | Function-calling with full write access |
+| **AI** | `@google/generative-ai` (`gemini-2.5-flash` cascade) | Function-calling with full write access; auto-fallback on "high demand" |
 | **Security & Crypto** | Web Crypto API + Electron safeStorage | PBKDF2 (100k iter) + AES-GCM 256-bit encryption |
 | **Audio & SFX** | Web Audio API | Zero-latency synthesized chimes & UI audioFX |
-| **Testing** | Vitest 2 + ESLint 10 | 201 unit tests across 11 test suites |
+| **Testing** | Vitest 2 + ESLint 10 | 411 unit tests across 25 suites; zero lint warnings |
 | **Desktop** | Electron + electron-builder + electron-updater | Multi-OS builds |
 | **NL Parsing** | chrono-node | *"tomorrow 5pm for 2h"* → Date objects |
 | **CI/CD** | GitHub Actions | Auto-merge dev→master, multi-OS matrix, changelog |

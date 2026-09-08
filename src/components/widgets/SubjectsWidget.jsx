@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Layers, ChevronLeft } from 'lucide-react'
+import { Plus, Layers, ChevronLeft, Pencil } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { useSubjects } from '@/hooks/useSubjects'
 import { WidgetFrame } from './WidgetFrame'
@@ -166,18 +166,30 @@ export function SubjectsWidget({ widget, variant }) {
             className="flex flex-1 flex-col gap-2 overflow-y-auto"
           >
             {subjects.map((s) => (
-              <button
+              <div
                 key={s.id}
-                onClick={() => pickCompact(s)}
-                className="rounded-xl border border-line/50 bg-surface-2/30 px-3 py-2 text-left transition-colors hover:border-accent/40"
+                className="group/subrow rounded-xl border border-line/50 bg-surface-2/30 px-3 py-2 transition-colors hover:border-accent/40"
               >
                 <div className="mb-1.5 flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full" style={{ background: s.color }} />
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium">{s.name}</span>
+                  <button
+                    onClick={() => pickCompact(s)}
+                    className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:text-accent"
+                  >
+                    {s.name}
+                  </button>
                   <span className="text-[10px] text-muted">{s.progressPct || 0}%</span>
+                  <button
+                    onClick={() => openEdit(s)}
+                    title="Edit subject & class times"
+                    className="shrink-0 rounded p-0.5 text-muted opacity-0 transition-opacity hover:text-ink group-hover/subrow:opacity-100"
+                    aria-label={`Edit ${s.name}`}
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
                 </div>
                 <ProgressBar value={s.progressPct || 0} color={s.color} height="h-1.5" />
-              </button>
+              </div>
             ))}
 
             {/* Persistent add affordance at bottom of compact list */}
