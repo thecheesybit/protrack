@@ -1,10 +1,14 @@
-import { useState } from 'react'
-import { Pencil, Plus, ExternalLink, X, Flag, Minus, Play } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Pencil, Plus, ExternalLink, X, Flag, Minus, Play, CalendarClock } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { MicroKanban } from './MicroKanban'
 import { SubjectQuickAdd } from './SubjectQuickAdd'
+import { SlotEditorModal } from '@/components/timetable/SlotEditorModal'
+import { useTimetable } from '@/hooks/useTimetable'
+import { deleteSlot } from '@/services/timetableService'
+import { DAYS, minutesToLabel, todayDow } from '@/lib/time'
 import {
   adjustProgress,
   addSubjectLink,
@@ -26,6 +30,17 @@ export function SubjectDetail({ modeId, subject, onEdit }) {
 
   // Atomic increment so concurrent +/- from two devices merge correctly.
   const targetModeId = modeId === 'all' ? subject._modeId : modeId
+
+  // Class / lab schedule — timetable slots linked to this subject.
+  const { slots } = useTimetable(targetModeId)
+  const classSlots = useMemo(
+    () =>
+      (slots || [])
+        .filter((s) => s.subjectId === subject.id)
+        .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startMin - b.startMin),
+    [slots, subject.id],
+  )
+  const [slotEditor, setSlotEditor] = useState(null) // slot draft | null
   const bumpProgress = (delta) => adjustProgress(user.uid, targetModeId, subject.id, delta)
 
   const addLink = () => {
@@ -187,6 +202,57 @@ export function SubjectDetail({ modeId, subject, onEdit }) {
         </div>
       </div>
 
+      {/* Class / lab schedule */}
+      <div className="mt-4 rounded-xl border border-line/50 bg-surface-2/30 p-2.5">
+        <div className="mb-1.5 flex items-center justify-between">
+          <span className="flex items-center gap-1.5 text-xs font-medium text-muted">
+            <CalendarClock className="h-3.5 w-3.5" /> Class schedule
+          </span>
+          <button
+            onClick={() =>
+              setSlotEditor({
+                subjectId: subject.id,
+                color: subject.color,
+                label: subject.name,
+                dayOfWeek: todayDow(),
+                startMin: 9 * 60,
+                endMin: 10 * 60,
+              })
+            }
+            className="flex items-center gap-1 text-[11px] font-semibold text-accent hover:underline"
+          >
+            <Plus className="h-3 w-3" /> Add time
+          </button>
+        </div>
+        <div className="flex flex-col gap-1">
+          {classSlots.map((s) => (
+            <div key={s.id} className="group/cs flex items-center gap-2 text-xs">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: s.color || subject.color }} />
+              <button
+                onClick={() => setSlotEditor({ ...s, _modeId: s._modeId || targetModeId })}
+                className="min-w-0 flex-1 truncate text-left hover:text-accent"
+              >
+                <span className="font-semibold">{DAYS[s.dayOfWeek]}</span>{' '}
+                {minutesToLabel(s.startMin)}–{minutesToLabel(s.endMin)}
+                {s.label && s.label !== subject.name ? ` · ${s.label}` : ''}
+              </button>
+              <button
+                onClick={() => deleteSlot(user.uid, s._modeId || targetModeId, s.id)}
+                className="opacity-0 transition-opacity group-hover/cs:opacity-100"
+                aria-label="Remove class time"
+              >
+                <X className="h-3 w-3 text-muted hover:text-rose-400" />
+              </button>
+            </div>
+          ))}
+          {!classSlots.length && (
+            <span className="text-[11px] text-muted">
+              No class times yet — add lectures / labs so they show on the timetable.
+            </span>
+          )}
+        </div>
+      </div>
+
       {/* Kanban */}
       <div className={cn('mt-4 flex min-h-0 flex-1 flex-col')}>
         <span className="mb-2 text-xs font-medium text-muted">Tasks</span>
@@ -200,6 +266,14 @@ export function SubjectDetail({ modeId, subject, onEdit }) {
           <MicroKanban modeId={targetModeId} subjectId={subject.id} subjectName={subject.name} />
         </div>
       </div>
+
+      <SlotEditorModal
+        open={Boolean(slotEditor)}
+        onClose={() => setSlotEditor(null)}
+        modeId={targetModeId}
+        slot={slotEditor}
+        subjects={[subject]}
+      />
     </div>
   )
 }

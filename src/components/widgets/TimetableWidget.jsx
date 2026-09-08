@@ -9,6 +9,8 @@ import { useTodos } from '@/hooks/useWellness'
 import { useNotes } from '@/hooks/useNotes'
 import { useFocusSessions } from '@/hooks/useFocusSessions'
 import { useModeTasksWithDates } from '@/hooks/useModeTasksWithDates'
+import { useSubjects } from '@/hooks/useSubjects'
+import { GCAL_ENABLED } from '@/lib/flags'
 import { WidgetFrame } from './WidgetFrame'
 import { cn } from '@/utils/cn'
 import { TimetableGrid } from '@/components/timetable/TimetableGrid'
@@ -83,6 +85,7 @@ export function TimetableWidget({ widget, variant }) {
 
   const todos = useTodos()
   const notes = useNotes()
+  const { subjects } = useSubjects(activeModeId)
   // Kanban tasks that have a day/time → show on the timeline & month views.
   const subjectDueTasks = useModeTasksWithDates(activeModeId)
   const activeMode = modes.find((m) => m.id === activeModeId)
@@ -321,7 +324,16 @@ export function TimetableWidget({ widget, variant }) {
         </div>
       )}
 
-      {isHero && (
+      {/* Add a class / session — visible in every mode */}
+      <button
+        onClick={() => quickAdd()}
+        title="Add a class or study session"
+        className="flex items-center gap-1.5 rounded-lg bg-accent px-2.5 py-1.5 text-xs font-semibold text-white shadow-glow-sm transition-opacity hover:opacity-95"
+      >
+        <CalendarPlus className="h-3.5 w-3.5" /> Add
+      </button>
+
+      {GCAL_ENABLED && isHero && (
         <button
           onClick={connectOrSync}
           title={connected ? 'Sync Google Calendar now' : 'Connect Google Calendar'}
@@ -410,7 +422,7 @@ export function TimetableWidget({ widget, variant }) {
               )}
             </div>
 
-            {connected && viewMode === 'week' && (
+            {GCAL_ENABLED && connected && viewMode === 'week' && (
               <div className="hidden w-56 shrink-0 flex-col xl:flex">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-xs font-medium text-muted">From Google</span>
@@ -522,6 +534,7 @@ export function TimetableWidget({ widget, variant }) {
         onClose={() => setEditorOpen(false)}
         modeId={editingSlot?._modeId || (activeModeId === 'all' ? modes[0]?.id : activeModeId)}
         slot={editingSlot}
+        subjects={subjects}
         allModes={activeModeId === 'all' ? modes : undefined}
       />
 

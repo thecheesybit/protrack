@@ -75,6 +75,7 @@ import {
   getLastSyncAt,
 } from '@/services/calendarService'
 import { GCAL_SYNC_NOW_EVENT } from '@/hooks/useCalendarSync'
+import { GCAL_ENABLED } from '@/lib/flags'
 
 function prettyAccelerator(acc) {
   if (!acc) return ''
@@ -1958,6 +1959,7 @@ export function SettingsPanel() {
                       </div>
                     </div>
 
+                    {GCAL_ENABLED && (
                     <div className="border-t border-line/40 pt-6">
                       <h4 className="text-xs font-bold uppercase tracking-widest text-muted mb-3">Schedules Sync</h4>
                       <label className="mb-1 block text-xs font-semibold text-muted">Google Calendar Connection</label>
@@ -2051,6 +2053,7 @@ export function SettingsPanel() {
                         </div>
                       )}
                     </div>
+                    )}
                   </div>
                 )}
 

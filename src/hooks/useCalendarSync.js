@@ -10,6 +10,7 @@ import {
   CalendarSetupError,
 } from '@/services/calendarService'
 import { isGisAvailable, ensureFreshToken, msUntilRefresh } from '@/lib/gauth'
+import { GCAL_ENABLED } from '@/lib/flags'
 
 const INTERVAL_MS = 5 * 60 * 1000
 /** Fire from anywhere (e.g. Settings "Sync now") to force an immediate run. */
@@ -53,6 +54,7 @@ export function useCalendarSync() {
   const autoSyncOn = settings?.gcalAutoSync !== false
 
   useEffect(() => {
+    if (!GCAL_ENABLED) return undefined // Google Calendar sync is a hidden beta
     if (!user) return undefined
 
     // Proactive silent token refresh so the user never sees a reconnect prompt.

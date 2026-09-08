@@ -16,6 +16,7 @@ import {
   isCalendarConnected,
   pushSlotToCalendar,
 } from '@/services/calendarService'
+import { GCAL_ENABLED } from '@/lib/flags'
 import { cn } from '@/utils/cn'
 
 /** Convert minutes-from-midnight → "HH:MM" for <input type="time"> */
@@ -33,7 +34,7 @@ function timeValueToMin(val) {
   return clampMin(h * 60 + (m || 0))
 }
 
-export function SlotEditorModal({ open, onClose, modeId: propModeId, slot, allModes }) {
+export function SlotEditorModal({ open, onClose, modeId: propModeId, slot, allModes, subjects = [] }) {
   const { user } = useAuth()
   const modeId = slot?._modeId || propModeId
   const [targetModeId, setTargetModeId] = useState(modeId)
@@ -170,12 +171,38 @@ export function SlotEditorModal({ open, onClose, modeId: propModeId, slot, allMo
         </div>
       )}
 
+      {subjects.length > 0 && (
+        <div className="mb-4">
+          <label className="mb-1.5 block text-xs font-medium text-muted">Subject / class</label>
+          <select
+            value={draft.subjectId || ''}
+            onChange={(e) => {
+              const sid = e.target.value || null
+              const subj = subjects.find((s) => s.id === sid)
+              patch({
+                subjectId: sid,
+                ...(subj?.color ? { color: subj.color } : {}),
+                ...(subj && !((draft.label || '').trim()) ? { label: subj.name } : {}),
+              })
+            }}
+            className="w-full rounded-xl border border-line bg-surface-2/60 px-2.5 py-2.5 text-sm outline-none focus:border-accent"
+          >
+            <option value="">— None (general session) —</option>
+            {subjects.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <label className="mb-1.5 block text-xs font-medium text-muted">Label</label>
       <input
         autoFocus
         value={draft.label || ''}
         onChange={(e) => patch({ label: e.target.value })}
-        placeholder="e.g. Polity revision"
+        placeholder="e.g. Lecture, Lab, Polity revision"
         className="w-full rounded-xl border border-line bg-surface-2/60 px-3.5 py-2.5 text-sm outline-none focus:border-accent"
       />
 
@@ -327,7 +354,7 @@ export function SlotEditorModal({ open, onClose, modeId: propModeId, slot, allMo
         </div>
       )}
 
-      {isEdit && (
+      {isEdit && GCAL_ENABLED && (
         <button
           onClick={pushToCalendar}
           className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-line bg-surface-2/50 py-2.5 text-sm text-muted transition-colors hover:text-ink"
