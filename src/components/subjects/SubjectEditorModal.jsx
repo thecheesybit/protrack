@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Trash2, Plus, X, CalendarClock } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
@@ -7,7 +7,21 @@ import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { MODE_PALETTE } from '@/lib/constants'
 import { addSubject, updateSubject, deleteSubject } from '@/services/subjectService'
+import { addSlot, updateSlot, deleteSlot } from '@/services/timetableService'
+import { useTimetable } from '@/hooks/useTimetable'
+import { DAYS, DAY_START_MIN } from '@/lib/time'
 import { cn } from '@/utils/cn'
+
+const toTime = (min) => {
+  const h = Math.floor((min ?? DAY_START_MIN) / 60)
+  const m = (min ?? DAY_START_MIN) % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+const fromTime = (v) => {
+  const [h, m] = (v || '09:00').split(':').map(Number)
+  return h * 60 + (m || 0)
+}
+const blankClass = () => ({ key: Math.random().toString(36).slice(2), dayOfWeek: 0, startMin: 9 * 60, endMin: 10 * 60, label: '' })
 
 export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject, order, onDeleted }) {
   const { user } = useAuth()
@@ -17,7 +31,16 @@ export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject,
   const initialModeId = subject?._modeId || (propModeId && propModeId !== 'all' ? propModeId : modes[0]?.id)
   const [selectedModeId, setSelectedModeId] = useState(initialModeId)
   const [draft, setDraft] = useState({ name: '', color: MODE_PALETTE[0], targetHours: 0 })
+  const [classTimes, setClassTimes] = useState([])
   const [saving, setSaving] = useState(false)
+
+  // Existing class-time slots for this subject (edit mode).
+  const editModeId = subject?._modeId || (propModeId && propModeId !== 'all' ? propModeId : null)
+  const { slots } = useTimetable(isEdit ? editModeId : null)
+  const existingSlots = useMemo(
+    () => (isEdit ? (slots || []).filter((s) => s.subjectId === subject?.id) : []),
+    [isEdit, slots, subject?.id],
+  )
 
   useEffect(() => {
     if (!open) return
@@ -34,6 +57,49 @@ export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject,
     )
   }, [open, subject, order, propModeId, modes])
 
+  // Hydrate the class-times editor from existing slots when the modal opens.
+  useEffect(() => {
+    if (!open) return
+    setClassTimes(
+      existingSlots.map((s) => ({
+        key: s.id,
+        id: s.id,
+        dayOfWeek: s.dayOfWeek,
+        startMin: s.startMin,
+        endMin: s.endMin,
+        label: s.label || '',
+      })),
+    )
+    // Only re-hydrate on open / when the existing set identity changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, existingSlots.length])
+
+  const patchClass = (key, p) =>
+    setClassTimes((rows) => rows.map((r) => (r.key === key ? { ...r, ...p } : r)))
+
+  async function syncClassTimes(uid, targetModeId, subjectId, color, name) {
+    const keptIds = new Set(classTimes.filter((r) => r.id).map((r) => r.id))
+    // Deletions
+    for (const s of existingSlots) {
+      if (!keptIds.has(s.id)) await deleteSlot(uid, targetModeId, s.id).catch(() => {})
+    }
+    // Creates + updates
+    for (const r of classTimes) {
+      if (r.endMin <= r.startMin) continue
+      const payload = {
+        label: (r.label || '').trim() || name,
+        dayOfWeek: r.dayOfWeek,
+        startMin: r.startMin,
+        endMin: r.endMin,
+        color,
+        subjectId,
+        recurrenceType: 'weekly',
+      }
+      if (r.id) await updateSlot(uid, targetModeId, r.id, payload).catch(() => {})
+      else await addSlot(uid, targetModeId, payload).catch(() => {})
+    }
+  }
+
   const save = async () => {
     const name = draft.name.trim()
     if (!name) return toast.error('Name your subject')
@@ -44,6 +110,7 @@ export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject,
 
     setSaving(true)
     try {
+      let subjectId = subject?.id
       if (isEdit) {
         await updateSubject(user.uid, targetModeId, subject.id, {
           name,
@@ -51,12 +118,16 @@ export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject,
           targetHours: Number(draft.targetHours) || 0,
         })
       } else {
-        await addSubject(user.uid, targetModeId, {
+        const ref = await addSubject(user.uid, targetModeId, {
           name,
           color: draft.color,
           targetHours: Number(draft.targetHours) || 0,
           order: order || 0,
         })
+        subjectId = ref?.id || ref
+      }
+      if (subjectId) {
+        await syncClassTimes(user.uid, targetModeId, subjectId, draft.color, name)
       }
       onClose()
     } catch (err) {
@@ -171,6 +242,71 @@ export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject,
             aria-label={c}
           />
         ))}
+      </div>
+
+      {/* Class / lab times — land on the timetable, coloured by this subject */}
+      <div className="mt-5 border-t border-line/50 pt-4">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="flex items-center gap-1.5 text-xs font-medium text-muted">
+            <CalendarClock className="h-3.5 w-3.5" /> Class / lab times
+          </span>
+          <button
+            type="button"
+            onClick={() => setClassTimes((r) => [...r, blankClass()])}
+            className="flex items-center gap-1 text-[11px] font-semibold text-accent hover:underline"
+          >
+            <Plus className="h-3 w-3" /> Add time
+          </button>
+        </div>
+        <div className="flex flex-col gap-2">
+          {classTimes.map((r) => (
+            <div key={r.key} className="flex items-center gap-1.5">
+              <select
+                value={r.dayOfWeek}
+                onChange={(e) => patchClass(r.key, { dayOfWeek: Number(e.target.value) })}
+                className="rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-xs outline-none focus:border-accent"
+              >
+                {DAYS.map((d, i) => (
+                  <option key={d} value={i}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="time"
+                value={toTime(r.startMin)}
+                onChange={(e) => patchClass(r.key, { startMin: fromTime(e.target.value) })}
+                className="rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-xs outline-none focus:border-accent"
+              />
+              <span className="text-[11px] text-muted">–</span>
+              <input
+                type="time"
+                value={toTime(r.endMin)}
+                onChange={(e) => patchClass(r.key, { endMin: fromTime(e.target.value) })}
+                className="rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-xs outline-none focus:border-accent"
+              />
+              <input
+                value={r.label}
+                onChange={(e) => patchClass(r.key, { label: e.target.value })}
+                placeholder="Lecture / Lab"
+                className="min-w-0 flex-1 rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-xs outline-none focus:border-accent"
+              />
+              <button
+                type="button"
+                onClick={() => setClassTimes((rows) => rows.filter((x) => x.key !== r.key))}
+                className="shrink-0 text-muted hover:text-rose-400"
+                aria-label="Remove class time"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+          {!classTimes.length && (
+            <span className="text-[11px] text-muted">
+              Add lecture / lab times so this subject shows on your timetable.
+            </span>
+          )}
+        </div>
       </div>
     </Modal>
   )

@@ -324,15 +324,6 @@ export function TimetableWidget({ widget, variant }) {
         </div>
       )}
 
-      {/* Add a class / session — visible in every mode */}
-      <button
-        onClick={() => quickAdd()}
-        title="Add a class or study session"
-        className="flex items-center gap-1.5 rounded-lg bg-accent px-2.5 py-1.5 text-xs font-semibold text-white shadow-glow-sm transition-opacity hover:opacity-95"
-      >
-        <CalendarPlus className="h-3.5 w-3.5" /> Add
-      </button>
-
       {GCAL_ENABLED && isHero && (
         <button
           onClick={connectOrSync}
