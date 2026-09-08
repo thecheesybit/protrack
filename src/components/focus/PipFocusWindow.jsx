@@ -48,6 +48,7 @@ function PipContent({ onClose, onExpand }) {
 
   const isBreak = phase === 'break'
   const accentColor = isBreak ? '#10b981' : session?.color || '#f59e0b'
+  // phaseTotalSec is the single source of truth for ring progress.
   const total = phaseTotalSec || secondsLeft || 1
   const progress = Math.min(1, Math.max(0, 1 - secondsLeft / total))
 
@@ -66,7 +67,7 @@ function PipContent({ onClose, onExpand }) {
             type="button"
             onClick={onExpand}
             className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
-            title="Expand into app"
+            title="Expand back into the app"
             aria-label="Expand"
           >
             <Maximize2 className="h-3.5 w-3.5" />
@@ -75,7 +76,7 @@ function PipContent({ onClose, onExpand }) {
             type="button"
             onClick={onClose}
             className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
-            title="Close PIP"
+            title="Close picture-in-picture"
             aria-label="Close"
           >
             <X className="h-3.5 w-3.5" />
@@ -141,7 +142,12 @@ function PipContent({ onClose, onExpand }) {
 }
 
 /**
- * Manages the native OS Document Picture-in-Picture window.
+ * Browser-only Picture-in-Picture: opens a real Document Picture-in-Picture
+ * window and portals <PipContent/> into it.
+ *
+ * The desktop build never uses this path — Electron morphs its single window
+ * instead (src/lib/pip.js → electron/main.js `pip:enter`, rendered by
+ * <PipAppView/>). The `isDesktop` guards below keep this inert there.
  */
 export function PipFocusWindow() {
   const pipActive = useStore((s) => s.pipActive)
@@ -207,19 +213,15 @@ export function PipFocusWindow() {
           pipWindow.document.body.appendChild(container)
           setPipContainer(container)
 
-          // In desktop Electron, minimize the main app window so only the PiP box floats on screen!
-          window.protrack?.window?.minimize?.()
-
           pipWindow.addEventListener('pagehide', () => {
             pipWindowRef.current = null
             setPipContainer(null)
             setPipActive(false)
-            // Restore and focus the main window when the PiP window is closed
-            window.protrack?.window?.restore?.()
           })
         } catch (err) {
           console.error('[pip] documentPictureInPicture error', err)
-          // If native PiP fails or is declined, keep pipActive so in-app floating pip displays
+          // If native PiP fails or is declined, just clear the flag.
+          setPipActive(false)
         }
       }
       openPip()
@@ -238,17 +240,12 @@ export function PipFocusWindow() {
 
   const handleExpand = () => {
     try {
-      window.protrack?.window?.restore?.()
-      window.protrack?.window?.setFullScreen?.(true)
       window.focus()
     } catch { /* noop */ }
     setPipActive(false)
   }
 
   const handleClose = () => {
-    try {
-      window.protrack?.window?.restore?.()
-    } catch { /* noop */ }
     setPipActive(false)
   }
 

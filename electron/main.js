@@ -717,6 +717,11 @@ ipcMain.handle('window:reload', () => {
 })
 
 /* ── IPC: native PiP mini-widget morphing ───────────────── */
+// Bounds of the floating always-on-top square while in Picture-in-Picture.
+const PIP_WIDTH = 240
+const PIP_HEIGHT = 240
+const PIP_MIN_SIZE = 160 // lowered minimum so setBounds isn't clamped
+const PIP_SCREEN_MARGIN = 24 // gap from the working-area edge
 let prePipState = null
 
 ipcMain.handle('pip:enter', async () => {
@@ -730,7 +735,7 @@ ipcMain.handle('pip:enter', async () => {
   }
 
   // Lower the minimum size FIRST, else setBounds is clamped to the old minimum.
-  win.setMinimumSize(160, 160)
+  win.setMinimumSize(PIP_MIN_SIZE, PIP_MIN_SIZE)
   win.setResizable(true)
 
   // A compact always-on-top square — just the floating timer, like a video PiP.
@@ -738,13 +743,11 @@ ipcMain.handle('pip:enter', async () => {
     if (!win || win.isDestroyed()) return
     const display = screen.getDisplayMatching(win.getBounds()) || screen.getPrimaryDisplay()
     const { x: dx, y: dy, width: dw, height: dh } = display.workArea
-    const pipW = 240
-    const pipH = 240
     win.setBounds({
-      x: Math.round(dx + dw - pipW - 24),
-      y: Math.round(dy + dh - pipH - 24),
-      width: pipW,
-      height: pipH,
+      x: Math.round(dx + dw - PIP_WIDTH - PIP_SCREEN_MARGIN),
+      y: Math.round(dy + dh - PIP_HEIGHT - PIP_SCREEN_MARGIN),
+      width: PIP_WIDTH,
+      height: PIP_HEIGHT,
     })
     try {
       win.setAlwaysOnTop(true, 'screen-saver')
