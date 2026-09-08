@@ -86,7 +86,8 @@ export function SpaceObjects() {
   const slot = useStore((s) => s.chronoSlot)
   const active = NIGHT_SLOTS.has(slot)
 
-  // Moon position is randomized once per entry into a night slot.
+  // Moon position is re-rolled once per entry into a night slot.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const moonSpot = useMemo(() => MOON_SPOTS[Math.floor(Math.random() * MOON_SPOTS.length)], [active])
 
   const [meteors, removeMeteor] = useSpawner(active, makeMeteor, [1200, 4000], [2800, 9000])

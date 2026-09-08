@@ -189,6 +189,9 @@ export function ModeSwitcher({ vertical = false }) {
       setIsRetracted(false)
     }
     return () => clearHideTimer()
+    // start/clearHideTimer are recreated each render but carry no external deps
+    // beyond the modal flags already listed — only re-run on those.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editorOpen, deleteModalOpen, contextMenu.open])
 
   const handleRailMouseEnter = () => {
@@ -200,7 +203,6 @@ export function ModeSwitcher({ vertical = false }) {
     startHideTimer()
   }
 
-  const firstName = (user?.displayName || 'Explorer').split(' ')[0]
 
   // Modes are rendered in their persisted order (mode.order ascending)
   const sortedModes = [...modes].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))

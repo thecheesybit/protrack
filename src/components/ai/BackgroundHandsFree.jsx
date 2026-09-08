@@ -74,7 +74,6 @@ export function BackgroundHandsFree() {
   }, [handsFreeActive])
 
   const {
-    supported,
     listening,
     transcript,
     interim,
@@ -220,7 +219,7 @@ export function BackgroundHandsFree() {
       setHandsFreeStatus('idle')
       setHandsFreeActive(false)
     }
-  }, [handsFreeStatus, handsFreeActive, turnLimit, start, stop, ctx, buildContext])
+  }, [handsFreeStatus, handsFreeActive, turnLimit, start, stop, ctx, buildContext, setHandsFreeActive, setHandsFreeFeedback, setHandsFreeStatus])
 
   // Accumulate speech transcript and check wake word
   useEffect(() => {

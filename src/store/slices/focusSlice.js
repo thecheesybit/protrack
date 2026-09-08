@@ -6,7 +6,7 @@
 const DEFAULT_FOCUS = 25
 const DEFAULT_BREAK = 5
 
-export const createFocusSlice = (set, get) => ({
+export const createFocusSlice = (set) => ({
   status: 'idle', // 'idle' | 'running' | 'paused'
   phase: 'focus', // 'focus' | 'break'
   focusMin: DEFAULT_FOCUS,

@@ -2,18 +2,11 @@ import { useEffect, useState } from 'react'
 import {
   Settings,
   Sun,
-  Moon,
-  Sunrise,
-  Bell,
   KeyRound,
   Check,
   ExternalLink,
-  Droplets,
-  Keyboard,
   History,
   Github,
-  Type,
-  DownloadCloud,
   RefreshCw,
   AlertTriangle,
   Volume2,
@@ -102,26 +95,6 @@ function formatLastSync(ms) {
   return new Date(ms).toLocaleDateString()
 }
 
-function Section({ title, icon, children, defaultOpen = false }) {
-  const [open, setOpen] = useState(defaultOpen)
-  return (
-    <div className="border-b border-line/50">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex w-full items-center gap-2 px-5 py-3.5 text-sm font-semibold transition-colors hover:bg-surface-2/30"
-      >
-        {icon}
-        <span className="flex-1 text-left">{title}</span>
-        <ChevronDown
-          className={cn('h-4 w-4 shrink-0 text-muted transition-transform', open && 'rotate-180')}
-        />
-      </button>
-      {open && <div className="px-5 pb-4">{children}</div>}
-    </div>
-  )
-}
-
 function ShortcutRow({ label, acc }) {
   return (
     <div className="flex items-center justify-between rounded-xl border border-line/60 bg-surface-2/30 px-3 py-2">
@@ -176,7 +149,7 @@ function renderMarkdownInline(text) {
 
 export function SettingsPanel() {
   const { user, deleteAccount } = useAuth()
-  const { theme, setTheme, toggleTheme } = useTheme()
+  const { theme, toggleTheme } = useTheme()
   const open = useStore((s) => s.settingsOpen)
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
   const settings = useStore((s) => s.settings)

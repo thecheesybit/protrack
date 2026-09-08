@@ -54,7 +54,7 @@ export function HabitEditorModal({ open, onClose, habit, order }) {
     reminderSound: true,
   })
   const [saving, setSaving] = useState(false)
-  const [showRationale, setShowRationale] = useState(true)
+  const [, setShowRationale] = useState(true)
 
   useEffect(() => {
     if (!open) return

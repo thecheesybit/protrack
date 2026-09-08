@@ -47,7 +47,6 @@ export function FocusMiniOverlay() {
   const maximizeWidget = useStore((s) => s.maximizeWidget)
   const pause = useStore((s) => s.pause)
   const resume = useStore((s) => s.resume)
-  const setPipActive = useStore((s) => s.setPipActive)
 
   const active = status !== 'idle'
   const show = active && Boolean(maximizedWidgetId) && maximizedWidgetId !== 'focus' && !focusContext

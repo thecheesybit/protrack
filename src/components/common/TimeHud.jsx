@@ -48,6 +48,8 @@ export function TimeHud() {
     setIsVisible(true)
     startHideTimer(30000)
     return () => clearTimer()
+    // startHideTimer/clearTimer are stable enough; only re-run on slot change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slot])
 
   const handleMouseEnter = () => {

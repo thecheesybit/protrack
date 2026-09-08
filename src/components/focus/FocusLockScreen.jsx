@@ -111,7 +111,6 @@ export function FocusLockScreen() {
   const muted = useStore((s) => s.muted)
   const activeModeId = useStore((s) => s.activeModeId)
   const pipActive = useStore((s) => s.pipActive)
-  const setPipActive = useStore((s) => s.setPipActive)
 
   const pause = useStore((s) => s.pause)
   const resume = useStore((s) => s.resume)

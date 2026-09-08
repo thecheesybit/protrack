@@ -85,7 +85,7 @@ export function ChatTab({ onOpenSettings, onToggleVoiceNote }) {
   const [loading, setLoading] = useState(false)
   const scrollRef = useRef(null)
 
-  const { supported, listening, transcript, interim, error: speechError, transcribing, start, stop, reset: resetSpeech, setText } = useSpeechRecognition()
+  const { supported, listening, transcript, interim, error: speechError, transcribing, start, stop, reset: resetSpeech } = useSpeechRecognition()
 
   const activeMode = modes.find((m) => m.id === activeModeId)
 

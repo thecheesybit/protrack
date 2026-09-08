@@ -153,7 +153,6 @@ export function BoardCanvas() {
   const [rightId, setRightId] = useState(DEFAULT_RIGHT_ID)
 
   const maximized = WIDGETS.find((w) => w.id === maximizedWidgetId)
-  const others = WIDGETS.filter((w) => w.id !== maximizedWidgetId)
 
   const leftWidget = WIDGETS.find((w) => w.id === LEFT_ID)
   const rightWidget = WIDGETS.find((w) => w.id === rightId)

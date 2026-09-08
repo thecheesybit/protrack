@@ -5,7 +5,7 @@ import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
 import { addTodo } from '@/services/todoService'
-import { minutesToLabel, durationLabel, DAY_FULL, isSlotOnDay } from '@/lib/time'
+import { minutesToLabel, durationLabel, isSlotOnDay } from '@/lib/time'
 import { getWeekDate, dayMinToDate, ymd } from '@/lib/dates'
 import { playPop } from '@/lib/audioFX'
 import { cn } from '@/utils/cn'
@@ -81,7 +81,6 @@ export function TimeContextPanel({
     setCurEndMin(endMin)
   }, [startMin, endMin])
 
-  const dayName = DAY_FULL[dayIndex] || 'Day'
   const rangeLabel = isAllDay ? 'All Day' : `${minutesToLabel(curStartMin)} – ${minutesToLabel(curEndMin)}`
   const dur = isAllDay ? 'All-day' : durationLabel(curStartMin, curEndMin)
   const selectedDateStr = ymd(getWeekDate(dayIndex))

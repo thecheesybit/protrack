@@ -18,7 +18,7 @@ import aiGif from '@/assets/ai.gif'
 // Web Speech). `speak(text, { voiceEnabled, onStart, onEnd })` mirrors the old
 // speakHandsFree signature; `stopSpeaking()` interrupts any tier.
 
-export function HandsFreeTab({ onOpenSettings }) {
+export function HandsFreeTab() {
   const { user } = useAuth()
   const activeModeId = useStore((s) => s.activeModeId)
   const modes = useStore((s) => s.modes)
@@ -47,7 +47,6 @@ export function HandsFreeTab({ onOpenSettings }) {
   }, [active])
 
   const {
-    supported,
     listening,
     transcript,
     interim,

@@ -291,11 +291,11 @@ function toDateSafe(v) {
 export function TimetableGrid({
   slots,
   events = [],
-  defaultColor,
+  defaultColor: _defaultColor,
   onSelect,
   onOpenSlot,
   onEditSlot,
-  onQuickCapture,
+  onQuickCapture: _onQuickCapture,
   onToggleTask,
   onDeleteTask,
   onDeleteEvent,

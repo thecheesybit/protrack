@@ -143,7 +143,6 @@ export function FocusWidget({ widget, variant }) {
   const pause = useStore((s) => s.pause)
   const resume = useStore((s) => s.resume)
   const reset = useStore((s) => s.reset)
-  const setPipActive = useStore((s) => s.setPipActive)
   const setVolume = useStore((s) => s.adjustTrackVolume)
   const toggleMute = useStore((s) => s.toggleMute)
 

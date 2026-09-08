@@ -107,7 +107,7 @@ export function NotesWidget({ widget, variant }) {
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false)
   const [recordSeconds, setRecordSeconds] = useState(0)
-  const [voiceBlob, setVoiceBlob] = useState(null)
+  const [, setVoiceBlob] = useState(null)
   const [voiceDataUrl, setVoiceDataUrl] = useState(null)
   const [voiceTranscript, setVoiceTranscript] = useState('')
   const mediaRecorderRef = useRef(null)

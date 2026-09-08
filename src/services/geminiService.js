@@ -252,12 +252,6 @@ export function setDeepSeekKey(value) {
   setApiKey('deepseek', value)
 }
 
-function client() {
-  const key = getGeminiKey()
-  if (!key) throw new Error('Add your Gemini API key in Settings first')
-  return new GoogleGenerativeAI(key)
-}
-
 const SYSTEM = `You are PRO TRACK's in-app study companion. Be concise, warm,
 and practical. You have write access to the user's workspace via tools — when
 the user expresses intent ("I finished Calculus", "remind me to drink water",
