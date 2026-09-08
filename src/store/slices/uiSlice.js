@@ -30,6 +30,33 @@ function readInitialFontFamily() {
   }
 }
 
+const COLLAPSED_KEY_PREFIX = 'protrack:widget_collapsed:'
+
+/** Rebuild the per-widget collapsed map from its localStorage keys. */
+function readInitialCollapsed() {
+  const out = {}
+  try {
+    if (typeof localStorage === 'undefined') return out
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (k && k.startsWith(COLLAPSED_KEY_PREFIX) && localStorage.getItem(k) === '1') {
+        out[k.slice(COLLAPSED_KEY_PREFIX.length)] = true
+      }
+    }
+  } catch {
+    /* private mode */
+  }
+  return out
+}
+
+function persistCollapsed(id, val) {
+  try {
+    localStorage.setItem(`${COLLAPSED_KEY_PREFIX}${id}`, val ? '1' : '0')
+  } catch {
+    /* private mode */
+  }
+}
+
 export const createUiSlice = (set, get) => ({
   maximizedWidgetId: null,
   settingsOpen: false,
@@ -47,6 +74,29 @@ export const createUiSlice = (set, get) => ({
     set((s) => ({
       maximizedWidgetId: s.maximizedWidgetId === id ? null : id,
     })),
+
+  // Per-widget "minimized to header" state — lifted out of WidgetFrame so the
+  // board can react (e.g. auto-promote a dock widget into a collapsed slot).
+  collapsedWidgets: readInitialCollapsed(),
+  setWidgetCollapsed: (id, val) =>
+    set((s) => {
+      const next = Boolean(val)
+      if (Boolean(s.collapsedWidgets[id]) === next) return s
+      persistCollapsed(id, next)
+      const collapsedWidgets = { ...s.collapsedWidgets }
+      if (next) collapsedWidgets[id] = true
+      else delete collapsedWidgets[id]
+      return { collapsedWidgets }
+    }),
+  toggleWidgetCollapsed: (id) =>
+    set((s) => {
+      const next = !s.collapsedWidgets[id]
+      persistCollapsed(id, next)
+      const collapsedWidgets = { ...s.collapsedWidgets }
+      if (next) collapsedWidgets[id] = true
+      else delete collapsedWidgets[id]
+      return { collapsedWidgets }
+    }),
 
   setClockCentered: (clockCentered) => set({ clockCentered }),
   toggleClockCentered: () => set((s) => ({ clockCentered: !s.clockCentered })),

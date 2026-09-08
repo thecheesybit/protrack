@@ -11,9 +11,27 @@ export const DAY_FULL = [
 ]
 
 export const DAY_START_MIN = 6 * 60 // 06:00
-export const DAY_END_MIN = 24 * 60 // 24:00
+export const DAY_END_MIN = 24 * 60 // 24:00 — last valid clock minute (editors / clamp)
 export const PX_PER_MIN = 0.8
 export const MIN_SLOT = 20
+
+// The weekly / daily grid draws a full 24-hour loop that starts at DAY_START_MIN
+// (06:00) and wraps past midnight to GRID_END_MIN (30:00 → 06:00 the next day).
+export const GRID_SPAN_MIN = 24 * 60
+export const GRID_END_MIN = DAY_START_MIN + GRID_SPAN_MIN // 06:00 next day (== 30:00)
+
+/**
+ * Map a raw minute-of-day (0–1439) onto the grid axis. Times from 00:00–05:59
+ * fall below the 06:00 start, so they wrap to the tail of the 24-hour loop
+ * (00:00 → 24:00, 05:59 → 29:59) and render at the bottom of the grid.
+ *
+ * @param {number|null|undefined} min
+ * @returns {number|null|undefined}
+ */
+export function toAxisMin(min) {
+  if (min == null || Number.isNaN(Number(min))) return min
+  return min < DAY_START_MIN ? min + GRID_SPAN_MIN : min
+}
 
 /** 0=Mon … 6=Sun for "today". */
 export function todayDow() {

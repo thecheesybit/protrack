@@ -1,16 +1,19 @@
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Play, Pause, RotateCcw, Flame, Clock, CloudRain, Waves, Wind, VolumeX, Volume2, TreePine, Headphones, Coffee, Trees, AudioLines, Sprout, PictureInPicture2 } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { Play, Pause, RotateCcw, Flame, Clock, TreePine, Sprout, PictureInPicture2 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { WidgetFrame } from './WidgetFrame'
-import { ForestView } from '@/components/focus/ForestView'
+import { MonthlyForest } from '@/components/focus/MonthlyForest'
+import { FocusSetup } from '@/components/focus/FocusSetup'
+import { SpriteTree } from '@/components/focus/ForestSprites'
+import { useFocusSessions } from '@/hooks/useFocusSessions'
 import { cn } from '@/utils/cn'
 import { useAuth } from '@/hooks/useAuth'
 import { updateSettings } from '@/services/userService'
 import { logFailedFocusSession } from '@/services/focusService'
 import { addLedgerEntry } from '@/services/ledgerService'
-import { VIDEO_PRESETS, youtubeId, toCanonicalYouTubeUrl } from '@/lib/focusScenes'
+import { youtubeId, toCanonicalYouTubeUrl } from '@/lib/focusScenes'
 import { enterPip } from '@/lib/pip'
 
 import f1 from '@/assets/f1.jpg'
@@ -21,17 +24,12 @@ import f5 from '@/assets/f5.jpg'
 
 const FOCUS_IMAGES = [f1, f2, f3, f4, f5]
 
-const PRESETS = [15, 25, 50]
-
-const AMBIENTS = [
-  { id: 'none', label: 'Off', Icon: VolumeX },
-  { id: 'rain', label: 'Rain', Icon: CloudRain },
-  { id: 'waves', label: 'Waves', Icon: Waves },
-  { id: 'wind', label: 'Wind', Icon: Wind },
-  { id: 'whitenoise', label: 'White Noise', Icon: AudioLines },
-  { id: 'cafe', label: 'Cafe', Icon: Coffee },
-  { id: 'forest', label: 'Forest', Icon: Trees },
-  { id: 'binaural', label: 'Binaural', Icon: Headphones },
+const MOTIVATION_LINES = [
+  'Press start — a tree takes root the moment you begin.',
+  'One session, one tree. Your forest is waiting.',
+  'Stay till the timer ends and this sapling grows tall.',
+  'Every focused minute is a ring in the trunk.',
+  'Plant something today your future self will walk through.',
 ]
 
 function mmss(sec) {
@@ -150,10 +148,15 @@ export function FocusWidget({ widget, variant }) {
   const activeModeId = useStore((s) => s.activeModeId)
   const focusAudioUrl = useStore((s) => s.settings?.focusAudioUrl || '')
   const customPresets = useStore((s) => s.settings?.customPresets || [])
+  const timerPresets = useStore((s) => s.settings?.timerPresets || [])
+  const { sessions } = useFocusSessions()
 
   const [exitAttempts, setExitAttempts] = useState(0)
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [activeTab, setActiveTab] = useState('timer')
+  const [motivation] = useState(
+    () => MOTIVATION_LINES[Math.floor(Math.random() * MOTIVATION_LINES.length)],
+  )
 
   const [bgImage, setBgImage] = useState(() => {
     const idx = Math.floor(Math.random() * FOCUS_IMAGES.length)
@@ -222,6 +225,35 @@ export function FocusWidget({ widget, variant }) {
       await updateSettings(user.uid, patch)
     } catch (err) {
       console.error('[focus] failed to save audio URL', err)
+    }
+  }
+
+  // ── Timer helpers ──────────────────────────────────────────────────────────
+  const workMin = Math.round(customTimerSetting.work / 60)
+  const breakMin = Math.round(customTimerSetting.break / 60)
+  const setWork = (m) => setCustomTimer(Math.max(1, Math.min(240, m)) * 60, customTimerSetting.break)
+  const setBreak = (m) => setCustomTimer(customTimerSetting.work, Math.max(0, Math.min(60, m)) * 60)
+
+  const saveTimerPreset = async () => {
+    if (timerPresets.some((p) => p.work === workMin && p.break === breakMin)) {
+      toast('That timer is already saved')
+      return
+    }
+    try {
+      await updateSettings(user.uid, {
+        timerPresets: [...timerPresets, { work: workMin, break: breakMin }].slice(-8),
+      })
+      toast.success(`Saved ${workMin}m focus · ${breakMin}m break`)
+    } catch (err) {
+      console.error('[focus] failed to save timer preset', err)
+      toast.error('Could not save preset')
+    }
+  }
+  const removeTimerPreset = async (idx) => {
+    try {
+      await updateSettings(user.uid, { timerPresets: timerPresets.filter((_, i) => i !== idx) })
+    } catch (err) {
+      console.error('[focus] failed to remove timer preset', err)
     }
   }
 
@@ -355,236 +387,42 @@ export function FocusWidget({ widget, variant }) {
                 )}
               </div>
 
-            {/* Elegant glassmorphic Tab Switcher */}
-            <div className="flex w-full max-w-[300px] rounded-2xl bg-black/40 p-1 border border-white/10 backdrop-blur-md">
-              <button
-                onClick={() => setActiveTab('timer')}
-                className={cn(
-                  "flex flex-1 items-center justify-center gap-1.5 py-2 text-[11px] font-bold uppercase tracking-wider rounded-xl transition-all",
-                  activeTab === 'timer'
-                    ? "bg-white/10 text-white border border-white/10 shadow-glow-sm"
-                    : "text-white/50 hover:text-white border border-transparent"
-                )}
+            {/* Idle: a sapling waiting to be planted + a nudge to begin */}
+            {isIdle && (
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex w-full max-w-[300px] items-center gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-950/30 px-3 py-2"
               >
-                <Clock className="h-3.5 w-3.5" />
-                Time
-              </button>
-              <button
-                onClick={() => setActiveTab('sounds')}
-                className={cn(
-                  "flex flex-1 items-center justify-center gap-1.5 py-2 text-[11px] font-bold uppercase tracking-wider rounded-xl transition-all",
-                  activeTab === 'sounds'
-                    ? "bg-white/10 text-white border border-white/10 shadow-glow-sm"
-                    : "text-white/50 hover:text-white border border-transparent"
-                )}
-              >
-                <AudioLines className="h-3.5 w-3.5" />
-                Audio
-              </button>
-              <button
-                onClick={() => setActiveTab('scenes')}
-                className={cn(
-                  "flex flex-1 items-center justify-center gap-1.5 py-2 text-[11px] font-bold uppercase tracking-wider rounded-xl transition-all",
-                  activeTab === 'scenes'
-                    ? "bg-white/10 text-white border border-white/10 shadow-glow-sm"
-                    : "text-white/50 hover:text-white border border-transparent"
-                )}
-              >
-                <TreePine className="h-3.5 w-3.5" />
-                Scene
-              </button>
-            </div>
+                <SpriteTree species="pine" variant={2} height={44} />
+                <span className="text-[11px] leading-snug text-emerald-200/80">{motivation}</span>
+              </motion.div>
+            )}
 
-            {/* Dynamic Tab Contents */}
-            <div className="w-full flex justify-center min-h-[110px]">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={activeTab}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.15 }}
-                  className="w-full flex justify-center"
-                >
-                  {activeTab === 'timer' && (
-                    <div className="flex flex-col items-center gap-3 w-full max-w-[300px]">
-                      <div className="flex items-center gap-1 w-full rounded-2xl border border-white/10 bg-black/30 p-1 backdrop-blur-sm">
-                        {PRESETS.map((p) => {
-                          const active = Math.round(customTimerSetting.work / 60) === p
-                          return (
-                            <button
-                              key={p}
-                              disabled={!isIdle}
-                              onClick={() => setCustomTimer(p * 60, customTimerSetting.break)}
-                              className={cn(
-                                'flex-1 rounded-xl py-1.5 text-xs font-semibold transition-all disabled:opacity-50',
-                                active
-                                  ? 'bg-accent text-white shadow-glow-sm'
-                                  : 'text-white/70 hover:text-white',
-                              )}
-                            >
-                              {p}m
-                            </button>
-                          )
-                        })}
-                      </div>
-
-                      {/* Custom timer inputs */}
-                      <div className="flex items-center justify-between w-full rounded-2xl border border-white/10 bg-black/30 px-3 py-2">
-                        <span className="text-[11px] font-medium text-white/50">Custom Duration</span>
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number" min="1" max="120"
-                            value={Math.round(customTimerSetting.work / 60)}
-                            onChange={(e) => setCustomTimer(Number(e.target.value) * 60, customTimerSetting.break)}
-                            disabled={!isIdle}
-                            className="w-12 rounded-lg border border-white/20 bg-black/60 px-1.5 py-1 text-center text-xs text-white outline-none backdrop-blur-sm focus:border-accent disabled:opacity-40"
-                          />
-                          <span className="text-[10px] text-white/40">/</span>
-                          <input
-                            type="number" min="1" max="60"
-                            value={Math.round(customTimerSetting.break / 60)}
-                            onChange={(e) => setCustomTimer(customTimerSetting.work, Number(e.target.value) * 60)}
-                            disabled={!isIdle}
-                            className="w-12 rounded-lg border border-white/20 bg-black/60 px-1.5 py-1 text-center text-xs text-white outline-none backdrop-blur-sm focus:border-accent disabled:opacity-40"
-                          />
-                          <span className="text-[10px] text-white/40">min</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {activeTab === 'sounds' && (
-                    <div className="flex flex-col gap-3 w-full max-w-[300px]">
-                      <div className="grid grid-cols-4 gap-1.5">
-                        {AMBIENTS.map(({ id, label, Icon }) => {
-                          const isActive = audioTracks.ambient1 === id || audioTracks.ambient2 === id
-                          return (
-                            <button
-                              key={id}
-                              onClick={() => {
-                                if (isActive) {
-                                  if (audioTracks.ambient1 === id) toggleConcurrentTrack('ambient1', 'off')
-                                  else toggleConcurrentTrack('ambient2', 'off')
-                                } else {
-                                  if (!audioTracks.ambient1 || audioTracks.ambient1 === 'off') toggleConcurrentTrack('ambient1', id)
-                                  else toggleConcurrentTrack('ambient2', id)
-                                }
-                              }}
-                              title={label}
-                              className={cn(
-                                'group flex h-10 items-center justify-center rounded-xl border transition-all',
-                                isActive
-                                  ? 'border-accent/50 bg-accent/15 text-accent shadow-glow-sm ring-1 ring-accent/30'
-                                  : 'border-white/20 bg-black/60 text-white/70 hover:text-white hover:bg-black/80 hover:border-white/40',
-                              )}
-                            >
-                              <Icon className="h-4 w-4" />
-                            </button>
-                          )
-                        })}
-                      </div>
-
-                      {/* Volume */}
-                      <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-black/30 px-3 py-1.5">
-                        <button
-                          onClick={toggleMute}
-                          className={cn(
-                            'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors bg-black/60 border-white/20 text-white/70 hover:bg-black/80 hover:text-white/90',
-                            muted && 'border-red-500/30 text-red-400'
-                          )}
-                          title={muted ? 'Unmute' : 'Mute'}
-                        >
-                          {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-                        </button>
-                        <input
-                          type="range" min="0" max="100"
-                          value={Math.round(volume * 100)}
-                          onChange={(e) => setVolume(Number(e.target.value) / 100)}
-                          className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-black/60 accent-accent [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent [&::-webkit-slider-thumb]:shadow-glow-sm"
-                        />
-                        <span className="w-8 text-right text-[10px] font-medium tabular-nums text-white/60">
-                          {Math.round(volume * 100)}%
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {activeTab === 'scenes' && (
-                    <div className="flex flex-col gap-2.5 w-full max-w-[300px]">
-                      <div className="grid grid-cols-3 gap-1">
-                        {VIDEO_PRESETS.map((p) => {
-                          const isSelected =
-                            focusAudioUrl === p.url ||
-                            (Boolean(focusAudioUrl) && youtubeId(focusAudioUrl) === youtubeId(p.url))
-                          return (
-                            <button
-                              key={p.url}
-                              onClick={() => selectVideoPreset(p.url)}
-                              className={cn(
-                                'truncate rounded-lg border px-2 py-1.5 text-[10px] transition-colors',
-                                isSelected
-                                  ? 'border-accent/50 bg-accent/15 text-accent'
-                                  : 'border-white/20 bg-black/60 text-white/70 hover:border-accent/50 hover:text-white hover:bg-black/80',
-                              )}
-                              title={p.label}
-                            >
-                              {p.label}
-                            </button>
-                          )
-                        })}
-                        {customPresets.map((p, idx) => {
-                          const isSelected =
-                            focusAudioUrl === p.url ||
-                            (Boolean(focusAudioUrl) && youtubeId(focusAudioUrl) === youtubeId(p.url))
-                          return (
-                            <button
-                              key={p.url + idx}
-                              onClick={() => selectVideoPreset(p.url)}
-                              className={cn(
-                                'truncate rounded-lg border px-2 py-1.5 text-[10px] transition-colors',
-                                isSelected
-                                  ? 'border-accent/50 bg-accent/15 text-accent'
-                                  : 'border-white/20 bg-black/60 text-white/70 hover:border-accent/50 hover:text-white hover:bg-black/80',
-                              )}
-                              title={p.label}
-                            >
-                              {p.label}
-                            </button>
-                          )
-                        })}
-                        <button
-                          onClick={() => updateFocusAudioUrl('')}
-                          className={cn(
-                            'truncate rounded-lg border px-2 py-1.5 text-[10px] transition-colors',
-                            !focusAudioUrl
-                              ? 'border-accent/50 bg-accent/15 text-accent'
-                              : 'border-white/20 bg-black/60 text-white/70 hover:border-accent/50 hover:text-white hover:bg-black/80',
-                          )}
-                        >
-                          Off
-                        </button>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={focusAudioUrl}
-                          onChange={(e) => updateFocusAudioUrl(e.target.value)}
-                          placeholder="Custom YouTube URL..."
-                          className="w-full flex-1 rounded-xl border border-white/20 bg-black/60 px-3 py-2 text-xs text-white outline-none backdrop-blur-sm placeholder:text-white/40 focus:border-accent"
-                        />
-                        <button
-                          onClick={loadStream}
-                          className="shrink-0 rounded-xl border border-white/20 bg-black/60 px-3 py-2 text-xs font-semibold text-white/80 transition-colors hover:bg-black/80 hover:text-white"
-                        >
-                          Save
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </motion.div>
-              </AnimatePresence>
-            </div>
+            <FocusSetup
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              isIdle={isIdle}
+              workMin={workMin}
+              breakMin={breakMin}
+              setWork={setWork}
+              setBreak={setBreak}
+              setCustomTimer={setCustomTimer}
+              timerPresets={timerPresets}
+              saveTimerPreset={saveTimerPreset}
+              removeTimerPreset={removeTimerPreset}
+              audioTracks={audioTracks}
+              toggleConcurrentTrack={toggleConcurrentTrack}
+              volume={volume}
+              setVolume={setVolume}
+              muted={muted}
+              toggleMute={toggleMute}
+              focusAudioUrl={focusAudioUrl}
+              updateFocusAudioUrl={updateFocusAudioUrl}
+              loadStream={loadStream}
+              selectVideoPreset={selectVideoPreset}
+              customPresets={customPresets}
+            />
             {/* Close Inner content wrapper */}
             </div>
           </div>
@@ -598,22 +436,21 @@ export function FocusWidget({ widget, variant }) {
               <GlassStat icon={<TreePine className="h-4 w-4 text-emerald-400" />} label="Trees" value={stats?.treesGrown || 0} />
             </div>
 
-            {/* Forest */}
+            {/* This month's forest — one tree per completed session */}
             <div className="mb-2 flex items-center gap-2">
               <Sprout className="h-4 w-4 text-emerald-400" />
               <span className="text-xs font-semibold text-white/70">Your Forest</span>
               <span className="ml-auto rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-400">
-                {stats?.treesGrown || 0}
+                {stats?.treesGrown || 0} all-time
               </span>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-white/5 bg-black/20 p-3">
-              <ForestView count={stats?.treesGrown || 0} />
-            </div>
+            <MonthlyForest sessions={sessions} />
           </div>
         </div>
       ) : (
         /* ════════════════════════ COMPACT / GRID VARIANT ════════════════════════ */
-        <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-4">
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center gap-3 overflow-y-auto py-2">
+         <div className="m-auto flex w-full flex-col items-center gap-3.5">
           {/* Breathing animation when idle */}
           <motion.div
             animate={isIdle ? { scale: [1, 1.03, 1] } : { scale: 1 }}
@@ -660,6 +497,45 @@ export function FocusWidget({ widget, variant }) {
             )}
           </div>
 
+          {/* Idle: a little nudge to plant today's tree */}
+          {isIdle && (
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-950/30 px-3 py-1.5">
+              <SpriteTree species="pine" variant={2} height={26} />
+              <span className="max-w-[190px] text-[10px] leading-snug text-emerald-200/75">
+                {motivation}
+              </span>
+            </div>
+          )}
+
+          {/* Same Time / Audio / Scene customization as full-screen */}
+          <div className="w-full max-w-[300px]">
+            <FocusSetup
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              isIdle={isIdle}
+              workMin={workMin}
+              breakMin={breakMin}
+              setWork={setWork}
+              setBreak={setBreak}
+              setCustomTimer={setCustomTimer}
+              timerPresets={timerPresets}
+              saveTimerPreset={saveTimerPreset}
+              removeTimerPreset={removeTimerPreset}
+              audioTracks={audioTracks}
+              toggleConcurrentTrack={toggleConcurrentTrack}
+              volume={volume}
+              setVolume={setVolume}
+              muted={muted}
+              toggleMute={toggleMute}
+              focusAudioUrl={focusAudioUrl}
+              updateFocusAudioUrl={updateFocusAudioUrl}
+              loadStream={loadStream}
+              selectVideoPreset={selectVideoPreset}
+              customPresets={customPresets}
+              maxWidth={300}
+            />
+          </div>
+
           {/* Mini stat strip */}
           <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 backdrop-blur-sm">
             <span className="flex items-center gap-1 text-xs text-white/60">
@@ -672,6 +548,7 @@ export function FocusWidget({ widget, variant }) {
               {stats?.treesGrown || 0} trees
             </span>
           </div>
+         </div>
         </div>
       )}
 

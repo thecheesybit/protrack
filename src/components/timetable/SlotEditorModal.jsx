@@ -8,8 +8,6 @@ import { MODE_PALETTE } from '@/lib/constants'
 import {
   DAYS,
   DAY_START_MIN,
-  DAY_END_MIN,
-  clampMin,
 } from '@/lib/time'
 import { addSlot, updateSlot, deleteSlot } from '@/services/timetableService'
 import {
@@ -27,11 +25,11 @@ function toTimeValue(min) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
-/** Parse "HH:MM" from <input type="time"> → minutes-from-midnight */
+/** Parse "HH:MM" from <input type="time"> → minutes-from-midnight (00:00–23:59) */
 function timeValueToMin(val) {
   if (!val) return DAY_START_MIN
   const [h, m] = val.split(':').map(Number)
-  return clampMin(h * 60 + (m || 0))
+  return Math.max(0, Math.min(24 * 60 - 1, h * 60 + (m || 0)))
 }
 
 export function SlotEditorModal({ open, onClose, modeId: propModeId, slot, allModes, subjects = [] }) {
@@ -230,8 +228,6 @@ export function SlotEditorModal({ open, onClose, modeId: propModeId, slot, allMo
             type="time"
             value={toTimeValue(draft.startMin)}
             onChange={(e) => patch({ startMin: timeValueToMin(e.target.value) })}
-            min={toTimeValue(DAY_START_MIN)}
-            max={toTimeValue(DAY_END_MIN)}
             className="w-full rounded-xl border border-line bg-surface-2/60 px-2.5 py-2.5 text-sm outline-none focus:border-accent"
           />
         </div>
@@ -241,8 +237,6 @@ export function SlotEditorModal({ open, onClose, modeId: propModeId, slot, allMo
             type="time"
             value={toTimeValue(draft.endMin)}
             onChange={(e) => patch({ endMin: timeValueToMin(e.target.value) })}
-            min={toTimeValue(DAY_START_MIN)}
-            max={toTimeValue(DAY_END_MIN)}
             className="w-full rounded-xl border border-line bg-surface-2/60 px-2.5 py-2.5 text-sm outline-none focus:border-accent"
           />
         </div>

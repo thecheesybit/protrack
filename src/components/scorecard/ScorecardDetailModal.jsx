@@ -455,6 +455,67 @@ export function ScorecardDetailModal({
           </div>
         </div>
 
+        {/* ── Sectional Breakdown (FLT) ──────────────────────────── */}
+        {Array.isArray(scorecard.sections) && scorecard.sections.length > 0 && (
+          <div className="rounded-2xl border border-line/60 bg-surface-2/20 p-3.5">
+            <div className="mb-2 flex items-center justify-between text-xs">
+              <span className="font-semibold text-ink flex items-center gap-1.5">
+                <Layers className="h-3.5 w-3.5 text-accent" /> Sectional Breakdown
+              </span>
+              {scorecard.cutoff != null && (
+                <span className="text-muted">
+                  Overall cut-off <span className="font-semibold text-ink">{scorecard.cutoff}</span>
+                  {scorecard.totalMarks ? `/${scorecard.totalMarks}` : ''}
+                </span>
+              )}
+            </div>
+            <div className="overflow-x-auto rounded-xl border border-line/50">
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="bg-surface-2/50 text-[9px] uppercase tracking-wider text-muted">
+                    <th className="px-2.5 py-2 text-left font-medium">Section</th>
+                    <th className="px-2 py-2 text-right font-medium">Score</th>
+                    <th className="px-2 py-2 text-right font-medium">Cut-off</th>
+                    <th className="px-2 py-2 text-right font-medium">C / W / U</th>
+                    <th className="px-2 py-2 text-right font-medium">Acc</th>
+                    <th className="px-2.5 py-2 text-right font-medium">%ile</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scorecard.sections.map((sec, i) => {
+                    const clearedCut = sec.cutoff != null && Number(sec.score) >= Number(sec.cutoff)
+                    return (
+                      <tr key={`${sec.name}-${i}`} className="border-t border-line/40">
+                        <td className="px-2.5 py-2 font-medium text-ink">{sec.canonicalName || sec.name}</td>
+                        <td className="px-2 py-2 text-right tabular-nums text-ink">
+                          {sec.score}<span className="text-muted">/{sec.totalMarks}</span>
+                        </td>
+                        <td className={cn(
+                          'px-2 py-2 text-right tabular-nums',
+                          sec.cutoff == null ? 'text-muted' : clearedCut ? 'text-emerald-400' : 'text-rose-400',
+                        )}>
+                          {sec.cutoff != null ? sec.cutoff : '—'}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums text-muted">
+                          <span className="text-emerald-400">{sec.correct}</span>
+                          {' / '}<span className="text-rose-400">{sec.wrong}</span>
+                          {' / '}{sec.unattempted}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums text-emerald-400">
+                          {sec.accuracy != null ? `${sec.accuracy}%` : '—'}
+                        </td>
+                        <td className="px-2.5 py-2 text-right tabular-nums text-accent">
+                          {sec.percentile != null ? sec.percentile : '—'}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {/* ── Mistakes & Error Analysis ──────────────────────────── */}
         <div className="rounded-2xl border border-line/60 bg-surface-2/20 p-3.5">
           <div className="mb-2.5 flex items-center justify-between">

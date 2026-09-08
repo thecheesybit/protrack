@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { parseRawExamSummary, timeStringToMinutes } from '../scorecardParser'
+import {
+  parseRawExamSummary,
+  parseSectionTable,
+  canonicalSectionName,
+  timeStringToMinutes,
+} from '../scorecardParser'
 
 describe('scorecardParser', () => {
   it('correctly converts time strings to minutes', () => {
@@ -109,6 +114,113 @@ Unattempted: 4
     expect(parsed.correct).toBe(34)
     expect(parsed.wrong).toBe(2)
     expect(parsed.unattempted).toBe(4)
+  })
+
+  it('understands a SmartKeeda "Test Analysis" full-length paste and feeds it as an FLT', () => {
+    const rawCopy = `Full Length
+SBI PO Mock Test (Pre)
+SmartKeeda
+Test Analysis
+User Profile
+Hi Ayush Kumar
+Your Rank #16396
+Out of 24317 test takers
+
+Cut Off Marks:
+56.25/100
+Your Marks:
+33/100
+Percentage:
+33%
+Accuracy:
+75%
+Percentile:
+32.28%
+Insights
+SUMMARY
+Started on: Jul 27, 2026, 6:16:30 PM
+Completed on: Jul 27, 2026, 7:17:08 PM
+Test Time Limit:01:00:00
+Time taken:01:00:00
+Rank:16396/24317
+Section	No. of Ques.
+Correct
+Incorrect
+Unattempted
+Time Taken	Cut off	Score	Percentile
+English Language	40
+24
+9
+7
+20 Mins	7
+21.75/40 (54.00%)
+67.47
+Quantitative Aptitude	30
+4
+2
+24
+20 Mins	6.5
+3.5/30 (12.00%)
+24.70
+Reasoning Aptitude	30
+8
+1
+21
+20 Mins	7
+7.75/30 (26.00%)
+40.10
+Overall	100
+36
+12
+52
+0 Mins	56.25
+33/100 (33.00%)
+32.28
+`
+    const parsed = parseRawExamSummary(rawCopy)
+
+    expect(parsed.type).toBe('flt')
+    expect(parsed.sectionName).toBe('All Sections')
+    expect(parsed.score).toBe(33)
+    expect(parsed.totalMarks).toBe(100)
+    expect(parsed.cutoff).toBe(56.25)
+    expect(parsed.correct).toBe(36)
+    expect(parsed.wrong).toBe(12)
+    expect(parsed.unattempted).toBe(52)
+    expect(parsed.totalQuestions).toBe(100)
+    expect(parsed.percentile).toBe(32.28)
+    expect(parsed.accuracy).toBe(75)
+    expect(parsed.rank).toBe(16396)
+    expect(parsed.totalCandidates).toBe(24317)
+    expect(parsed.timeSpentMinutes).toBe(60)
+
+    expect(parsed.sections).toHaveLength(3)
+    const [eng, quant, reasoning] = parsed.sections
+    expect(eng.canonicalName).toBe('English Language')
+    expect(eng.correct).toBe(24)
+    expect(eng.wrong).toBe(9)
+    expect(eng.unattempted).toBe(7)
+    expect(eng.score).toBe(21.75)
+    expect(eng.totalMarks).toBe(40)
+    expect(eng.timeSpentMinutes).toBe(20)
+    expect(eng.percentile).toBe(67.47)
+    expect(eng.accuracy).toBe(72.7) // 24 / (24 + 9)
+    expect(quant.canonicalName).toBe('Quantitative Aptitude')
+    expect(quant.cutoff).toBe(6.5)
+    expect(reasoning.canonicalName).toBe('Reasoning')
+    expect(reasoning.correct).toBe(8)
+  })
+
+  it('parseSectionTable returns null when there is no tabular breakdown', () => {
+    expect(parseSectionTable('Score: 22 / 40\nCorrect: 10')).toBeNull()
+  })
+
+  it('canonicalSectionName maps portal-specific labels onto shared buckets', () => {
+    expect(canonicalSectionName('Reasoning Aptitude')).toBe('Reasoning')
+    expect(canonicalSectionName('Reasoning Ability')).toBe('Reasoning')
+    expect(canonicalSectionName('Numerical Ability')).toBe('Quantitative Aptitude')
+    expect(canonicalSectionName('English Language')).toBe('English Language')
+    expect(canonicalSectionName('Data Interpretation & Analysis')).toBe('Quantitative Aptitude')
   })
 
   it('does not invent values when fields are not present in text', () => {

@@ -726,13 +726,48 @@ ipcMain.handle('window:reload', () => {
 const PIP_WIDTH = 240
 const PIP_HEIGHT = 240
 const PIP_MIN_SIZE = 160 // lowered minimum so setBounds isn't clamped
-const PIP_SCREEN_MARGIN = 24 // gap from the working-area edge
+const PIP_SCREEN_MARGIN = 20 // gap from the working-area edge
 let prePipState = null
+
+// Wait for an Electron window event, with a hard fallback so we never hang if
+// the OS doesn't emit it (common on Windows when the window state is already
+// what we asked for).
+function waitForWindowEvent(w, event, fallbackMs) {
+  return new Promise((resolve) => {
+    let done = false
+    const finish = () => {
+      if (done) return
+      done = true
+      resolve()
+    }
+    try {
+      w.once(event, finish)
+    } catch {
+      /* window gone */
+    }
+    setTimeout(finish, fallbackMs)
+  })
+}
 
 ipcMain.handle('pip:enter', async () => {
   if (!win) return false
   const wasFullScreen = win.isFullScreen()
   const wasMaximized = win.isMaximized()
+
+  // Pin PiP to the display the window is on RIGHT NOW, computed once. Re-querying
+  // the display on later retries let a mid-transition window bounce to another
+  // monitor (and pick up its DPI scale) — a real problem on mixed-DPI dual
+  // setups. This target never changes for the lifetime of this PiP session.
+  const startDisplay =
+    screen.getDisplayMatching(win.getBounds()) || screen.getPrimaryDisplay()
+  const { x: dx, y: dy, width: dw } = startDisplay.workArea
+  const pipBounds = {
+    x: Math.round(dx + dw - PIP_WIDTH - PIP_SCREEN_MARGIN),
+    y: Math.round(dy + PIP_SCREEN_MARGIN),
+    width: PIP_WIDTH,
+    height: PIP_HEIGHT,
+  }
+
   prePipState = {
     bounds: win.getNormalBounds ? win.getNormalBounds() : win.getBounds(),
     isFullScreen: wasFullScreen,
@@ -742,20 +777,15 @@ ipcMain.handle('pip:enter', async () => {
   // Lower the minimum size FIRST, else setBounds is clamped to the old minimum.
   win.setMinimumSize(PIP_MIN_SIZE, PIP_MIN_SIZE)
   win.setResizable(true)
+  win.setMaximizable(false)
 
-  // A compact always-on-top square — just the floating timer, like a video PiP.
   const applyPipBounds = () => {
-    if (!win || win.isDestroyed()) return
-    const display = screen.getDisplayMatching(win.getBounds()) || screen.getPrimaryDisplay()
-    const { x: dx, y: dy, width: dw, height: dh } = display.workArea
-    win.setBounds({
-      x: Math.round(dx + dw - PIP_WIDTH - PIP_SCREEN_MARGIN),
-      y: Math.round(dy + dh - PIP_HEIGHT - PIP_SCREEN_MARGIN),
-      width: PIP_WIDTH,
-      height: PIP_HEIGHT,
-    })
+    if (!win || win.isDestroyed() || !prePipState) return
+    win.setBounds(pipBounds) // fixed target — never recomputed
     try {
       win.setAlwaysOnTop(true, 'screen-saver')
+      win.webContents.setZoomFactor(1.0) // keep the mini view at native pixels
+      win.webContents.setZoomLevel(0)
     } catch {
       win.setAlwaysOnTop(true)
     }
@@ -763,54 +793,63 @@ ipcMain.handle('pip:enter', async () => {
     win.focus()
   }
 
-  // Leaving fullscreen/maximize is async on Windows; resizing mid-transition is
-  // ignored (the OS restores the pre-transition bounds). So exit first, wait for
-  // it to settle (event + fallback timeout), then apply — and apply once more a
-  // tick later to defeat any late restore.
+  // Leaving fullscreen / maximize is async on Windows; a resize mid-transition is
+  // dropped. Exit first, wait for it to settle, then apply once — plus a single
+  // late correction for any compositor restore.
   if (wasFullScreen) {
     win.setFullScreen(false)
-    await new Promise((resolve) => {
-      let done = false
-      const finish = () => {
-        if (!done) {
-          done = true
-          resolve()
-        }
-      }
-      win.once('leave-full-screen', finish)
-      setTimeout(finish, 500)
-    })
-  } else if (wasMaximized) {
-    win.unmaximize()
-    await new Promise((resolve) => setTimeout(resolve, 80))
+    await waitForWindowEvent(win, 'leave-full-screen', 650)
   }
+  if (win.isMaximized()) {
+    win.unmaximize()
+    await waitForWindowEvent(win, 'unmaximize', 220)
+  }
+  if (win.isMinimized()) win.restore()
 
   applyPipBounds()
-  setTimeout(applyPipBounds, 140)
+  setTimeout(() => {
+    if (prePipState) applyPipBounds()
+  }, 260)
   return true
 })
 
 ipcMain.handle('pip:exit', () => {
   if (!win) return false
+  const restore = prePipState
+  prePipState = null // stops the pip:enter retry loop immediately
+
   win.setAlwaysOnTop(false)
   win.setMinimumSize(940, 600)
+  win.setResizable(true)
+  win.setMaximizable(true)
 
-  if (prePipState) {
-    const { bounds, isMaximized, isFullScreen } = prePipState
-    prePipState = null
-    if (bounds) {
-      win.setBounds(bounds)
-    }
-    if (isMaximized) {
-      win.maximize()
-    }
-    if (isFullScreen) {
-      win.setFullScreen(true)
-    }
+  if (restore) {
+    const { bounds, isMaximized, isFullScreen } = restore
+    if (bounds) win.setBounds(bounds)
+    if (isMaximized) win.maximize()
+    if (isFullScreen) win.setFullScreen(true)
   } else {
     win.setSize(1280, 820)
     win.center()
   }
+
+  // Re-pin the renderer at native pixels — shrinking to the PiP square and back,
+  // especially across monitors of different DPI, can leave the webContents at a
+  // non-1.0 zoom (the "everything is huge" bug). Setting it mid-transition can be
+  // lost, so re-assert a couple of times as bounds settle.
+  const reZoom = () => {
+    if (!win || win.isDestroyed()) return
+    try {
+      win.webContents.setZoomFactor(1.0)
+      win.webContents.setZoomLevel(0)
+      win.webContents.setVisualZoomLevelLimits(1, 1).catch(() => {})
+    } catch {
+      /* webContents gone */
+    }
+  }
+  reZoom()
+  setTimeout(reZoom, 220)
+  setTimeout(reZoom, 650)
 
   win.show()
   win.focus()

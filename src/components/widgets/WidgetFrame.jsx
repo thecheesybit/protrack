@@ -1,22 +1,9 @@
-import { useState, useCallback } from 'react'
+import { useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Maximize2, Minimize2, ChevronDown, ChevronUp } from 'lucide-react'
 import { getIcon } from '@/lib/icons'
 import { useStore } from '@/store/useStore'
 import { cn } from '@/utils/cn'
-
-function readCollapsed(widgetId) {
-  try {
-    return localStorage.getItem(`protrack:widget_collapsed:${widgetId}`) === '1'
-  } catch {
-    return false
-  }
-}
-function writeCollapsed(widgetId, val) {
-  try {
-    localStorage.setItem(`protrack:widget_collapsed:${widgetId}`, val ? '1' : '0')
-  } catch { /* private mode */ }
-}
 
 /**
  * Shared widget chrome with the focused-zoom morph (shared layoutId).
@@ -41,18 +28,17 @@ export function WidgetFrame({
 }) {
   const Icon = getIcon(widget.icon)
   const toggleWidget = useStore((s) => s.toggleWidget)
+  const toggleWidgetCollapsed = useStore((s) => s.toggleWidgetCollapsed)
   const isHero = variant === 'hero'
 
-  const [collapsed, setCollapsed] = useState(() => !isHero && readCollapsed(widget.id))
+  // Collapse state is board-level (uiSlice) so BoardCanvas can auto-promote a
+  // dock widget into a minimized slot. Hero view is never collapsed.
+  const collapsed = useStore((s) => !isHero && Boolean(s.collapsedWidgets[widget.id]))
 
   const toggleCollapse = useCallback((e) => {
     e.stopPropagation()
-    setCollapsed((prev) => {
-      const next = !prev
-      writeCollapsed(widget.id, next)
-      return next
-    })
-  }, [widget.id])
+    toggleWidgetCollapsed(widget.id)
+  }, [widget.id, toggleWidgetCollapsed])
 
   return (
     <div

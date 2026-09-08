@@ -35,6 +35,7 @@ import { SessionCompleteModal } from '@/components/focus/SessionCompleteModal'
 import { HydrationReminder } from '@/components/wellness/HydrationReminder'
 import { CenterPrompt } from '@/components/prompt/CenterPrompt'
 import { HelpModal } from '@/components/common/HelpModal'
+import { WhatsNewModal } from '@/components/common/WhatsNewModal'
 import { HelpCircle } from 'lucide-react'
 
 const SettingsPanel = React.lazy(() =>
@@ -51,9 +52,7 @@ const SupportModal = React.lazy(() =>
 )
 import aiGif from '@/assets/ai.gif'
 import { APP_VERSION } from '@/lib/version'
-import { DEFAULT_FOCUS_SCENE, youtubeId, buildSceneEmbedUrl } from '@/lib/focusScenes'
 import { exitPip } from '@/lib/pip'
-import { useYouTubeVolume } from '@/hooks/useYouTubeVolume'
 import { cn } from '@/utils/cn'
 
 /**
@@ -196,11 +195,12 @@ export function Dashboard() {
   // In desktop Electron, entering PiP morphs the single native window down to a
   // small always-on-top square at the screen corner (electron/main.js `pip:enter`).
   // Render only the dedicated PiP view + the scene-audio player.
+  // The scene <iframe> lives in <FocusSceneVideo/> at the workspace root — it
+  // stays mounted through this branch, so entering/leaving PiP never reloads it.
   if (typeof window !== 'undefined' && window.protrack?.isDesktop && pipActive) {
     return (
       <div className="relative h-screen w-screen overflow-hidden select-none bg-slate-950 font-sans text-white antialiased">
         <PipAppView />
-        <BackgroundAudioPlayer />
       </div>
     )
   }
@@ -361,7 +361,7 @@ export function Dashboard() {
         </button>
       )}
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
-      <BackgroundAudioPlayer />
+      <WhatsNewModal />
 
       <Suspense fallback={null}>
         <AIAssistant />
@@ -373,61 +373,6 @@ export function Dashboard() {
   )
 }
 
-function BackgroundAudioPlayer() {
-  const status = useStore((s) => s.status)
-  const userFocusAudioUrl = useStore((s) => s.settings?.focusAudioUrl || '')
-  const volume = useStore((s) => s.volume)
-  const muted = useStore((s) => s.muted)
-  const focusLocked = useStore((s) => s.focusLocked)
-  const pipActive = useStore((s) => s.pipActive)
-  const focusVideoEnabled = useStore((s) => s.settings?.focusVideoEnabled !== false)
-  const iframeRef = useRef(null)
-  const audioRef = useRef(null)
-
-  const onIframeLoad = useYouTubeVolume(iframeRef, volume, muted)
-
-  // Use default scene if no user preference is set
-  const focusAudioUrl = userFocusAudioUrl || DEFAULT_FOCUS_SCENE.url
-
-  // Audio plays only while session is actively running, scene is enabled and unmuted
-  if (status !== 'running' || !focusAudioUrl || muted || !focusVideoEnabled) return null
-
-  const videoId = youtubeId(focusAudioUrl)
-
-  // When FocusLockScreen is actively showing the video iframe (which also carries audio),
-  // this hidden player would duplicate playback — skip it. When in PiP mode, FocusLockScreen
-  // is unmounted, so this player keeps the scene audio playing seamlessly.
-  if (focusLocked && !pipActive && focusVideoEnabled && videoId) return null
-
-  if (videoId) {
-    const embedUrl = buildSceneEmbedUrl(videoId)
-    return (
-      <iframe
-        key={videoId}
-        ref={iframeRef}
-        src={embedUrl}
-        onLoad={onIframeLoad}
-        className="sr-only pointer-events-none"
-        allow="autoplay"
-        title="Background Audio Stream"
-        style={{ width: 1, height: 1, border: 0 }}
-      />
-    )
-  }
-
-  return (
-    <audio
-      ref={(el) => {
-        audioRef.current = el
-        if (el) el.volume = volume ?? 0.5
-      }}
-      src={focusAudioUrl}
-      autoPlay
-      loop
-      className="sr-only"
-    />
-  )
-}
 
 /**
  * Dynamic branding component.

@@ -52,6 +52,7 @@ export function ScorecardEditorModal({
   const [score, setScore] = useState('')
   const [totalMarks, setTotalMarks] = useState('')
   const [negativeMarks, setNegativeMarks] = useState('')
+  const [cutoff, setCutoff] = useState('')
   const [rank, setRank] = useState('')
   const [totalCandidates, setTotalCandidates] = useState('')
   const [percentile, setPercentile] = useState('')
@@ -62,6 +63,10 @@ export function ScorecardEditorModal({
   const [correct, setCorrect] = useState('')
   const [wrong, setWrong] = useState('')
   const [unattempted, setUnattempted] = useState('')
+
+  // Per-section breakdown (FLT paste, e.g. SmartKeeda "Test Analysis"). Read-only
+  // preview here; persisted so the detail card + AI coach can use it.
+  const [sections, setSections] = useState([])
 
   // Inline Mistakes
   const [mistakes, setMistakes] = useState([])
@@ -105,6 +110,8 @@ export function ScorecardEditorModal({
       setScore(scorecard.score != null ? String(scorecard.score) : '')
       setTotalMarks(scorecard.totalMarks != null ? String(scorecard.totalMarks) : '')
       setNegativeMarks(scorecard.negativeMarks != null ? String(scorecard.negativeMarks) : '')
+      setCutoff(scorecard.cutoff != null ? String(scorecard.cutoff) : '')
+      setSections(Array.isArray(scorecard.sections) ? scorecard.sections : [])
       setRank(scorecard.rank != null ? String(scorecard.rank) : '')
       setTotalCandidates(scorecard.totalCandidates != null ? String(scorecard.totalCandidates) : '')
       setPercentile(scorecard.percentile != null ? String(scorecard.percentile) : '')
@@ -130,6 +137,8 @@ export function ScorecardEditorModal({
       setScore('')
       setTotalMarks('')
       setNegativeMarks('')
+      setCutoff('')
+      setSections([])
       setRank('')
       setTotalCandidates('')
       setPercentile('')
@@ -155,6 +164,8 @@ export function ScorecardEditorModal({
     if (parsed.score != null) setScore(String(parsed.score))
     if (parsed.totalMarks != null) setTotalMarks(String(parsed.totalMarks))
     if (parsed.negativeMarks != null) setNegativeMarks(String(parsed.negativeMarks))
+    if (parsed.cutoff != null) setCutoff(String(parsed.cutoff))
+    if (Array.isArray(parsed.sections) && parsed.sections.length) setSections(parsed.sections)
     if (parsed.rank != null) setRank(String(parsed.rank))
     if (parsed.totalCandidates != null) setTotalCandidates(String(parsed.totalCandidates))
     if (parsed.percentile != null) setPercentile(String(parsed.percentile))
@@ -222,6 +233,8 @@ export function ScorecardEditorModal({
     setScore('')
     setTotalMarks('')
     setNegativeMarks('')
+    setCutoff('')
+    setSections([])
     setRank('')
     setTotalCandidates('')
     setPercentile('')
@@ -305,6 +318,8 @@ export function ScorecardEditorModal({
         score: score !== '' ? Number(score) : 0,
         totalMarks: totalMarks !== '' ? Number(totalMarks) : 0,
         negativeMarks: negativeMarks !== '' ? Number(negativeMarks) : 0,
+        cutoff: cutoff !== '' ? Number(cutoff) : null,
+        sections: Array.isArray(sections) ? sections : [],
         rank: rank !== '' ? Number(rank) : null,
         totalCandidates: totalCandidates !== '' ? Number(totalCandidates) : null,
         percentile: percentile !== '' ? Number(percentile) : null,
@@ -734,6 +749,62 @@ export function ScorecardEditorModal({
               </div>
             </div>
           </div>
+
+          {/* Sectional split — captured from an FLT paste (SmartKeeda / Adda247 table) */}
+          {sections.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-line/40">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[11px] font-medium text-muted">
+                  Sectional Split ({sections.length} sections{cutoff ? ` · overall cut-off ${cutoff}` : ''})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSections([])}
+                  className="text-[10px] text-muted hover:text-rose-400 transition-colors"
+                  title="Discard the parsed sectional split"
+                >
+                  Remove
+                </button>
+              </div>
+              <div className="overflow-hidden rounded-xl border border-line/50">
+                <table className="w-full text-[11px]">
+                  <thead>
+                    <tr className="bg-surface-2/50 text-[10px] uppercase tracking-wider text-muted">
+                      <th className="px-2 py-1.5 text-left font-medium">Section</th>
+                      <th className="px-2 py-1.5 text-right font-medium">Score</th>
+                      <th className="px-2 py-1.5 text-right font-medium">C / W / U</th>
+                      <th className="px-2 py-1.5 text-right font-medium">Acc</th>
+                      <th className="px-2 py-1.5 text-right font-medium">%ile</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sections.map((sec, i) => (
+                      <tr key={`${sec.name}-${i}`} className="border-t border-line/40">
+                        <td className="px-2 py-1.5 font-medium text-ink">{sec.canonicalName || sec.name}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-ink">
+                          {sec.score}<span className="text-muted">/{sec.totalMarks}</span>
+                        </td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-muted">
+                          <span className="text-emerald-400">{sec.correct}</span>
+                          {' / '}<span className="text-rose-400">{sec.wrong}</span>
+                          {' / '}{sec.unattempted}
+                        </td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-emerald-400">
+                          {sec.accuracy != null ? `${sec.accuracy}%` : '—'}
+                        </td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-accent">
+                          {sec.percentile != null ? sec.percentile : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-1 text-[10px] text-muted/70">
+                Auto-detected full-length test — top metrics above reflect the overall row.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* ── Mistakes & Error Logger (Most Important) ──────────── */}

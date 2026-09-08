@@ -64,6 +64,7 @@ export async function addScorecard(uid, modeId, data) {
     score: Number(data.score) || 0,
     totalMarks: Number(data.totalMarks) || 0,
     negativeMarks: Number(data.negativeMarks) || 0,
+    cutoff: data.cutoff != null && data.cutoff !== '' ? Number(data.cutoff) : null,
     rank: data.rank != null && data.rank !== '' ? Number(data.rank) : null,
     totalCandidates: data.totalCandidates != null && data.totalCandidates !== '' ? Number(data.totalCandidates) : null,
     percentile: data.percentile != null && data.percentile !== '' ? Number(data.percentile) : null,
@@ -74,6 +75,8 @@ export async function addScorecard(uid, modeId, data) {
     wrong: Number(data.wrong) || 0,
     unattempted: Number(data.unattempted) || 0,
     totalQuestions: Number(data.totalQuestions) || (Number(data.correct || 0) + Number(data.wrong || 0) + Number(data.unattempted || 0)),
+    // Per-section breakdown for FLTs (SmartKeeda-style paste). Empty for sectionals.
+    sections: Array.isArray(data.sections) ? data.sections : [],
     mistakes: Array.isArray(data.mistakes) ? data.mistakes : [],
     rawText: data.rawText || '',
     createdAt: serverTimestamp(),
@@ -170,6 +173,7 @@ export async function generateGeminiExpertAnalysis(scorecards, activeScopeName =
     type: s.type,
     section: s.sectionName,
     score: `${s.score}/${s.totalMarks}`,
+    cutoff: s.cutoff != null ? `${s.cutoff}/${s.totalMarks}` : 'N/A',
     percentile: s.percentile ? `${s.percentile}%` : 'N/A',
     accuracy: `${s.accuracy || 0}%`,
     timeSpent: s.timeSpent,
@@ -177,6 +181,18 @@ export async function generateGeminiExpertAnalysis(scorecards, activeScopeName =
     wrong: s.wrong,
     unattempted: s.unattempted,
     negativeMarks: s.negativeMarks,
+    // Sectional split for FLTs — lets the coach pinpoint the weak section.
+    sectionSplit: Array.isArray(s.sections) && s.sections.length
+      ? s.sections.map((sec) => ({
+          name: sec.canonicalName || sec.name,
+          score: `${sec.score}/${sec.totalMarks}`,
+          accuracy: sec.accuracy != null ? `${sec.accuracy}%` : 'N/A',
+          correct: sec.correct,
+          wrong: sec.wrong,
+          unattempted: sec.unattempted,
+          timeMin: sec.timeSpentMinutes,
+        }))
+      : undefined,
     mistakeNotes: (s.mistakes || []).map((m) => `[${m.tag}${m.topic ? ` - ${m.topic}` : ''}] ${m.note}`),
   }))
 

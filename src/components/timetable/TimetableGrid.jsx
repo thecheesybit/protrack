@@ -9,31 +9,56 @@ import {
   DAYS,
   DAY_START_MIN,
   DAY_END_MIN,
+  GRID_END_MIN,
+  GRID_SPAN_MIN,
   PX_PER_MIN,
   MIN_SLOT,
   todayDow,
   minutesToAxis,
   minutesToLabel,
   snap,
-  clampMin,
   isSlotOnDay,
+  toAxisMin,
 } from '@/lib/time'
 import { useNowMinutes } from '@/hooks/useNowMinutes'
 import { cn } from '@/utils/cn'
 
-const TOTAL_MIN = DAY_END_MIN - DAY_START_MIN
+const TOTAL_MIN = GRID_END_MIN - DAY_START_MIN
 
-// Tick arrays — computed once
+// Tick arrays — computed once. The axis runs a full 24h loop (06:00 → 06:00).
 const hours = []
-for (let m = DAY_START_MIN; m <= DAY_END_MIN; m += 60) hours.push(m)
+for (let m = DAY_START_MIN; m <= GRID_END_MIN; m += 60) hours.push(m)
 
 const halfHours = []
-for (let m = DAY_START_MIN + 30; m < DAY_END_MIN; m += 60) halfHours.push(m)
+for (let m = DAY_START_MIN + 30; m < GRID_END_MIN; m += 60) halfHours.push(m)
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// Pointer Y → axis minute, clamped to the visible span (06:00 → 30:00) so the
+// post-midnight band stays draggable.
 function yToMin(clientY, rect, ppm = PX_PER_MIN) {
-  return clampMin(snap(DAY_START_MIN + (clientY - rect.top) / ppm, 5))
+  const raw = snap(DAY_START_MIN + (clientY - rect.top) / ppm, 5)
+  return Math.max(DAY_START_MIN, Math.min(GRID_END_MIN, raw))
+}
+
+/**
+ * Turn an axis-minute range picked on weekday column `day` into the real
+ * { dayIndex, startMin, endMin } the slot editor stores. A pick that begins
+ * after midnight lands on the NEXT weekday's early morning; a single pick is
+ * kept on one side of the midnight wrap so it maps to one clean triple.
+ */
+function axisRangeToSelection(day, axisStart, axisEnd) {
+  const startsNextDay = axisStart >= GRID_SPAN_MIN // >= 24:00 on the axis
+  const off = startsNextDay ? GRID_SPAN_MIN : 0
+  const hiCap = startsNextDay ? GRID_END_MIN : GRID_SPAN_MIN
+  const lo = axisStart - off
+  const hi = Math.min(axisEnd, hiCap) - off
+  return {
+    dayIndex: startsNextDay ? (day + 1) % 7 : day,
+    startMin: lo,
+    endMin: Math.max(lo + 5, hi),
+    dayCap: hiCap - off, // 06:00 for the tail, 24:00 otherwise
+  }
 }
 
 function hexA(hex, a) {
@@ -47,8 +72,11 @@ function hexA(hex, a) {
 // ── Block components ──────────────────────────────────────────────────────────
 
 const SlotBlock = memo(function SlotBlock({ slot, onOpen, onEdit, ppm = PX_PER_MIN }) {
-  const top = (slot.startMin - DAY_START_MIN) * ppm
-  const height = Math.max(26, (slot.endMin - slot.startMin) * ppm)
+  const startAxis = toAxisMin(slot.startMin)
+  let endAxis = toAxisMin(slot.endMin)
+  if (endAxis <= startAxis) endAxis += GRID_SPAN_MIN // slot runs past midnight
+  const top = (startAxis - DAY_START_MIN) * ppm
+  const height = Math.max(26, (endAxis - startAxis) * ppm)
 
   const isStriped =
     slot.tagStyle === 'striped' ||
@@ -116,8 +144,11 @@ const EventBlock = memo(function EventBlock({ event, onDelete, onOpen, ppm = PX_
     event.eventStartMin ??
     (event.dueAt ? (event.dueAt?.toDate ? event.dueAt.toDate() : new Date(event.dueAt)).getHours() * 60 : 0)
   const endMin = event.eventEndMin ?? startMin + 60
-  const top = (startMin - DAY_START_MIN) * ppm
-  const height = Math.max(26, (endMin - startMin) * ppm)
+  const startAxis = toAxisMin(startMin)
+  let endAxis = toAxisMin(endMin)
+  if (endAxis <= startAxis) endAxis += GRID_SPAN_MIN // event runs past midnight
+  const top = (startAxis - DAY_START_MIN) * ppm
+  const height = Math.max(26, (endAxis - startAxis) * ppm)
 
   return (
     <div
@@ -315,7 +346,14 @@ export function TimetableGrid({
   const scrollRef = useRef(null)
   const today = todayDow()
   const nowMin = useNowMinutes()
-  const nowVisible = nowMin >= DAY_START_MIN && nowMin <= DAY_END_MIN && weekOffset === 0
+  // The grid covers a full 24h loop (06:00 → 06:00), so "now" always maps onto the
+  // axis; 00:00–05:59 wraps to the bottom band and belongs to the PREVIOUS
+  // calendar day's column (its night tail).
+  const nowAxis = toAxisMin(nowMin)
+  const nowColIdx = nowMin < DAY_START_MIN ? (today + 6) % 7 : today
+  // When it's past midnight on a Monday, the active 24h day sits in the previous
+  // week's Sunday column — not rendered at weekOffset 0, so hide the marker.
+  const nowVisible = weekOffset === 0 && !(nowMin < DAY_START_MIN && today === 0)
 
   // Zoom — pixels-per-minute multiplier. Persisted; 1× = the classic scale,
   // up to 4× so 9–10 AM opens into a clean minute-by-minute view.
@@ -346,7 +384,7 @@ export function TimetableGrid({
   const fineStep = zoom >= 3 ? 5 : zoom >= 1.5 ? 15 : 30
   const fineLines = useMemo(() => {
     const out = []
-    for (let m = DAY_START_MIN; m <= DAY_END_MIN; m += fineStep) {
+    for (let m = DAY_START_MIN; m <= GRID_END_MIN; m += fineStep) {
       if (m % 60 !== 0) out.push(m)
     }
     return out
@@ -365,15 +403,45 @@ export function TimetableGrid({
     return thurs.toLocaleDateString([], { month: 'long', year: 'numeric' })
   }, [activeRefDate])
 
+  // The all-day / tasks shelf only earns its row when the visible week actually
+  // has an all-day item, an untimed deadline, or an overdue carry-forward — an
+  // empty strip just wastes the 6 AM row. Mirrors the per-column filters below.
+  const weekHasTrayItems = useMemo(() => {
+    const now = new Date()
+    for (let day = 0; day < 7; day++) {
+      const colDate = getWeekDate(day, activeRefDate)
+      const colDateStr = ymd(colDate)
+      const isCurrentToday = day === today && weekOffset === 0
+      const todoHit = allTodos.some((t) => {
+        if (t.type === 'event' || t.source === 'gcal' || !t.dueAt) return false
+        const d2 = t.dueAt?.toDate ? t.dueAt.toDate() : new Date(t.dueAt)
+        if (isNaN(d2.getTime())) return false
+        const isDone = Boolean(t.done) || t.column === 'done'
+        const mins = d2.getHours() * 60 + d2.getMinutes()
+        if (ymd(d2) === colDateStr) return Boolean(t.allDay) || mins === 0
+        return isCurrentToday && !isDone && d2 < now
+      })
+      if (todoHit) return true
+      const gcalHit = (gcalEvents || []).some((ev) => {
+        if (!ev.allDay || !ev.startMs) return false
+        const s = ymd(new Date(ev.startMs))
+        const e = ev.endMs ? ymd(new Date(ev.endMs)) : s
+        return colDateStr >= s && colDateStr <= e
+      })
+      if (gcalHit) return true
+    }
+    return false
+  }, [allTodos, gcalEvents, activeRefDate, today, weekOffset])
+
   // Auto-scroll so current hour or earliest session is comfortably in view
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
     if (nowVisible) {
-      const nowTop = (nowMin - DAY_START_MIN) * ppm
+      const nowTop = (nowAxis - DAY_START_MIN) * ppm
       el.scrollTop = Math.max(0, nowTop - el.clientHeight / 3)
     } else if (slots.length > 0) {
-      const minStart = Math.min(...slots.map((s) => s.startMin))
+      const minStart = Math.min(...slots.map((s) => toAxisMin(s.startMin)))
       const top = (minStart - DAY_START_MIN) * ppm
       el.scrollTop = Math.max(0, top - 30)
     }
@@ -414,24 +482,24 @@ export function TimetableGrid({
     } catch {
       /* ignore pointer capture errors */
     }
-    const startMin = Math.min(drag.start, drag.current)
-    const endMin = Math.max(drag.start, drag.current)
-    const day = drag.day
+    const aStart = Math.min(drag.start, drag.current)
+    const aEnd = Math.max(drag.start, drag.current)
+    const sel = axisRangeToSelection(drag.day, aStart, aEnd)
     setDrag(null)
-    if (endMin - startMin >= MIN_SLOT) {
-      onSelect?.({ dayIndex: day, startMin, endMin })
+    if (aEnd - aStart >= MIN_SLOT) {
+      onSelect?.({ dayIndex: sel.dayIndex, startMin: sel.startMin, endMin: sel.endMin })
     } else {
       // Single tap/click on a cell: select a clean 1-hour slot at the clicked time
-      const clickEnd = Math.min(startMin + 60, DAY_END_MIN)
-      onSelect?.({ dayIndex: day, startMin, endMin: clickEnd })
+      const clickEnd = Math.min(sel.startMin + 60, sel.dayCap)
+      onSelect?.({ dayIndex: sel.dayIndex, startMin: sel.startMin, endMin: clickEnd })
     }
   }
 
   const onContextMenu = (day) => (e) => {
     e.preventDefault()
-    const min = yToMin(e.clientY, e.currentTarget.getBoundingClientRect(), ppm)
-    const endMin = Math.min(min + 60, DAY_END_MIN)
-    onSelect?.({ dayIndex: day, startMin: min, endMin })
+    const a = yToMin(e.clientY, e.currentTarget.getBoundingClientRect(), ppm)
+    const sel = axisRangeToSelection(day, a, a + 60)
+    onSelect?.({ dayIndex: sel.dayIndex, startMin: sel.startMin, endMin: sel.endMin })
   }
 
   return (
@@ -537,7 +605,9 @@ export function TimetableGrid({
         })}
       </div>
 
-      {/* All-Day / Tasks shelf across the week — compact markers with rich side detail (P10) */}
+      {/* All-Day / Tasks shelf across the week — hidden entirely on an empty week
+          so it never eats the 6 AM row. */}
+      {weekHasTrayItems && (
       <div className="flex border-b border-line/50 pl-12 bg-surface-2/20 shrink-0 min-h-[30px] max-h-[58px]">
         {DAYS.map((d, day) => {
           const colDate = getWeekDate(day, activeRefDate)
@@ -558,7 +628,9 @@ export function TimetableGrid({
             if (isNaN(d2.getTime())) return false
             const isDueToday = ymd(d2) === colDateStr
             const mins = d2.getHours() * 60 + d2.getMinutes()
-            const isUntimedOrMidnight = t.allDay || mins === 0 || mins < DAY_START_MIN
+            // A real early-morning time (00:01–05:59) now has a home on the grid —
+            // the previous day's night tail — so it's no longer "untimed".
+            const isUntimedOrMidnight = t.allDay || mins === 0
             if (isDueToday) return isUntimedOrMidnight
             // Display-only carry-forward for incomplete overdue items onto today
             if (isCurrentToday && !isDone && d2 < new Date()) return true
@@ -661,9 +733,10 @@ export function TimetableGrid({
           )
         })}
       </div>
+      )}
 
       {/* Scrollable grid body */}
-      <div ref={scrollRef} className="relative flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="relative flex-1 overflow-y-auto pt-3">
         <div className="relative flex" style={{ height: gridH }}>
 
           {/* Time axis */}
@@ -725,6 +798,20 @@ export function TimetableGrid({
               const colDateStr = ymd(colDate)
               const isCurrentDayToday = day === today && weekOffset === 0
 
+              // This column's 24h span is [colDate 06:00 → nextDate 06:00). An item
+              // with a real early-morning time (00:01–05:59) belongs to the
+              // previous day's column, so this column also pulls the pre-06:00
+              // slice of the NEXT calendar day. Midnight-exact / untimed items
+              // stay on their nominal date.
+              const tailDate = new Date(colDate)
+              tailDate.setDate(tailDate.getDate() + 1)
+              const tailDateStr = ymd(tailDate)
+              const tailDayIdx = (day + 1) % 7
+              const isTailMinute = (m) => m != null && m > 0 && m < DAY_START_MIN
+              // date + minute-of-day → does this item render in this column?
+              const inColumn = (dateStr, minute) =>
+                isTailMinute(minute) ? dateStr === tailDateStr : dateStr === colDateStr
+
               return (
                 <div
                   key={d}
@@ -738,9 +825,13 @@ export function TimetableGrid({
                     isCurrentDayToday && 'bg-accent/5',
                   )}
                 >
-                  {/* Recurring slots */}
+                  {/* Recurring slots — early-morning ones surface in the prior day's tail */}
                   {slots
-                    .filter((s) => isSlotOnDay(s, day, colDate))
+                    .filter((s) =>
+                      isTailMinute(s.startMin)
+                        ? isSlotOnDay(s, tailDayIdx, tailDate)
+                        : isSlotOnDay(s, day, colDate),
+                    )
                     .map((s) => (
                       <SlotBlock
                         key={s.id}
@@ -754,10 +845,12 @@ export function TimetableGrid({
                   {/* One-time event blocks */}
                   {events
                     .filter((e) => {
-                      const eDateStr =
-                        e.eventDate ||
-                        (e.dueAt ? ymd(e.dueAt?.toDate ? e.dueAt.toDate() : new Date(e.dueAt)) : null)
-                      return eDateStr === colDateStr
+                      const ed = e.dueAt ? (e.dueAt?.toDate ? e.dueAt.toDate() : new Date(e.dueAt)) : null
+                      const eDateStr = e.eventDate || (ed ? ymd(ed) : null)
+                      if (!eDateStr) return false
+                      const mins =
+                        e.eventStartMin ?? (ed && !isNaN(ed.getTime()) ? ed.getHours() * 60 + ed.getMinutes() : null)
+                      return inColumn(eDateStr, mins)
                     })
                     .map((e) => (
                       <EventBlock
@@ -779,17 +872,15 @@ export function TimetableGrid({
                   {/* Deadline chips — any day that has a matching todo with a specific time */}
                   {dateTasks
                     .filter((t) => {
-                      if (!t.dueAt) return false
+                      if (!t.dueAt || t.allDay) return false
                       const d2 = t.dueAt?.toDate ? t.dueAt.toDate() : new Date(t.dueAt)
                       if (isNaN(d2.getTime())) return false
-                      if (ymd(d2) !== colDateStr) return false
-                      const mins = d2.getHours() * 60 + d2.getMinutes()
-                      return !t.allDay && mins >= DAY_START_MIN
+                      return inColumn(ymd(d2), d2.getHours() * 60 + d2.getMinutes())
                     })
                     .map((t, idx) => {
                       const d2 = t.dueAt?.toDate ? t.dueAt.toDate() : new Date(t.dueAt)
-                      let mins = d2.getHours() * 60 + d2.getMinutes()
-                      if (mins > DAY_END_MIN) mins = DAY_END_MIN - 15
+                      let mins = toAxisMin(d2.getHours() * 60 + d2.getMinutes())
+                      if (mins > GRID_END_MIN) mins = GRID_END_MIN - 15
                       return (
                         <TodoChip
                           key={t.id}
@@ -807,13 +898,12 @@ export function TimetableGrid({
                       if (!n.dueAt) return false
                       const d2 = n.dueAt?.toDate ? n.dueAt.toDate() : new Date(n.dueAt)
                       if (isNaN(d2.getTime())) return false
-                      return ymd(d2) === colDateStr
+                      return inColumn(ymd(d2), d2.getHours() * 60 + d2.getMinutes())
                     })
                     .map((n, idx) => {
                       const d2 = n.dueAt?.toDate ? n.dueAt.toDate() : new Date(n.dueAt)
-                      let mins = d2.getHours() * 60 + d2.getMinutes()
-                      if (mins < DAY_START_MIN) mins = DAY_START_MIN
-                      if (mins > DAY_END_MIN) mins = DAY_END_MIN - 15
+                      let mins = toAxisMin(d2.getHours() * 60 + d2.getMinutes())
+                      if (mins > GRID_END_MIN) mins = GRID_END_MIN - 15
                       return (
                         <NoteDeadlineChip
                           key={n.id}
@@ -827,16 +917,15 @@ export function TimetableGrid({
                   {/* Subject Kanban tasks that carry a day/time */}
                   {subjectTasks
                     .filter((t) => {
+                      if (t.allDay) return false
                       const d2 = toDateSafe(t.dueAt)
                       if (!d2) return false
-                      if (ymd(d2) !== colDateStr) return false
-                      const mins = d2.getHours() * 60 + d2.getMinutes()
-                      return !t.allDay && mins >= DAY_START_MIN
+                      return inColumn(ymd(d2), d2.getHours() * 60 + d2.getMinutes())
                     })
                     .map((t, idx) => {
                       const d2 = toDateSafe(t.dueAt)
-                      let mins = d2.getHours() * 60 + d2.getMinutes()
-                      if (mins > DAY_END_MIN) mins = DAY_END_MIN - 15
+                      let mins = toAxisMin(d2.getHours() * 60 + d2.getMinutes())
+                      if (mins > GRID_END_MIN) mins = GRID_END_MIN - 15
                       return (
                         <TodoChip
                           key={`st-${t.id}`}
@@ -849,11 +938,15 @@ export function TimetableGrid({
 
                   {/* Synced Google Calendar events — read-only, at their real time */}
                   {gcalEvents
-                    .filter((ev) => !ev.allDay && ev.dateStr === colDateStr && typeof ev.startMin === 'number')
+                    .filter(
+                      (ev) =>
+                        !ev.allDay &&
+                        typeof ev.startMin === 'number' &&
+                        inColumn(ev.dateStr, ev.startMin),
+                    )
                     .map((ev, idx) => {
-                      let mins = ev.startMin
-                      if (mins < DAY_START_MIN) mins = DAY_START_MIN
-                      if (mins > DAY_END_MIN) mins = DAY_END_MIN - 15
+                      let mins = toAxisMin(ev.startMin)
+                      if (mins > GRID_END_MIN) mins = GRID_END_MIN - 15
                       return (
                         <GcalChip
                           key={ev.id}
@@ -881,9 +974,8 @@ export function TimetableGrid({
                       )
                       .map((t, idx) => {
                         const c = toDateSafe(t.createdAt)
-                        let mins = c.getHours() * 60 + c.getMinutes()
-                        if (mins < DAY_START_MIN) mins = DAY_START_MIN
-                        if (mins > DAY_END_MIN) mins = DAY_END_MIN - 15
+                        let mins = toAxisMin(c.getHours() * 60 + c.getMinutes())
+                        if (mins > GRID_END_MIN) mins = GRID_END_MIN - 15
                         return (
                           <UndatedMarker
                             key={t.id}
@@ -930,15 +1022,15 @@ export function TimetableGrid({
 
             {/* Now line */}
             {nowVisible && (() => {
-              const passedPercent = Math.round(((nowMin - DAY_START_MIN) / TOTAL_MIN) * 100)
-              const remainingHours = ((DAY_END_MIN - nowMin) / 60).toFixed(1)
-              const nowTop = (nowMin - DAY_START_MIN) * ppm
+              const passedPercent = Math.round(((nowAxis - DAY_START_MIN) / TOTAL_MIN) * 100)
+              const remainingHours = ((GRID_END_MIN - nowAxis) / 60).toFixed(1)
+              const nowTop = (nowAxis - DAY_START_MIN) * ppm
               return (
                 <>
                   <div
                     className="pointer-events-none absolute z-[5]"
                     style={{
-                      left: `${(today / 7) * 100}%`,
+                      left: `${(nowColIdx / 7) * 100}%`,
                       width: `${(1 / 7) * 100}%`,
                       top: 0,
                       height: nowTop,

@@ -30,9 +30,83 @@ export function timeStringToMinutes(timeStr) {
   return isNaN(numOnly) ? 0 : Math.round(numOnly)
 }
 
+// Canonical section names — keeps SmartKeeda's "Reasoning Aptitude" and
+// Oliveboard's "Reasoning Ability" landing on the same bucket.
+const SECTION_CANON = [
+  { name: 'Reasoning', re: /reasoning|logical|general intelligence|analytical/i },
+  { name: 'Quantitative Aptitude', re: /quant|numerical ability|numerical aptitude|\bmaths?\b|mathematic|data interpretation|\bdi\b/i },
+  { name: 'English Language', re: /english|verbal ability|reading comprehension/i },
+  { name: 'General Awareness', re: /general awareness|current affairs|banking awareness|financial awareness|general knowledge|\bga\b|\bgk\b/i },
+  { name: 'Computer Aptitude', re: /computer/i },
+  { name: 'General Studies', re: /general studies|\bgs\b|\bcsat\b/i },
+]
+
+/** Map a raw section label onto a canonical name (falls back to the trimmed input). */
+export function canonicalSectionName(raw) {
+  const s = String(raw || '').trim()
+  for (const item of SECTION_CANON) if (item.re.test(s)) return item.name
+  return s
+}
+
+const OVERALL_ROW_RE = /^(overall|total|grand total|aggregate|overall performance)$/i
+
+// One row of a tabular section breakdown (SmartKeeda "Test Analysis", Adda247
+// section table, etc.). Columns may be separated by any mix of spaces / tabs /
+// newlines. Order:
+//   Name | No. of Ques | Correct | Incorrect | Unattempted | Time Taken
+//        | Cut off | Score (x / total (pct%)) | Percentile
+const SECTION_ROW_RE =
+  /([A-Za-z][A-Za-z0-9 .&/'()-]*?)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+(?:\.\d+)?)\s*(?:mins?|minutes?|m)\b\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\/\s*(\d+)\s*\(?\s*(\d+(?:\.\d+)?)\s*%?\s*\)?\s+(-?\d+(?:\.\d+)?)/gi
+
+function roundTo(n, dp = 1) {
+  const f = 10 ** dp
+  return Math.round(n * f) / f
+}
+
 /**
- * Parses raw text copied from mock exam portals (Oliveboard, Testbook, PracticeMock, Adda247, etc.)
- * using fast regex and heuristics. Works offline with zero latency.
+ * Parse a tabular per-section breakdown, if the raw text contains one.
+ *
+ * @param {string} text
+ * @returns {{ sections: object[], overall: object|null } | null}
+ */
+export function parseSectionTable(text) {
+  if (!text) return null
+  const rows = []
+  SECTION_ROW_RE.lastIndex = 0
+  let m
+  while ((m = SECTION_ROW_RE.exec(text)) !== null) {
+    const [, rawName, nQ, correct, wrong, unatt, timeVal, cutoff, score, scoreTotal, scorePct, percentile] = m
+    const c = parseInt(correct, 10)
+    const w = parseInt(wrong, 10)
+    const u = parseInt(unatt, 10)
+    const attempted = c + w
+    rows.push({
+      name: rawName.trim(),
+      canonicalName: canonicalSectionName(rawName),
+      totalQuestions: parseInt(nQ, 10),
+      correct: c,
+      wrong: w,
+      unattempted: u,
+      timeSpentMinutes: Math.round(parseFloat(timeVal)),
+      cutoff: parseFloat(cutoff),
+      score: parseFloat(score),
+      totalMarks: parseInt(scoreTotal, 10),
+      scorePct: parseFloat(scorePct),
+      accuracy: attempted ? roundTo((c / attempted) * 100, 1) : 0,
+      percentile: parseFloat(percentile),
+    })
+  }
+  if (rows.length === 0) return null
+
+  const overall = rows.find((r) => OVERALL_ROW_RE.test(r.name)) || null
+  const sections = rows.filter((r) => r !== overall)
+  return { sections, overall }
+}
+
+/**
+ * Parses raw text copied from mock exam portals (Oliveboard, Testbook, PracticeMock,
+ * Adda247, SmartKeeda, etc.) using fast regex and heuristics. Works offline with
+ * zero latency.
  *
  * @param {string} rawText
  * @returns {object} Extracted scorecard fields
@@ -47,6 +121,7 @@ export function parseRawExamSummary(rawText) {
     score: null,
     totalMarks: null,
     negativeMarks: null,
+    cutoff: null,
     rank: null,
     totalCandidates: null,
     percentile: null,
@@ -58,6 +133,7 @@ export function parseRawExamSummary(rawText) {
     unattempted: null,
     totalQuestions: null,
     sectionName: '',
+    sections: [],
     examName: '',
     type: 'sectional', // default to sectional
   }
@@ -265,6 +341,81 @@ export function parseRawExamSummary(rawText) {
     result.totalQuestions = c + w + u
   }
 
+  // ── 9. Tabular per-section breakdown (SmartKeeda "Test Analysis", Adda247 …) ──
+  // A multi-row section table with an aggregate row makes this unambiguously a
+  // full-length test: capture every section and drive the top-level fields from
+  // the "Overall" row (falling back to the section sum).
+  const table = parseSectionTable(text)
+  if (table && table.sections.length >= 2) {
+    result.sections = table.sections
+    result.type = 'flt'
+    result.sectionName = 'All Sections'
+
+    const sum = (key) => table.sections.reduce((acc, s) => acc + (Number(s[key]) || 0), 0)
+    const ov = table.overall || {
+      score: sum('score'),
+      totalMarks: sum('totalMarks'),
+      correct: sum('correct'),
+      wrong: sum('wrong'),
+      unattempted: sum('unattempted'),
+      totalQuestions: sum('totalQuestions'),
+      timeSpentMinutes: sum('timeSpentMinutes'),
+      cutoff: null,
+      percentile: null,
+    }
+
+    if (ov.score != null) result.score = ov.score
+    if (ov.totalMarks) result.totalMarks = ov.totalMarks
+    if (ov.correct != null) result.correct = ov.correct
+    if (ov.wrong != null) result.wrong = ov.wrong
+    if (ov.unattempted != null) result.unattempted = ov.unattempted
+    result.totalQuestions =
+      ov.totalQuestions ||
+      (Number(result.correct || 0) + Number(result.wrong || 0) + Number(result.unattempted || 0))
+    if (ov.cutoff != null && !Number.isNaN(ov.cutoff)) result.cutoff = ov.cutoff
+    if (ov.percentile != null && !Number.isNaN(ov.percentile) && result.percentile == null) {
+      result.percentile = ov.percentile
+    }
+    if (ov.timeSpentMinutes && !result.timeSpentMinutes) {
+      result.timeSpentMinutes = ov.timeSpentMinutes
+    }
+    // Derived overall accuracy when the portal didn't print one.
+    if (result.accuracy == null) {
+      const attempted = Number(result.correct || 0) + Number(result.wrong || 0)
+      if (attempted > 0) result.accuracy = roundTo((result.correct / attempted) * 100, 1)
+    }
+  }
+
+  // ── 10. Labelled summary cards ("Label:" then value on the next line) ─────────
+  // SmartKeeda / generic portals stack the label above the number. These only
+  // fill gaps the line-oriented patterns above missed, so existing formats are
+  // untouched.
+  const yourMarks = text.match(/Your\s*Marks\s*:?\s*([+-]?\d+(?:\.\d+)?)\s*\/\s*(\d+)/i)
+  if (yourMarks) {
+    if (result.score == null) result.score = parseFloat(yourMarks[1])
+    if (result.totalMarks == null) result.totalMarks = parseFloat(yourMarks[2])
+  }
+  if (result.cutoff == null) {
+    const cutoffCard = text.match(/Cut[\s-]*Off\s*Marks?\s*:?\s*([+-]?\d+(?:\.\d+)?)/i)
+    if (cutoffCard) result.cutoff = parseFloat(cutoffCard[1])
+  }
+  if (result.accuracy == null) {
+    const accCard = text.match(/(?:Your\s+)?Accuracy\s*:?\s*([\d.]+)\s*%/i)
+    if (accCard) result.accuracy = parseFloat(accCard[1])
+  }
+  if (result.percentile == null) {
+    const pctCard = text.match(/(?:Your\s+)?Percentile\s*:?\s*([\d.]+)\s*%/i)
+    if (pctCard) result.percentile = parseFloat(pctCard[1])
+  }
+  if (result.rank == null) {
+    const rankHash = text.match(/(?:Your\s+)?Rank\s*#\s*([\d,]+)/i)
+    if (rankHash) result.rank = parseInt(rankHash[1].replace(/,/g, ''), 10)
+  }
+  if (result.totalCandidates == null) {
+    const takers = text.match(/(?:Out of|of)\s*([\d,]+)\s*(?:test[\s-]*takers|students|candidates|aspirants|users)/i)
+    if (takers) result.totalCandidates = parseInt(takers[1].replace(/,/g, ''), 10)
+  }
+
   return result
 }
 
@@ -284,6 +435,11 @@ export async function extractScorecardWithGemini(rawText) {
 Your task is to extract structured test performance data from the provided raw clipboard text of an exam or mock test portal (e.g. Oliveboard, Testbook, PracticeMock, Adda247, etc.).
 Extract the metrics with high precision. If a metric is not present in the text, return null (do not invent or use placeholder numbers).
 
+If the text contains a per-section table (e.g. SmartKeeda "Test Analysis" with rows per
+section plus an "Overall" row), it is a full-length test: set "type" to "flt",
+"sectionName" to "All Sections", fill the top-level metrics from the "Overall" row, and
+list every non-overall section in "sections". Otherwise "sections" is an empty array.
+
 Return STRICTLY a JSON object with these keys:
 {
   "examName": "string or empty",
@@ -293,6 +449,7 @@ Return STRICTLY a JSON object with these keys:
   "score": number or null,
   "totalMarks": number or null,
   "negativeMarks": number or null,
+  "cutoff": number or null,
   "rank": number or null,
   "totalCandidates": number or null,
   "percentile": number or null,
@@ -302,7 +459,22 @@ Return STRICTLY a JSON object with these keys:
   "correct": number or null,
   "wrong": number or null,
   "unattempted": number or null,
-  "totalQuestions": number or null
+  "totalQuestions": number or null,
+  "sections": [
+    {
+      "name": "string",
+      "totalQuestions": number or null,
+      "correct": number or null,
+      "wrong": number or null,
+      "unattempted": number or null,
+      "score": number or null,
+      "totalMarks": number or null,
+      "accuracy": number or null,
+      "percentile": number or null,
+      "timeSpentMinutes": number or null,
+      "cutoff": number or null
+    }
+  ]
 }
 Do not include markdown wraps or extra commentary. Return only the JSON.`
 

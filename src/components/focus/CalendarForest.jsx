@@ -362,6 +362,9 @@ export function DayGrove({
 }) {
   const [hoveredTree, setHoveredTree] = useState(null)
   const [hoveredIdx, setHoveredIdx] = useState(null)
+  // Pointing at the grove fades it out so the calendar cells + blocks it sits on
+  // top of stay reachable (owner: the trees are decoration, not an obstacle).
+  const [groveHidden, setGroveHidden] = useState(false)
 
   // Filter completed & successful sessions for this specific day, ordered chronologically
   const daySessions = useMemo(() => {
@@ -377,14 +380,14 @@ export function DayGrove({
   return (
     <div
       className={cn(
-        'pointer-events-auto absolute inset-x-0 bottom-0 z-20 flex flex-col items-center justify-end overflow-visible select-none',
+        'pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col items-center justify-end overflow-visible select-none',
         className,
       )}
       style={{ minHeight: 90 }}
     >
       {/* ── Hover Tooltip Card ────────────────────────────────────── */}
       <AnimatePresence>
-        {hoveredTree && (
+        {hoveredTree && !groveHidden && (
           <motion.div
             initial={{ opacity: 0, y: 6, scale: 0.92 }}
             animate={{ opacity: 1, y: -4, scale: 1 }}
@@ -403,7 +406,16 @@ export function DayGrove({
       </AnimatePresence>
 
       {/* ── Raster focus trees — one per successful session, none on an empty day ── */}
-      <div className="relative flex w-full items-end justify-center px-1 pb-1">
+      <div
+        className="pointer-events-auto relative flex w-full items-end justify-center px-1 pb-1 transition-opacity duration-200"
+        style={{ opacity: groveHidden ? 0 : 1 }}
+        onMouseEnter={() => count > 0 && setGroveHidden(true)}
+        onMouseLeave={() => {
+          setGroveHidden(false)
+          setHoveredTree(null)
+          setHoveredIdx(null)
+        }}
+      >
         {count === 0 ? (
           /* Empty day: nothing on the baseline (owner: no sapling placeholders). */
           null

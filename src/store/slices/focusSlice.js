@@ -70,6 +70,12 @@ export const createFocusSlice = (set) => ({
   
   setFocusLock: (isLocked) => set({ focusLocked: isLocked }),
   setPipActive: (active) => set({ pipActive: active }),
+
+  // Set when the YouTube scene reports it can't be embedded/played, so the lock
+  // screen falls back to a gradient. Owned by the single persistent
+  // <FocusSceneVideo/>; the lock screen only reads it.
+  sceneVideoError: false,
+  setSceneVideoError: (v) => set({ sceneVideoError: Boolean(v) }),
   clearCongratulations: () => set({ congratulations: null }),
 
   setMuted: (muted) => set({ muted }),

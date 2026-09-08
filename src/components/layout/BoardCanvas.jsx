@@ -152,15 +152,34 @@ export function BoardCanvas() {
 
   const [rightId, setRightId] = useState(DEFAULT_RIGHT_ID)
 
+  // Per-widget "minimized to header" state (uiSlice). Drives the right-column
+  // auto-stack: every collapsed widget in the stack pulls the next dock widget
+  // in below it so the freed space never sits empty.
+  const collapsedWidgets = useStore((s) => s.collapsedWidgets)
+
   const maximized = WIDGETS.find((w) => w.id === maximizedWidgetId)
 
   const leftWidget = WIDGETS.find((w) => w.id === LEFT_ID)
-  const rightWidget = WIDGETS.find((w) => w.id === rightId)
 
-  // Bottom row: all swappable widgets EXCEPT the one currently in the right slot,
-  // maintaining a consistent natural order.
+  // Right column is a vertical stack. It starts with the chosen right widget and
+  // grows by one dock widget for each consecutive collapsed member — so there's
+  // always exactly one expanded widget filling the space, plus N headers.
+  const rightStackIds = (() => {
+    const stack = [rightId]
+    const pool = ALL_SWAPPABLE.filter((id) => id !== rightId)
+    while (collapsedWidgets[stack[stack.length - 1]] && pool.length) {
+      stack.push(pool.shift())
+    }
+    return stack
+  })()
+  const rightStack = rightStackIds
+    .map((id) => WIDGETS.find((w) => w.id === id))
+    .filter(Boolean)
+
+  // Bottom row: every swappable widget not currently living in the right stack,
+  // in the natural order.
   const bottomWidgets = ALL_SWAPPABLE
-    .filter((id) => id !== rightId)
+    .filter((id) => !rightStackIds.includes(id))
     .map((id) => WIDGETS.find((w) => w.id === id))
     .filter(Boolean)
 
@@ -398,7 +417,7 @@ export function BoardCanvas() {
           </div>
         </div>
 
-        {rightWidget && (
+        {rightStack.length > 0 && (
           <div
             onMouseEnter={() => handleMouseEnterSlot('right')}
             onMouseLeave={() => handleMouseLeaveSlot('right')}
@@ -406,11 +425,19 @@ export function BoardCanvas() {
               flexBasis: `${rightFlex}%`,
               transition: isDraggingDivider.current ? 'none' : 'flex-basis 0.38s cubic-bezier(0.16, 1, 0.3, 1)',
             }}
-            className="min-h-0 min-w-0 flex-1 rounded-3xl"
+            className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 rounded-3xl"
           >
-            <div className="h-full">
-              <Widget widget={rightWidget} variant="grid" context={contextFor(rightWidget.id)} />
-            </div>
+            {rightStack.map((w) => {
+              const isCollapsed = Boolean(collapsedWidgets[w.id])
+              return (
+                <div
+                  key={w.id}
+                  className={cn('min-w-0', isCollapsed ? 'shrink-0' : 'min-h-0 flex-1')}
+                >
+                  <Widget widget={w} variant="grid" context={contextFor(w.id)} />
+                </div>
+              )
+            })}
           </div>
         )}
       </div>

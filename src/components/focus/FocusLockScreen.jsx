@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Play,
@@ -18,12 +18,11 @@ import {
 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { useAuth } from '@/hooks/useAuth'
-import { useYouTubeVolume } from '@/hooks/useYouTubeVolume'
 import { slotForHour, CHRONO_ACCENT } from '@/hooks/useChronoTheme'
 import { logFailedFocusSession } from '@/services/focusService'
 import { addLedgerEntry } from '@/services/ledgerService'
 import { updateSettings } from '@/services/userService'
-import { VIDEO_PRESETS, DEFAULT_FOCUS_SCENE, youtubeId, buildSceneEmbedUrl } from '@/lib/focusScenes'
+import { VIDEO_PRESETS, DEFAULT_FOCUS_SCENE, youtubeId } from '@/lib/focusScenes'
 import { withAlpha } from '@/lib/color'
 import { enterPip } from '@/lib/pip'
 import { cn } from '@/utils/cn'
@@ -126,39 +125,14 @@ export function FocusLockScreen() {
   // Use default scene if no user preference is set
   const focusAudioUrl = userFocusAudioUrl || DEFAULT_FOCUS_SCENE.url
 
+  // Playback error is detected + owned by the always-mounted <FocusSceneVideo/>.
+  const sceneVideoError = useStore((s) => s.sceneVideoError)
+
   const [confirmQuit, setConfirmQuit] = useState(false)
   const [showScenes, setShowScenes] = useState(false)
-  // Set when YouTube reports the scene can't be embedded/played (removed,
-  // embedding disabled, region-locked). We then hide the iframe and fall back
-  // to the gradient rather than leaving YouTube's branded error on screen.
-  const [videoError, setVideoError] = useState(false)
-
-  const iframeRef = useRef(null)
-  const onIframeLoad = useYouTubeVolume(iframeRef, volume, muted, status === 'running')
 
   const videoId = youtubeId(focusAudioUrl)
-  const showVideo = Boolean(focusVideoEnabled && videoId && !videoError)
-
-  // Reset the error gate whenever the chosen scene changes, so switching to a
-  // different (working) scene re-shows the video.
-  useEffect(() => {
-    setVideoError(false)
-  }, [videoId])
-
-  // Listen for the IFrame API's onError (video unavailable / embedding disabled).
-  useEffect(() => {
-    const onMessage = (e) => {
-      if (e.origin !== 'https://www.youtube.com') return
-      try {
-        const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
-        if (data?.event === 'onError') setVideoError(true)
-      } catch {
-        /* not a JSON control message */
-      }
-    }
-    window.addEventListener('message', onMessage)
-    return () => window.removeEventListener('message', onMessage)
-  }, [])
+  const showVideo = Boolean(focusVideoEnabled && videoId && !sceneVideoError)
 
   const band = slotForHour(new Date().getHours())
   const { Icon: BandIcon, label: bandLabel } = BAND_META[band] || BAND_META.evening
@@ -168,10 +142,6 @@ export function FocusLockScreen() {
 
   const total = phaseTotalSec || secondsLeft || 1
   const progress = Math.min(1, Math.max(0, 1 - secondsLeft / total))
-
-  // Embed URL (origin handling, autoplay, mute) lives in buildSceneEmbedUrl so
-  // the lock screen and the hidden background player never drift.
-  const embedUrl = buildSceneEmbedUrl(videoId)
 
   const onMain = () => (status === 'running' ? pause() : resume())
 
@@ -251,43 +221,15 @@ export function FocusLockScreen() {
             </button>
           </div>
 
-          {/* ── Background ─────────────────────────────────────────── */}
+          {/* ── Background ─────────────────────────────────────────────
+              The scene <iframe> itself lives in the always-mounted
+              <FocusSceneVideo/> (workspace root) so switching to/from PiP never
+              reloads it. Here we only add the readability dim on top of it. */}
           {showVideo ? (
-            <>
-              <div className="absolute inset-0 overflow-hidden">
-                <iframe
-                  ref={iframeRef}
-                  key={videoId}
-                  src={embedUrl}
-                  onLoad={onIframeLoad}
-                  allow="autoplay; fullscreen"
-                  title="Focus Background"
-                  style={{
-                    border: 0,
-                    pointerEvents: 'none',
-                    position: 'absolute',
-                    width: '177.78vh',
-                    height: '56.25vw',
-                    minWidth: '100%',
-                    minHeight: '100%',
-                    top: '50%',
-                    left: '50%',
-                    // scale(1.35) overfills the viewport so YouTube's edge chrome
-                    // — the logo + "More videos" grid (bottom corners) and the
-                    // caption band (bottom-center) — is cropped off-screen. The
-                    // captions module is also unloaded via the IFrame API; this is
-                    // belt-and-braces for a perfectly clean background scene.
-                    transform: 'translate(-50%, -50%) scale(1.35)',
-                  }}
-                />
-              </div>
-              {/* Cinematic vignette + dim so the panel stays readable */}
-              <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/45 to-black/80" />
-              <div
-                className="absolute inset-0"
-                style={{ boxShadow: `inset 0 0 320px 60px ${withAlpha(accentHex, 0.18)}` }}
-              />
-            </>
+            <div
+              className="absolute inset-0"
+              style={{ boxShadow: `inset 0 0 320px 60px ${withAlpha(accentHex, 0.18)}` }}
+            />
           ) : (
             <>
               <div
