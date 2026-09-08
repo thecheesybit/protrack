@@ -3,11 +3,14 @@ import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
 import { useTimetable } from '@/hooks/useTimetable'
 import { useTodos } from '@/hooks/useWellness'
+import { useNotes } from '@/hooks/useNotes'
 import {
   isCalendarConnected,
   syncEverything,
   CalendarAuthError,
+  CalendarSetupError,
 } from '@/services/calendarService'
+import { isGisAvailable, ensureFreshToken, msUntilRefresh } from '@/lib/gauth'
 
 const INTERVAL_MS = 5 * 60 * 1000
 /** Fire from anywhere (e.g. Settings "Sync now") to force an immediate run. */
@@ -16,17 +19,15 @@ export const GCAL_SYNC_NOW_EVENT = 'protrack:gcal-sync-now'
 /**
  * "Live while the app is open" Google Calendar sync. Mounted once in Dashboard.
  *
- * Runs `syncEverything` on mount, every 5 minutes, on window focus, and on the
- * `protrack:gcal-sync-now` event. Because the OAuth token can't refresh in the
- * background on the free tier, a lapsed token surfaces ONE sticky Island prompt
- * ("Reconnect Google Calendar") — never an automatic browser re-open. The
- * Island only speaks on a state change (first success, recovery, first failure),
- * not on every quiet tick.
+ * PULL is display-only into the local `gcalSlice` cache — every visible calendar
+ * (primary, secondary, subscribed, holidays, shared, Gmail-generated) — so it
+ * never touches Firestore write quota. PUSH is two-way for the user's own
+ * primary calendar (slots / dated to-dos / dated notes).
  *
- * Free-tier: no new always-on listeners of its own — it reuses the cross-mode
- * `useTimetable('all')` slot subscriptions (the same ones the hero timetable
- * view uses) and the shared todos listener, and does bounded one-shot Calendar
- * API reads via a persisted syncToken.
+ * Token: with `VITE_GOOGLE_OAUTH_CLIENT_ID` set, GIS refreshes the token
+ * silently in the background (proactive timer + retry inside calFetch), so the
+ * connection persists like a login. Without it, a lapse surfaces ONE sticky
+ * "Reconnect" Island prompt.
  */
 export function useCalendarSync() {
   const { user } = useAuth()
@@ -35,21 +36,40 @@ export function useCalendarSync() {
   const activeModeId = useStore((s) => s.activeModeId)
   const pushIsland = useStore((s) => s.pushIsland)
   const dismissIsland = useStore((s) => s.dismissIsland)
+  const setGcalEvents = useStore((s) => s.setGcalEvents)
+  const setGcalCalendars = useStore((s) => s.setGcalCalendars)
+  const setGcalSetupError = useStore((s) => s.setGcalSetupError)
 
   const { slots } = useTimetable('all')
   const todos = useTodos()
+  const notes = useNotes()
 
   const runningRef = useRef(false)
-  const lastStateRef = useRef('init') // 'init' | 'ok' | 'auth' | 'error'
+  const lastStateRef = useRef('init') // 'init' | 'ok' | 'auth' | 'setup' | 'error'
   const offlineIslandIdRef = useRef(null)
-  // Keep the freshest data without re-arming the interval every render.
-  const dataRef = useRef({ slots, todos })
-  dataRef.current = { slots, todos }
+  const refreshTimerRef = useRef(null)
+  const dataRef = useRef({ slots, todos, notes })
+  dataRef.current = { slots, todos, notes }
 
   const autoSyncOn = settings?.gcalAutoSync !== false
 
   useEffect(() => {
     if (!user) return undefined
+
+    // Proactive silent token refresh so the user never sees a reconnect prompt.
+    const scheduleRefresh = () => {
+      if (!isGisAvailable()) return
+      clearTimeout(refreshTimerRef.current)
+      const wait = Math.max(30 * 1000, msUntilRefresh() || 45 * 60 * 1000)
+      refreshTimerRef.current = setTimeout(async () => {
+        try {
+          await ensureFreshToken()
+        } catch {
+          /* the next sync run surfaces the reconnect prompt */
+        }
+        scheduleRefresh()
+      }, wait)
+    }
 
     const run = async ({ manual = false } = {}) => {
       if (runningRef.current) return
@@ -66,25 +86,42 @@ export function useCalendarSync() {
           inboxModeId,
           slots: dataRef.current.slots,
           todos: dataRef.current.todos,
+          notes: dataRef.current.notes,
           tasks: [],
         })
 
-        const changed = res.pulled + res.pushed + res.patched + res.deleted
-        if (lastStateRef.current === 'auth' && offlineIslandIdRef.current != null) {
+        setGcalEvents(res.events || [])
+        if (res.calendars?.length) setGcalCalendars(res.calendars)
+        setGcalSetupError(null)
+        scheduleRefresh()
+
+        const changed = res.pushed + res.patched + res.deleted
+        if (lastStateRef.current !== 'ok' && offlineIslandIdRef.current != null) {
           dismissIsland(offlineIslandIdRef.current)
           offlineIslandIdRef.current = null
         }
-        if (changed > 0 || lastStateRef.current === 'auth' || lastStateRef.current === 'error') {
+        if (changed > 0 || lastStateRef.current === 'auth' || lastStateRef.current === 'setup' || lastStateRef.current === 'error') {
           pushIsland({
             kind: 'sync-online',
             title: 'Calendar synced',
-            detail: changed > 0 ? `${changed} change${changed === 1 ? '' : 's'}` : null,
+            detail: changed > 0 ? `${changed} pushed` : `${res.events?.length || 0} events`,
             duration: 2400,
           })
         }
         lastStateRef.current = 'ok'
       } catch (err) {
-        if (err instanceof CalendarAuthError) {
+        if (err instanceof CalendarSetupError) {
+          setGcalSetupError({ message: err.message, consoleUrl: err.consoleUrl })
+          if (lastStateRef.current !== 'setup') {
+            offlineIslandIdRef.current = pushIsland({
+              kind: 'sync-offline',
+              title: 'Google Calendar not enabled',
+              detail: 'Enable the Calendar API in Google Cloud Console, then reconnect.',
+              sticky: true,
+            })
+          }
+          lastStateRef.current = 'setup'
+        } else if (err instanceof CalendarAuthError) {
           if (lastStateRef.current !== 'auth') {
             offlineIslandIdRef.current = pushIsland({
               kind: 'sync-offline',
@@ -112,6 +149,7 @@ export function useCalendarSync() {
     }
 
     run()
+    scheduleRefresh()
     const interval = setInterval(run, INTERVAL_MS)
     const onFocus = () => run()
     const onSyncNow = () => run({ manual: true })
@@ -120,10 +158,20 @@ export function useCalendarSync() {
 
     return () => {
       clearInterval(interval)
+      clearTimeout(refreshTimerRef.current)
       window.removeEventListener('focus', onFocus)
       window.removeEventListener(GCAL_SYNC_NOW_EVENT, onSyncNow)
     }
-    // Re-arm when identity / scope / auto-sync preference changes. Slots & todos
-    // flow through dataRef so their churn doesn't reset the interval.
-  }, [user, autoSyncOn, activeModeId, modes, settings?.gcalInboxModeId, pushIsland, dismissIsland])
+  }, [
+    user,
+    autoSyncOn,
+    activeModeId,
+    modes,
+    settings?.gcalInboxModeId,
+    pushIsland,
+    dismissIsland,
+    setGcalEvents,
+    setGcalCalendars,
+    setGcalSetupError,
+  ])
 }

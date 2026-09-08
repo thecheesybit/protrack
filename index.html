@@ -20,6 +20,10 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Google Identity Services — powers silent OAuth token refresh for the
+         two-way Google Calendar sync (see src/lib/gauth.js). Safe no-op when
+         VITE_GOOGLE_OAUTH_CLIENT_ID is unset. -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script type="module" src="/src/main.jsx"></script>
     <script>
       // Register the service worker for the WEB build only. The desktop app is

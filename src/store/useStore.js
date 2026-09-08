@@ -12,6 +12,7 @@ import { createCheckinSlice } from './slices/checkinSlice'
 import { createPromptSlice } from './slices/promptSlice'
 import { createNavSlice } from './slices/navSlice'
 import { createLockSlice } from './slices/lockSlice'
+import { createGcalSlice } from './slices/gcalSlice'
 
 /**
  * Single Zustand store composed from feature slices. Realtime Firestore
@@ -32,4 +33,5 @@ export const useStore = create((...a) => ({
   ...createPromptSlice(...a),
   ...createNavSlice(...a),
   ...createLockSlice(...a),
+  ...createGcalSlice(...a),
 }))

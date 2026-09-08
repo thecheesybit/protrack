@@ -38,6 +38,7 @@ export function openItemCounts({
 
   for (const t of todoList) {
     if (!t || t.type === 'event') continue
+    if (t.source === 'gcal') continue // pulled Google events live in the local cache, not the to-do list
     const isDone = Boolean(t.done) || t.column === 'done'
     if (!isDone) {
       openTodos++

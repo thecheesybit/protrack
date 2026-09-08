@@ -38,9 +38,10 @@ const TODO_COLOR = '#f59e0b'
 const TASK_COLOR = '#38bdf8'
 const SESSION_COLOR = '#10b981'
 const NOTE_COLOR = '#fbbf24'
+const GCAL_COLOR = '#4285f4'
 
 // Deterministic tie-break when two timed items share a start minute.
-const KIND_ORDER = { session: 0, slot: 1, event: 2, task: 3, todo: 4, note: 5 }
+const KIND_ORDER = { session: 0, slot: 1, event: 2, gcal: 3, task: 4, todo: 5, note: 6 }
 
 function toDate(value) {
   if (!value) return null
@@ -181,6 +182,30 @@ function normalizeSession(s) {
   }
 }
 
+function normalizeGcal(g) {
+  return {
+    id: `gcal:${g.id}`,
+    kind: 'gcal',
+    startMin: typeof g.startMin === 'number' ? g.startMin : null,
+    endMin: typeof g.endMin === 'number' ? g.endMin : null,
+    title: g.title || 'Google event',
+    color: g.color || GCAL_COLOR,
+    subjectId: null,
+    modeId: null,
+    modeName: null,
+    modeColor: null,
+    source: 'gcal',
+    readonly: true,
+    allDay: Boolean(g.allDay),
+    location: g.location || '',
+    htmlLink: g.htmlLink || '',
+    calendarName: g.calendarName || '',
+    isHoliday: Boolean(g.isHoliday),
+    done: false,
+    ref: g,
+  }
+}
+
 function normalizeNote(n) {
   const { modeId, modeName, modeColor } = modeMeta(n)
   return {
@@ -223,6 +248,7 @@ export function buildDayTimeline({
   tasks = [],
   sessions = [],
   notes = [],
+  gcalEvents = [],
   date = new Date(),
   nowMin = null,
   carryForward = true,
@@ -231,6 +257,19 @@ export function buildDayTimeline({
   const dayStr = ymd(date)
   const isCurrentToday = dayStr === ymd(new Date())
   const out = []
+
+  for (const g of gcalEvents) {
+    if (!g || !g.dateStr) continue
+    // All-day/multi-day: include when the view date falls in [start, end].
+    if (g.allDay && g.endMs) {
+      const s = ymd(new Date(g.startMs))
+      const e = ymd(new Date(g.endMs))
+      if (dayStr < s || dayStr > e) continue
+    } else if (g.dateStr !== dayStr) {
+      continue
+    }
+    out.push(normalizeGcal(g))
+  }
 
   for (const slot of slots) {
     if (slot && slot.id != null && isSlotOnDay(slot, dow)) out.push(normalizeSlot(slot))

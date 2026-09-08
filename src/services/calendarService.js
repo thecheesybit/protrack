@@ -4,9 +4,17 @@ import { auth, db } from '@/lib/firebase'
 import { isDesktop } from '@/desktop/isDesktop'
 import { nextOccurrence } from '@/lib/time'
 import { addSlot, updateSlot, deleteSlot } from '@/services/timetableService'
-import { addTodo, updateTodo, deleteTodo } from '@/services/todoService'
+import { updateTodo, deleteTodo } from '@/services/todoService'
 import { signInWithGooglePopup } from '@/lib/authPopup'
-import { eventToItem, itemToEvent, itemSignature, mergeStrategy } from '@/lib/gcalMap'
+import { itemToEvent, itemSignature, toMs } from '@/lib/gcalMap'
+import { ymd } from '@/lib/dates'
+import {
+  isGisAvailable,
+  isGisConfigured,
+  acquireToken,
+  ensureFreshToken,
+  revokeToken as gisRevoke,
+} from '@/lib/gauth'
 
 /**
  * Google Calendar integration.
@@ -23,11 +31,12 @@ import { eventToItem, itemToEvent, itemSignature, mergeStrategy } from '@/lib/gc
  * a single user-initiated "Reconnect Google Calendar" prompt (never an
  * automatic browser re-open) when the token lapses.
  */
-const CAL_SCOPE = 'https://www.googleapis.com/auth/calendar.events'
+const CAL_SCOPE = 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events'
 const AUTH_CORE_KEY = 'protrack:auth_core'
-const SYNC_TOKEN_KEY = 'protrack:gcal_sync_token'
+const SYNC_TOKEN_KEY = 'protrack:gcal_sync_tokens' // { [calendarId]: syncToken }
 const PUSH_SIGS_KEY = 'protrack:gcal_push_sigs'
 const LAST_SYNC_KEY = 'protrack:gcal_last_sync' // plain epoch ms — read by Settings
+const CAL_LIST_KEY = 'protrack:gcal_calendars' // cached calendarList metadata
 
 import { secureStorage } from '@/services/cryptoService'
 
@@ -37,6 +46,16 @@ export class CalendarAuthError extends Error {
   constructor(message = 'Calendar session expired — please reconnect') {
     super(message)
     this.name = 'CalendarAuthError'
+  }
+}
+
+/** Thrown when the Google Calendar API itself is misconfigured for the project
+ *  (disabled, quota, billing) — needs a Cloud Console fix, not a reconnect. */
+export class CalendarSetupError extends Error {
+  constructor(message, consoleUrl) {
+    super(message)
+    this.name = 'CalendarSetupError'
+    this.consoleUrl = consoleUrl || null
   }
 }
 
@@ -70,6 +89,26 @@ export function getCalToken() {
 
 export function isCalendarConnected() {
   return Boolean(getCalToken())
+}
+
+/**
+ * Token for an API call: on the web with GIS configured, transparently mint a
+ * fresh one (silent — no popup) when the cached token is stale; otherwise fall
+ * back to whatever the connect flow stored.
+ */
+async function getFreshToken() {
+  if (isGisAvailable()) {
+    try {
+      return await ensureFreshToken()
+    } catch {
+      // Silent refresh failed (consent revoked / no Google session) — surface
+      // as an auth error so the hook shows one reconnect prompt.
+      throw new CalendarAuthError()
+    }
+  }
+  const token = getCalToken()
+  if (!token) throw new CalendarAuthError('Calendar not connected')
+  return token
 }
 
 export function clearCalToken() {
@@ -155,30 +194,72 @@ export async function connectCalendar() {
     })
   }
 
+  // ── Web: prefer GIS (persistent silent refresh) when a client id is set ──
+  if (isGisAvailable()) {
+    // One consent popup; from here on ensureFreshToken() renews silently.
+    return acquireToken({ interactive: true })
+  }
+
+  // Fallback: the Firebase Google popup token (lapses ~hourly, no refresh).
   const provider = new GoogleAuthProvider()
   provider.addScope(CAL_SCOPE)
   provider.setCustomParameters({ prompt: 'consent' })
-  // Retries once against the popup/third-party-cookie failure class
-  // (auth/internal-error and friends). Runs only in a real browser tab (the
-  // isDesktop branch above never reaches here), so this cannot affect Electron.
   const result = await signInWithGooglePopup(auth, provider)
   const credential = GoogleAuthProvider.credentialFromResult(result)
   const token = credential?.accessToken
   if (!token) throw new Error('No calendar access token returned')
 
-  // Store securely under protrack:auth_core
   saveCalCredentials({
     access_token: token,
     expires_at: Date.now() + 3599 * 1000,
-    refresh_token: 'mock_gcal_refresh_token'
+    refresh_token: 'mock_gcal_refresh_token',
   })
   return token
 }
 
-async function calFetch(path, options = {}) {
-  const token = getCalToken()
-  if (!token) throw new CalendarAuthError('Calendar not connected')
-  const res = await fetch(`https://www.googleapis.com/calendar/v3${path}`, {
+/** Disconnect: revoke the GIS grant (if any) and drop all local sync state. */
+export function disconnectCalendar() {
+  try {
+    if (isGisConfigured()) gisRevoke()
+  } catch {
+    /* ignore */
+  }
+  clearCalCredentials()
+  try {
+    secureStorage.removeItem(SYNC_TOKEN_KEY)
+    secureStorage.removeItem(PUSH_SIGS_KEY)
+    secureStorage.removeItem(CAL_LIST_KEY)
+    localStorage.removeItem(LAST_SYNC_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+const GCAL_BASE = 'https://www.googleapis.com/calendar/v3'
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+/** Pull the machine-readable reason out of a Google API error body. */
+function parseGoogleError(body, status) {
+  const e = body?.error || {}
+  const reason = e.errors?.[0]?.reason || e.status || ''
+  const message = e.message || `Calendar API error ${status}`
+  return { reason, message }
+}
+
+/**
+ * One Calendar API call with: transparent silent token refresh, a single
+ * refresh-and-retry on 401/insufficient-scope, exponential backoff on
+ * rate-limit / 5xx, and typed errors for the "fix it in Cloud Console" class.
+ */
+async function calFetch(path, options = {}, _attempt = 0) {
+  let token
+  try {
+    token = await getFreshToken()
+  } catch (err) {
+    throw err instanceof CalendarAuthError ? err : new CalendarAuthError(err.message)
+  }
+
+  const res = await fetch(`${GCAL_BASE}${path}`, {
     ...options,
     headers: {
       Authorization: `Bearer ${token}`,
@@ -186,17 +267,80 @@ async function calFetch(path, options = {}) {
       ...(options.headers || {}),
     },
   })
-  if (res.status === 401) {
+
+  if (res.status === 204) return {} // DELETE returns no body
+  if (res.ok) return res.json()
+
+  let body = null
+  try {
+    body = await res.json()
+  } catch {
+    /* non-JSON error body */
+  }
+  const { reason, message } = parseGoogleError(body, res.status)
+
+  // ── Auth: expired / revoked / missing scope → one silent refresh, then prompt
+  if (
+    res.status === 401 ||
+    reason === 'authError' ||
+    reason === 'insufficientPermissions' ||
+    /insufficient (authentication scopes|permission)/i.test(message)
+  ) {
+    if (_attempt === 0 && isGisAvailable()) {
+      try {
+        await acquireToken({ interactive: false })
+        return calFetch(path, options, _attempt + 1)
+      } catch {
+        /* fall through to the reconnect prompt */
+      }
+    }
     clearCalToken()
     throw new CalendarAuthError()
   }
-  if (res.status === 204) return {} // DELETE returns no body
-  if (!res.ok) {
-    const err = new Error(`Calendar API error ${res.status}`)
-    err.status = res.status
-    throw err
+
+  // ── Project misconfig: API disabled / billing / quota project-wide
+  if (
+    res.status === 403 &&
+    (reason === 'accessNotConfigured' ||
+      reason === 'accessNotConfiguredHelp' ||
+      /has not been used in project|is disabled|enable it by visiting/i.test(message))
+  ) {
+    const project = firebaseProjectId()
+    throw new CalendarSetupError(
+      'The Google Calendar API is not enabled for this project. Enable it in the Cloud Console, then reconnect.',
+      project
+        ? `https://console.cloud.google.com/apis/library/calendar-json.googleapis.com?project=${project}`
+        : 'https://console.cloud.google.com/apis/library/calendar-json.googleapis.com',
+    )
   }
-  return res.json()
+
+  // ── Transient: rate limit / backend error → backoff and retry (max 3)
+  if (
+    res.status === 429 ||
+    res.status === 500 ||
+    res.status === 503 ||
+    reason === 'rateLimitExceeded' ||
+    reason === 'userRateLimitExceeded' ||
+    reason === 'backendError'
+  ) {
+    if (_attempt < 3) {
+      await sleep([600, 1800, 4000][_attempt])
+      return calFetch(path, options, _attempt + 1)
+    }
+  }
+
+  const err = new Error(message)
+  err.status = res.status
+  err.reason = reason
+  throw err
+}
+
+function firebaseProjectId() {
+  try {
+    return import.meta.env.VITE_FIREBASE_PROJECT_ID || auth?.app?.options?.projectId || null
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -334,15 +478,6 @@ export async function syncCalendar(uid, modeId, existingSlots = [], defaultColor
 
 /* ── Full two-way live sync (everything with a time) ─────── */
 
-async function readSyncToken() {
-  return (await secureStorage.getItem(SYNC_TOKEN_KEY)) || null
-}
-async function writeSyncToken(token) {
-  if (token) await secureStorage.setItem(SYNC_TOKEN_KEY, token)
-}
-async function clearSyncToken() {
-  secureStorage.removeItem(SYNC_TOKEN_KEY)
-}
 async function readPushSigs() {
   try {
     return JSON.parse((await secureStorage.getItem(PUSH_SIGS_KEY)) || '{}') || {}
@@ -354,54 +489,154 @@ async function writePushSigs(sigs) {
   await secureStorage.setItem(PUSH_SIGS_KEY, JSON.stringify(sigs))
 }
 
-/** One page of primary-calendar events. Handles the syncToken vs. timeMin split. */
-async function fetchEventsPage({ syncToken, pageToken }) {
-  const params = new URLSearchParams({ maxResults: '250' })
-  if (pageToken) params.set('pageToken', pageToken)
-  if (syncToken) {
-    params.set('syncToken', syncToken)
-  } else {
-    // Full sync window: a week back covers recently-moved items without an
-    // unbounded read. singleEvents expands recurrences to instances.
-    params.set('timeMin', new Date(Date.now() - 7 * 86400000).toISOString())
-    params.set('singleEvents', 'true')
-    params.set('showDeleted', 'true')
+/** Read/write the { [calendarId]: syncToken } map used for delta pulls. */
+async function readSyncTokens() {
+  try {
+    return JSON.parse((await secureStorage.getItem(SYNC_TOKEN_KEY)) || '{}') || {}
+  } catch {
+    return {}
   }
-  return calFetch(`/calendars/primary/events?${params}`)
+}
+async function writeSyncTokens(map) {
+  await secureStorage.setItem(SYNC_TOKEN_KEY, JSON.stringify(map || {}))
 }
 
-/** Collect every changed event since the stored syncToken (or a full window). */
-async function pullChangedEvents() {
-  let syncToken = await readSyncToken()
-  let items = []
-  let pageToken = null
-  let nextSyncToken = null
-
-  for (let guard = 0; guard < 20; guard++) {
-    let page
+/**
+ * Every calendar the user can see — primary, secondary, subscribed, holidays,
+ * shared. `accessRole` in {owner, writer} means we may push to it; {reader,
+ * freeBusyReader} is display-only. Cached so a transient failure still renders.
+ */
+export async function listCalendars() {
+  try {
+    const data = await calFetch('/users/me/calendarList?minAccessRole=freeBusyReader&maxResults=250')
+    const cals = (data.items || [])
+      .filter((c) => c.selected !== false && c.deleted !== true)
+      .map((c) => ({
+        id: c.id,
+        name: c.summaryOverride || c.summary || c.id,
+        color: c.backgroundColor || '#6366f1',
+        accessRole: c.accessRole || 'reader',
+        primary: Boolean(c.primary),
+        writable: c.accessRole === 'owner' || c.accessRole === 'writer',
+      }))
     try {
-      page = await fetchEventsPage({ syncToken, pageToken })
-    } catch (err) {
-      if (err.status === 410) {
-        // Token expired server-side — drop it and restart a full sync once.
-        await clearSyncToken()
-        syncToken = null
-        pageToken = null
-        items = []
+      await secureStorage.setItem(CAL_LIST_KEY, JSON.stringify(cals))
+    } catch {
+      /* ignore */
+    }
+    return cals
+  } catch (err) {
+    if (err instanceof CalendarAuthError || err instanceof CalendarSetupError) throw err
+    try {
+      const cached = JSON.parse((await secureStorage.getItem(CAL_LIST_KEY)) || '[]')
+      if (cached.length) return cached
+    } catch {
+      /* ignore */
+    }
+    throw err
+  }
+}
+
+export async function getCachedCalendars() {
+  try {
+    return JSON.parse((await secureStorage.getItem(CAL_LIST_KEY)) || '[]') || []
+  } catch {
+    return []
+  }
+}
+
+const HOLIDAY_RE = /#holiday@|holiday\.calendar\.google/i
+
+/** Normalize a raw Google event into the local display shape (no Firestore). */
+function normalizeGcalEvent(ev, cal) {
+  if (!ev || ev.status === 'cancelled' || (!ev.start)) return null
+  const allDay = Boolean(ev.start.date && !ev.start.dateTime)
+  const startMs = toMs(ev.start.dateTime || ev.start.date)
+  let endMs = toMs(ev.end?.dateTime || ev.end?.date)
+  if (allDay && endMs) endMs -= 1 // Google's all-day end is exclusive
+  const start = startMs ? new Date(startMs) : null
+  const end = endMs ? new Date(endMs) : null
+  return {
+    id: `${cal.id}::${ev.id}`,
+    eventId: ev.id,
+    calendarId: cal.id,
+    calendarName: cal.name,
+    color: cal.color,
+    title: ev.summary || (HOLIDAY_RE.test(cal.id) ? 'Holiday' : '(busy)'),
+    description: (ev.description || '').slice(0, 500),
+    location: ev.location || '',
+    htmlLink: ev.htmlLink || '',
+    allDay,
+    isHoliday: HOLIDAY_RE.test(cal.id),
+    readonly: !cal.writable,
+    startMs,
+    endMs,
+    dateStr: start ? ymd(start) : null,
+    startMin: allDay || !start ? null : start.getHours() * 60 + start.getMinutes(),
+    endMin: allDay || !end ? null : end.getHours() * 60 + end.getMinutes(),
+    updated: ev.updated ? toMs(ev.updated) : null,
+    recurringEventId: ev.recurringEventId || null,
+  }
+}
+
+/**
+ * Pull changed events from EVERY visible calendar. Returns normalized display
+ * events (local only — never written to Firestore) plus the fresh syncToken map
+ * and the set of eventIds that were cancelled since the last pull.
+ */
+async function pullAllCalendars() {
+  const cals = await listCalendars()
+  const tokens = await readSyncTokens()
+  const nextTokens = {}
+  const events = []
+  const cancelled = new Set()
+
+  for (const cal of cals) {
+    let syncToken = tokens[cal.id] || null
+    let pageToken = null
+    for (let guard = 0; guard < 20; guard++) {
+      const params = new URLSearchParams({ maxResults: '250', singleEvents: 'true' })
+      if (pageToken) params.set('pageToken', pageToken)
+      if (syncToken) {
+        params.set('syncToken', syncToken)
+      } else {
+        // First sync (or a reset token): a wide window so the month views have
+        // holidays + upcoming events straight away without an unbounded read.
+        params.set('timeMin', new Date(Date.now() - 45 * 86400000).toISOString())
+        params.set('timeMax', new Date(Date.now() + 400 * 86400000).toISOString())
+        params.set('showDeleted', 'true')
+      }
+      let page
+      try {
+        page = await calFetch(`/calendars/${encodeURIComponent(cal.id)}/events?${params}`)
+      } catch (err) {
+        if (err.status === 410) {
+          // Server dropped the token — restart this calendar's full window once.
+          syncToken = null
+          pageToken = null
+          continue
+        }
+        // One bad calendar must not abort the whole sync.
+        break
+      }
+      for (const ev of page.items || []) {
+        if (ev.status === 'cancelled') {
+          cancelled.add(ev.id)
+          continue
+        }
+        const norm = normalizeGcalEvent(ev, cal)
+        if (norm) events.push(norm)
+      }
+      if (page.nextPageToken) {
+        pageToken = page.nextPageToken
         continue
       }
-      throw err
+      if (page.nextSyncToken) nextTokens[cal.id] = page.nextSyncToken
+      break
     }
-    items = items.concat(page.items || [])
-    if (page.nextPageToken) {
-      pageToken = page.nextPageToken
-      continue
-    }
-    nextSyncToken = page.nextSyncToken || null
-    break
   }
 
-  return { items, nextSyncToken }
+  return { events, nextTokens, cancelled, calendars: cals }
 }
 
 /**
@@ -409,101 +644,57 @@ async function pullChangedEvents() {
  * recurring slots, one-time events, and dated to-dos/tasks — in both directions,
  * including deletes. All client-side direct Calendar API; no server.
  *
+ * PULL is display-only: events from every visible calendar (primary, secondary,
+ * subscribed, holidays, shared, Gmail-generated flights/tickets/reservations)
+ * are returned in `out.events` for a local cache — NOT written to Firestore, so
+ * hundreds of holiday entries cost zero write quota. PUSH is two-way: local
+ * slots / dated to-dos / dated notes are created & patched on the user's primary
+ * calendar and deleted there when removed locally. Read-only calendars are never
+ * pushed to.
+ *
  * @param {string} uid
- * @param {{ modes: Array, inboxModeId: string, slots: Array, todos: Array, tasks?: Array }} ctx
- *        `slots` should be the cross-mode list (each tagged `_modeId`); `todos`
- *        are the decrypted todos (events = those with `type:'event'`). `tasks`
- *        has no app-wide source (free-tier: no collectionGroup listener) — pass
- *        [] for now; see the `DAY_TASKS` note in TimetableWidget.
- * @returns {Promise<{pulled:number, pushed:number, patched:number, deleted:number, errors:string[]}>}
+ * @param {{ modes: Array, inboxModeId: string, slots: Array, todos: Array, notes?: Array, tasks?: Array }} ctx
+ * @returns {Promise<{pulled:number, pushed:number, patched:number, deleted:number,
+ *   errors:string[], events:Array, calendars:Array}>}
  */
-export async function syncEverything(uid, { modes = [], inboxModeId, slots = [], todos = [], tasks = [] }) {
-  if (!uid) return { pulled: 0, pushed: 0, patched: 0, deleted: 0, errors: ['no uid'] }
+export async function syncEverything(uid, { modes = [], inboxModeId, slots = [], todos = [], notes = [], tasks = [] }) {
+  if (!uid) return { pulled: 0, pushed: 0, patched: 0, deleted: 0, errors: ['no uid'], events: [], calendars: [] }
   if (!isCalendarConnected()) throw new CalendarAuthError('Calendar not connected')
 
   const inbox = inboxModeId || modes[0]?.id
-  const out = { pulled: 0, pushed: 0, patched: 0, deleted: 0, errors: [] }
+  const out = { pulled: 0, pushed: 0, patched: 0, deleted: 0, errors: [], events: [], calendars: [] }
 
   const slotModeId = (s) => s._modeId || inbox
-  const findByEventId = (id) => ({
-    slot: slots.find((s) => s.googleEventId === id),
-    todo: todos.find((t) => t.googleEventId === id),
-  })
+  let nextTokens = null
 
-  /* 1 ── PULL: apply remote changes locally ─────────────── */
-  let nextSyncToken = null
+  /* 0 ── one-time cleanup of the pre-v2.2.2 sync that wrote gcal → to-dos ── */
   try {
-    const { items, nextSyncToken: tok } = await pullChangedEvents()
-    nextSyncToken = tok
-
-    for (const ev of items) {
-      const mapped = eventToItem(ev)
-      if (!mapped) continue
-      const { slot, todo } = findByEventId(mapped.googleEventId)
-
-      try {
-        if (mapped.kind === 'cancelled') {
-          if (slot) {
-            await deleteSlot(uid, slotModeId(slot), slot.id)
-            out.deleted++
-          } else if (todo) {
-            await deleteTodo(uid, todo.id)
-            out.deleted++
-          }
-          continue
+    if (!(await secureStorage.getItem('protrack:gcal_migrated_v2'))) {
+      for (const t of todos) {
+        if (t.source === 'gcal' && t.googleEventId) {
+          await deleteTodo(uid, t.id).catch(() => {})
         }
-
-        if (mapped.kind === 'slot') {
-          const patch = {
-            label: mapped.label,
-            dayOfWeek: mapped.dayOfWeek,
-            startMin: mapped.startMin,
-            endMin: mapped.endMin,
-            googleEventId: mapped.googleEventId,
-            source: 'gcal',
-            recurrenceType: 'weekly',
-          }
-          if (slot) {
-            if (mergeStrategy(null, mapped.updated) === 'remote') {
-              await updateSlot(uid, slotModeId(slot), slot.id, patch)
-              out.pulled++
-            }
-          } else {
-            await addSlot(uid, inbox, {
-              ...patch,
-              color: modes.find((m) => m.id === inbox)?.accentColor || '#6366f1',
-              tag: 'Google Cal',
-              tagStyle: 'dashed',
-            })
-            out.pulled++
-          }
-          continue
-        }
-
-        // mapped.kind === 'todo'
-        if (todo) {
-          if (mergeStrategy(null, mapped.updated) === 'remote') {
-            const patch = mapped.type === 'event'
-              ? { text: mapped.text, type: 'event', eventDate: mapped.eventDate, eventStartMin: mapped.eventStartMin, eventEndMin: mapped.eventEndMin }
-              : { text: mapped.text, dueAt: mapped.dueAt }
-            await updateTodo(uid, todo.id, patch)
-            out.pulled++
-          }
-        } else {
-          const base = { text: mapped.text, modeId: inbox, googleEventId: mapped.googleEventId, source: 'gcal' }
-          if (mapped.type === 'event') {
-            await addTodo(uid, { ...base, type: 'event', eventDate: mapped.eventDate, eventStartMin: mapped.eventStartMin, eventEndMin: mapped.eventEndMin })
-          } else {
-            await addTodo(uid, { ...base, dueAt: mapped.dueAt })
-          }
-          out.pulled++
-        }
-      } catch (err) {
-        out.errors.push(`pull ${mapped.googleEventId}: ${err.message}`)
       }
+      for (const s of slots) {
+        if (s.source === 'gcal' && s.googleEventId) {
+          await deleteSlot(uid, slotModeId(s), s.id).catch(() => {})
+        }
+      }
+      await secureStorage.setItem('protrack:gcal_migrated_v2', '1')
     }
+  } catch {
+    /* non-fatal */
+  }
+
+  /* 1 ── PULL: all calendars → local display cache (no Firestore) ─────────── */
+  try {
+    const { events, nextTokens: tok, calendars } = await pullAllCalendars()
+    nextTokens = tok
+    out.events = events
+    out.calendars = calendars
+    out.pulled = events.length
   } catch (err) {
-    if (err instanceof CalendarAuthError) throw err
+    if (err instanceof CalendarAuthError || err instanceof CalendarSetupError) throw err
     out.errors.push(`pull: ${err.message}`)
   }
 
@@ -512,10 +703,15 @@ export async function syncEverything(uid, { modes = [], inboxModeId, slots = [],
   const seenEventIds = new Set()
 
   const pushable = [
-    ...slots.map((s) => ({ item: s, write: (id) => updateSlot(uid, slotModeId(s), s.id, { googleEventId: id }) })),
+    ...slots
+      .filter((s) => s.source !== 'gcal')
+      .map((s) => ({ item: s, write: (id) => updateSlot(uid, slotModeId(s), s.id, { googleEventId: id }) })),
     ...todos
-      .filter((t) => !t.done && (t.type === 'event' || t.dueAt))
+      .filter((t) => t.source !== 'gcal' && !t.done && (t.type === 'event' || t.dueAt))
       .map((t) => ({ item: t, write: (id) => updateTodo(uid, t.id, { googleEventId: id }) })),
+    ...notes
+      .filter((n) => n.source !== 'gcal' && n.dueAt)
+      .map((n) => ({ item: { text: n.title || n.text || 'Note', dueAt: n.dueAt, allDay: n.allDay, googleEventId: n.googleEventId, id: n.id }, write: null })),
     ...tasks
       .filter((t) => t.column !== 'done' && t.dueAt)
       .map((t) => ({ item: t, write: null })), // no app-wide task writer yet
@@ -524,6 +720,8 @@ export async function syncEverything(uid, { modes = [], inboxModeId, slots = [],
   for (const { item, write } of pushable) {
     const body = itemToEvent(item)
     if (!body) continue
+    // Notify in Google Calendar too — a 30-min popup on everything we push.
+    body.reminders = { useDefault: false, overrides: [{ method: 'popup', minutes: 30 }] }
     try {
       if (!item.googleEventId) {
         if (!write) continue // can't persist the id back — skip silently
@@ -575,7 +773,7 @@ export async function syncEverything(uid, { modes = [], inboxModeId, slots = [],
   }
 
   await writePushSigs(sigs)
-  if (nextSyncToken) await writeSyncToken(nextSyncToken)
+  if (nextTokens) await writeSyncTokens(nextTokens)
   stampLastSync()
   return out
 }
