@@ -314,13 +314,17 @@ export function playSound(name) {
 /**
  * Map a Dynamic Island event `kind` to the sound that should accompany it.
  * Returns the sound name only — the caller (P5's useIslandCycle) plays it.
- * Unlisted kinds (e.g. 'sync-offline', 'info') fall through to 'notify'.
+ * `null` means "no sound" (a valid, silent no-op through {@link playSound}).
+ * Unlisted kinds (e.g. 'sync-offline', 'info', 'cancelled') fall through to
+ * 'notify'.
  * @param {string} kind
- * @returns {'success'|'chime'|'error'|'notify'}
+ * @returns {'success'|'chime'|'error'|'notify'|null}
  */
 export function chimeForIslandKind(kind) {
   switch (kind) {
     case 'success':
+    case 'milestone':
+    case 'update-ready':
       return 'success'
     case 'progress':
     case 'water':
@@ -331,6 +335,9 @@ export function chimeForIslandKind(kind) {
     case 'deadline':
     case 'error':
       return 'error'
+    // Background auto-update download the user never asked for — stay silent.
+    case 'update-downloading':
+      return null
     default:
       return 'notify'
   }

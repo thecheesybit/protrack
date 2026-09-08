@@ -148,6 +148,8 @@ describe('setSoundsEnabled', () => {
 describe('chimeForIslandKind', () => {
   const cases = [
     ['success', 'success'],
+    ['milestone', 'success'],
+    ['update-ready', 'success'],
     ['progress', 'chime'],
     ['water', 'chime'],
     ['sync-online', 'chime'],
@@ -157,6 +159,8 @@ describe('chimeForIslandKind', () => {
     ['error', 'error'],
     ['info', 'notify'],
     ['sync-offline', 'notify'],
+    ['cancelled', 'notify'],
+    ['update-downloading', null],
     [undefined, 'notify'],
     ['totally-unknown', 'notify'],
   ]
