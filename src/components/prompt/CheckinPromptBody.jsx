@@ -3,6 +3,7 @@ import { Sunrise, Sun, Sunset, ListPlus, Check } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { saveCheckinAnswer } from '@/services/checkinService'
 import { addTodo } from '@/services/todoService'
+import { addNote } from '@/services/noteService'
 import { snoozeCheckins } from '@/hooks/useCheckIns'
 import { energyTrend, checkinInsight } from '@/lib/checkin'
 import { ymd } from '@/lib/dates'
@@ -48,6 +49,21 @@ export function CheckinPromptBody({ prompt, uid, onResolve }) {
         ...(note.trim() ? { note: note.trim() } : {}),
       })
       if (alsoTodo) await addTodo(uid, { text: value, modeId: activeModeId })
+      // Every answered check-in is also filed as an all-scope "memory" note, so
+      // the AI can recall your mock status / intent / energy in later sessions.
+      addNote(uid, {
+        type: 'memory',
+        title: `${label} · ${ymd()}`,
+        content: [
+          `Q: ${question.text || question.id}`,
+          `A: ${value}`,
+          note.trim() ? `Note: ${note.trim()}` : null,
+        ]
+          .filter(Boolean)
+          .join('\n'),
+        tags: ['check-in', slot],
+        modeId: null, // all scopes
+      }).catch((e) => console.warn('[checkin] memory note failed', e))
       onResolve()
       pushIsland({
         kind: 'success',

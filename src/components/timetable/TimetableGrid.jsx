@@ -500,6 +500,14 @@ export function TimetableGrid({
             return false
           })
 
+          // All-day Google Calendar items (holidays, multi-day trips…) for this day.
+          const dayAllDayGcal = gcalEvents.filter((ev) => {
+            if (!ev.allDay || !ev.startMs) return false
+            const s = ymd(new Date(ev.startMs))
+            const e = ev.endMs ? ymd(new Date(ev.endMs)) : s
+            return colDateStr >= s && colDateStr <= e
+          })
+
           const VISIBLE_COUNT = 2
           const visibleTasks = dayTopTasks.slice(0, VISIBLE_COUNT)
           const overflowCount = Math.max(0, dayTopTasks.length - VISIBLE_COUNT)
@@ -517,6 +525,20 @@ export function TimetableGrid({
               )}
               title={`Double-click to add an all-day item on ${d}`}
             >
+              {dayAllDayGcal.map((ev) => (
+                <a
+                  key={ev.id}
+                  href={ev.htmlLink || undefined}
+                  target={ev.htmlLink ? '_blank' : undefined}
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex max-w-full items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold text-white shadow-xs"
+                  style={{ backgroundColor: ev.color || '#4285f4' }}
+                  title={`${ev.title} · ${ev.calendarName}`}
+                >
+                  <span className="truncate">{ev.title}</span>
+                </a>
+              ))}
               {visibleTasks.map((t, idx) => {
                 const d2 = t.dueAt ? (t.dueAt?.toDate ? t.dueAt.toDate() : new Date(t.dueAt)) : null
                 const isCarried = isCurrentToday && d2 && ymd(d2) !== colDateStr
