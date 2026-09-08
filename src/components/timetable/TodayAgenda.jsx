@@ -59,6 +59,7 @@ export function TodayAgenda({
   events = [],
   tasks = [],
   gcalEvents = [],
+  initialDate = null,
   noteDeadlines = [],
   onOpenNote,
   allTodos = [],
@@ -73,6 +74,20 @@ export function TodayAgenda({
   const today = todayDow()
   const [selectedDay, setSelectedDay] = useState(today)
   const [weekOffset, setWeekOffset] = useState(0)
+
+  // Jump to a date handed in from the Week view's day-header click.
+  useEffect(() => {
+    if (!initialDate) return
+    const mondayOf = (x) => {
+      const m = new Date(x)
+      m.setHours(0, 0, 0, 0)
+      m.setDate(m.getDate() - ((m.getDay() + 6) % 7))
+      return m
+    }
+    const d = new Date(initialDate)
+    setSelectedDay((d.getDay() + 6) % 7)
+    setWeekOffset(Math.round((mondayOf(d) - mondayOf(new Date())) / (7 * 86400000)))
+  }, [initialDate])
   const nowMinRaw = useNowMinutes()
   const nowMin = Math.round(nowMinRaw)
   const scrollRef = useRef(null)

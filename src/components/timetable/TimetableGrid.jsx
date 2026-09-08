@@ -209,6 +209,66 @@ const TodoChip = memo(function TodoChip({ item, topPx, onToggle, onDelete }) {
   )
 })
 
+/** Read-only chip for a synced Google Calendar event, positioned at its time. */
+const GcalChip = memo(function GcalChip({ ev, topPx }) {
+  return (
+    <a
+      href={ev.htmlLink || undefined}
+      target={ev.htmlLink ? '_blank' : undefined}
+      rel="noopener noreferrer"
+      onPointerDown={(e) => e.stopPropagation()}
+      title={`${ev.title}${ev.location ? ` · ${ev.location}` : ''} · ${ev.calendarName}`}
+      className="group/gc absolute left-0.5 right-0.5 z-[9] flex items-center gap-1 overflow-hidden rounded-md px-1.5 py-0.5 text-[9px] font-semibold text-white shadow-sm transition-transform hover:scale-[1.02]"
+      style={{ top: Math.max(0, topPx - 6), backgroundColor: ev.color || '#4285f4' }}
+    >
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-white/70" />
+      <span className="truncate">{ev.title}</span>
+    </a>
+  )
+})
+
+/**
+ * Small numbered marker for a to-do created today without a due time — pinned to
+ * its `createdAt` minute so the day fills in chronologically (owner: markers
+ * should sit at the time they were added, not pile up at the top).
+ */
+const UndatedMarker = memo(function UndatedMarker({ item, n, topPx, onToggle, onDelete }) {
+  return (
+    <div
+      onPointerDown={(e) => e.stopPropagation()}
+      title={item.text || item.title}
+      className="group/um absolute left-0.5 z-10 flex max-w-[90%] items-center gap-1 rounded-full border border-line/70 bg-surface-3/90 px-1.5 py-0.5 text-[9px] font-medium text-ink shadow-xs backdrop-blur-sm transition-transform hover:scale-105"
+      style={{ top: Math.max(0, topPx - 8) }}
+    >
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onToggle?.(item) }}
+        className="flex h-3 w-3 shrink-0 items-center justify-center rounded-full bg-accent/20 text-[8px] font-bold text-accent hover:bg-accent/40"
+        title="Mark done"
+      >
+        {n}
+      </button>
+      <span className={cn('truncate', item.done && 'line-through opacity-60')}>{item.text || item.title}</span>
+      {onDelete && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onDelete(item.id) }}
+          className="rounded p-0.5 opacity-0 transition-opacity hover:text-rose-500 group-hover/um:opacity-100"
+          title="Delete"
+        >
+          <X className="h-2.5 w-2.5" />
+        </button>
+      )}
+    </div>
+  )
+})
+
+function toDateSafe(v) {
+  if (!v) return null
+  const d = v?.toDate ? v.toDate() : new Date(v)
+  return isNaN(d.getTime()) ? null : d
+}
+
 // ── Main grid ─────────────────────────────────────────────────────────────────
 
 /**
@@ -242,6 +302,8 @@ export function TimetableGrid({
   dateTasks = [],
   noteDeadlines = [],
   onOpenNote,
+  onPickDay,
+  gcalEvents = [],
   allTodos = [],
   sessions = [],
   compact = false,
@@ -388,11 +450,8 @@ export function TimetableGrid({
           return (
             <div
               key={d}
-              onClick={() => onSelect?.({ dayIndex: i, startMin: 9 * 60, endMin: 10 * 60 })}
-              onDoubleClick={(e) => {
-                e.stopPropagation()
-                onSelect?.({ dayIndex: i, startMin: 9 * 60, endMin: 10 * 60 })
-              }}
+              onClick={() => onPickDay?.(colDate)}
+              title={`Open ${d} ${dateNum} in the day view`}
               className={cn(
                 'flex flex-1 flex-col items-center justify-center py-1.5 px-1 rounded-2xl border transition-all cursor-pointer select-none',
                 isToday
@@ -423,9 +482,11 @@ export function TimetableGrid({
           // 2. Unscheduled tasks (no dueAt) when day is today
           // 3. Overdue incomplete tasks carried forward onto today
           const dayTopTasks = allTodos.filter((t) => {
-            if (t.type === 'event') return false
+            if (t.type === 'event' || t.source === 'gcal') return false
             const isDone = Boolean(t.done) || t.column === 'done'
-            if (!t.dueAt) return isCurrentToday
+            // Undated to-dos now sit inline on the grid at their created time
+            // (see UndatedMarker below) — not piled in this all-day tray.
+            if (!t.dueAt) return false
             const d2 = t.dueAt?.toDate ? t.dueAt.toDate() : new Date(t.dueAt)
             if (isNaN(d2.getTime())) return false
             const isDueToday = ymd(d2) === colDateStr
@@ -444,16 +505,15 @@ export function TimetableGrid({
           return (
             <div
               key={`tray-${d}`}
-              onClick={() => onSelect?.({ dayIndex: day, startMin: 9 * 60, endMin: 10 * 60 })}
               onDoubleClick={(e) => {
                 e.stopPropagation()
-                onSelect?.({ dayIndex: day, startMin: 9 * 60, endMin: 10 * 60 })
+                onSelect?.({ dayIndex: day, startMin: 9 * 60, endMin: 10 * 60, allDay: true })
               }}
               className={cn(
-                'flex-1 border-l border-line/30 p-1 flex flex-wrap items-center content-start gap-1 min-h-[30px] cursor-pointer hover:bg-surface-2/40 transition-colors overflow-hidden',
+                'flex-1 border-l border-line/30 p-1 flex flex-wrap items-center content-start gap-1 min-h-[30px] transition-colors overflow-hidden',
                 isCurrentToday && 'bg-accent/5',
               )}
-              title={`Click to add task on ${d}`}
+              title={`Double-click to add an all-day item on ${d}`}
             >
               {visibleTasks.map((t, idx) => {
                 const d2 = t.dueAt ? (t.dueAt?.toDate ? t.dueAt.toDate() : new Date(t.dueAt)) : null
@@ -657,6 +717,55 @@ export function TimetableGrid({
                         />
                       )
                     })}
+
+                  {/* Synced Google Calendar events — read-only, at their real time */}
+                  {gcalEvents
+                    .filter((ev) => !ev.allDay && ev.dateStr === colDateStr && typeof ev.startMin === 'number')
+                    .map((ev, idx) => {
+                      let mins = ev.startMin
+                      if (mins < DAY_START_MIN) mins = DAY_START_MIN
+                      if (mins > DAY_END_MIN) mins = DAY_END_MIN - 15
+                      return (
+                        <GcalChip
+                          key={ev.id}
+                          ev={ev}
+                          topPx={(mins - DAY_START_MIN) * PX_PER_MIN + (idx % 2 === 1 ? 11 : 0)}
+                        />
+                      )
+                    })}
+
+                  {/* Undated to-dos created today — numbered, at their created time */}
+                  {isCurrentDayToday &&
+                    allTodos
+                      .filter(
+                        (t) =>
+                          t.source !== 'gcal' &&
+                          t.type !== 'event' &&
+                          !t.dueAt &&
+                          !(t.done || t.column === 'done') &&
+                          toDateSafe(t.createdAt),
+                      )
+                      .sort(
+                        (a, b) =>
+                          (toDateSafe(a.createdAt)?.getTime() || 0) -
+                          (toDateSafe(b.createdAt)?.getTime() || 0),
+                      )
+                      .map((t, idx) => {
+                        const c = toDateSafe(t.createdAt)
+                        let mins = c.getHours() * 60 + c.getMinutes()
+                        if (mins < DAY_START_MIN) mins = DAY_START_MIN
+                        if (mins > DAY_END_MIN) mins = DAY_END_MIN - 15
+                        return (
+                          <UndatedMarker
+                            key={t.id}
+                            item={t}
+                            n={idx + 1}
+                            topPx={(mins - DAY_START_MIN) * PX_PER_MIN}
+                            onToggle={onToggleTask}
+                            onDelete={onDeleteTask}
+                          />
+                        )
+                      })}
 
                   {/* Drag selection ghost */}
                   {drag && drag.day === day && (

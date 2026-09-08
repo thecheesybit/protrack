@@ -212,6 +212,13 @@ export function TimetableWidget({ widget, variant }) {
     } catch { /* noop */ }
   }
 
+  // Clicking a weekday header in Week view → open that date in the Day view.
+  const [pickedDate, setPickedDate] = useState(null)
+  const pickDay = (date) => {
+    setPickedDate(date instanceof Date ? new Date(date) : new Date())
+    handleSetViewMode('day')
+  }
+
   // Scope todos: all modes if 'all', or matching active mode + unassigned global todos
   const activeTodos = useMemo(() => {
     return todos.filter(
@@ -361,6 +368,8 @@ export function TimetableWidget({ widget, variant }) {
                 dateTasks={chipTodos}
                 noteDeadlines={noteDeadlines}
                 onOpenNote={setPeekNote}
+                gcalEvents={gcalEvents}
+                onPickDay={pickDay}
                 allTodos={activeTodos}
                 sessions={sessions}
               />
@@ -427,6 +436,8 @@ export function TimetableWidget({ widget, variant }) {
                   dateTasks={chipTodos}
                   noteDeadlines={noteDeadlines}
                   onOpenNote={setPeekNote}
+                  gcalEvents={gcalEvents}
+                  onPickDay={pickDay}
                   allTodos={activeTodos}
                   sessions={sessions}
                   compact
@@ -441,6 +452,7 @@ export function TimetableWidget({ widget, variant }) {
                 dateTasks={chipTodos}
                 tasks={DAY_TASKS}
                 gcalEvents={gcalEvents}
+                initialDate={pickedDate}
                 noteDeadlines={noteDeadlines}
                 onOpenNote={setPeekNote}
                 allTodos={activeTodos}
