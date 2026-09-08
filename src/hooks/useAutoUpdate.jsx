@@ -1,7 +1,6 @@
-import React, { useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { useStore } from '@/store/useStore'
 import { isDesktop, desktopBridge } from '@/desktop/isDesktop'
-import toast from 'react-hot-toast'
 
 // No progress event for this long while downloading = stalled. electron-updater
 // resumes interrupted downloads differentially, so a quiet re-check recovers it.
@@ -80,40 +79,28 @@ export function useAutoUpdate() {
       u.onDownloaded((p) => {
         disarmStallWatchdog()
         st().reportUpdateReady(p?.version)
+        // The update is already applied silently on the next quit
+        // (autoInstallOnAppQuit). This is the single, non-blocking "apply now"
+        // affordance: one sticky Island card whose tap calls update:install →
+        // a silent quitAndInstall that relaunches into the new version.
+        const detail = p?.version
+          ? `Version ${p.version} — restart to apply`
+          : 'Restart to apply update'
         if (islandIdRef.current) {
           st().updateIsland(islandIdRef.current, {
             kind: 'update-ready',
-            title: 'Update Ready to Install',
-            detail: 'Click here to restart and apply.',
+            title: 'Update ready',
+            detail,
             progress: 100,
           })
         } else {
           islandIdRef.current = st().pushIsland({
             kind: 'update-ready',
-            title: 'Update Ready to Install',
-            detail: 'Click here to restart and apply.',
+            title: 'Update ready',
+            detail,
             sticky: true,
           })
         }
-        
-        // Show a 1-click toast notification for immediate background update
-        toast((t) => 
-          React.createElement('div', { className: 'flex items-center gap-3' },
-            React.createElement('span', { className: 'text-xs font-semibold text-ink' }, 
-              `Version ${p?.version || ''} ready`
-            ),
-            React.createElement('button', {
-              onClick: () => {
-                toast.dismiss(t.id)
-                desktopBridge?.update?.install?.()
-              },
-              className: 'rounded-lg bg-accent px-2.5 py-1 text-[10px] font-bold text-white shadow-premium-sm'
-            }, 'Restart')
-          ), {
-            duration: 15000,
-            id: 'update-ready-toast',
-          }
-        )
       }),
       u.onError((p) => {
         disarmStallWatchdog()

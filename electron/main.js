@@ -299,6 +299,11 @@ function isTransientUpdateError(err) {
  */
 function initAutoUpdate() {
   if (!app.isPackaged || isStoreBuild) return
+  // Fully silent flow: download in the background, and install with no UI —
+  // either on the next quit (autoInstallOnAppQuit) or immediately when the user
+  // taps the "restart to apply" Island card (update:install → quitAndInstall
+  // with isSilent). The NSIS one-click target (electron-builder.yml) is what
+  // makes the install itself wizard-free.
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
 
@@ -868,7 +873,9 @@ ipcMain.handle('device:fingerprint', () => ({
 /* ── IPC: apply downloaded update ───────────────────────── */
 ipcMain.handle('update:install', () => {
   try {
-    autoUpdater.quitAndInstall()
+    // isSilent=true  → no NSIS wizard (pairs with the one-click target)
+    // isForceRunAfter=true → relaunch straight into the new version
+    autoUpdater.quitAndInstall(true, true)
   } catch (err) {
     console.error('[update:install]', err)
   }

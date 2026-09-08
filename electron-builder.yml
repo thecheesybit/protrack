@@ -46,10 +46,14 @@ appx:
   backgroundColor: '#09090e'
   artifactName: PRO-TRACK-${version}-${arch}.${ext}
 
+# One-click (assistant-less) installer: a fresh install shows only a progress
+# bar, and electron-updater's silent quitAndInstall(true, …) can apply updates
+# with zero wizard UI. One-click cannot offer a custom install directory — fine
+# for a single-user desktop app; existing installs upgrade in place via the
+# registry entry regardless.
 nsis:
-  oneClick: false
+  oneClick: true
   perMachine: false
-  allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: PRO TRACK
