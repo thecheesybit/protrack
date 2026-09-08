@@ -304,6 +304,8 @@ export function TimetableGrid({
   onOpenNote,
   onPickDay,
   gcalEvents = [],
+  subjectTasks = [],
+  onToggleSubjectTask,
   allTodos = [],
   sessions = [],
   compact = false,
@@ -714,6 +716,29 @@ export function TimetableGrid({
                           note={n}
                           topPx={(mins - DAY_START_MIN) * PX_PER_MIN + (idx % 2 === 1 ? 12 : 0)}
                           onOpen={onOpenNote}
+                        />
+                      )
+                    })}
+
+                  {/* Subject Kanban tasks that carry a day/time */}
+                  {subjectTasks
+                    .filter((t) => {
+                      const d2 = toDateSafe(t.dueAt)
+                      if (!d2) return false
+                      if (ymd(d2) !== colDateStr) return false
+                      const mins = d2.getHours() * 60 + d2.getMinutes()
+                      return !t.allDay && mins >= DAY_START_MIN
+                    })
+                    .map((t, idx) => {
+                      const d2 = toDateSafe(t.dueAt)
+                      let mins = d2.getHours() * 60 + d2.getMinutes()
+                      if (mins > DAY_END_MIN) mins = DAY_END_MIN - 15
+                      return (
+                        <TodoChip
+                          key={`st-${t.id}`}
+                          item={{ ...t, text: t.title || t.text }}
+                          topPx={(mins - DAY_START_MIN) * PX_PER_MIN + (idx % 2 === 1 ? 12 : 0)}
+                          onToggle={onToggleSubjectTask}
                         />
                       )
                     })}

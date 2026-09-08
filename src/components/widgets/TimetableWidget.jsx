@@ -8,6 +8,7 @@ import { useTimetable } from '@/hooks/useTimetable'
 import { useTodos } from '@/hooks/useWellness'
 import { useNotes } from '@/hooks/useNotes'
 import { useFocusSessions } from '@/hooks/useFocusSessions'
+import { useModeTasksWithDates } from '@/hooks/useModeTasksWithDates'
 import { WidgetFrame } from './WidgetFrame'
 import { cn } from '@/utils/cn'
 import { TimetableGrid } from '@/components/timetable/TimetableGrid'
@@ -18,6 +19,7 @@ import { SlotEditorModal } from '@/components/timetable/SlotEditorModal'
 import { NlQuickCapture } from '@/components/calendar/NlQuickCapture'
 import { TimeContextPanel } from '@/components/timetable/TimeContextPanel'
 import { updateTodo, deleteTodo } from '@/services/todoService'
+import { updateTask } from '@/services/subjectService'
 import { MODE_PALETTE } from '@/lib/constants'
 import { DAY_START_MIN, todayDow, minutesToLabel, durationLabel } from '@/lib/time'
 import { ymd } from '@/lib/dates'
@@ -33,16 +35,6 @@ function toDate(ts) {
   if (typeof ts.toDate === 'function') return ts.toDate()
   return new Date(ts)
 }
-
-// Deliberately empty (free-tier constraint, not a stub-in-progress). Kanban
-// tasks live in per-subject subcollections with no app-wide listener, and a
-// collectionGroup subscription would break the "one bounded listener per active
-// collection" rule (claude.md §5). To-dos and one-time events with a `dueAt`
-// already surface in the day timeline via `activeTodos`/`eventTodos` below;
-// only per-subject Kanban *cards* with a due date are out of scope here.
-// `buildDayTimeline` still accepts `tasks`, so a future aggregated source can
-// feed it without touching TodayAgenda.
-const DAY_TASKS = []
 
 function CompactStats({ sessions, stats }) {
   const todayMins = useMemo(() => {
@@ -91,6 +83,8 @@ export function TimetableWidget({ widget, variant }) {
 
   const todos = useTodos()
   const notes = useNotes()
+  // Kanban tasks that have a day/time → show on the timeline & month views.
+  const subjectDueTasks = useModeTasksWithDates(activeModeId)
   const activeMode = modes.find((m) => m.id === activeModeId)
   const defaultColor = activeMode?.accentColor || MODE_PALETTE[0]
 
@@ -129,6 +123,14 @@ export function TimetableWidget({ widget, variant }) {
     if (!user) return
     deleteTodo(user.uid, id)
     toast.success('Event removed')
+  }
+
+  const handleToggleSubjectTask = (t) => {
+    if (!user || !t?.subjectId) return
+    const done = t.column === 'done' || t.done
+    updateTask(user.uid, t._modeId || activeModeId, t.subjectId, t.id, {
+      column: done ? 'todo' : 'done',
+    })
   }
 
   // "Refresh" just asks useCalendarSync (mounted in Dashboard) to run now; the
@@ -370,6 +372,10 @@ export function TimetableWidget({ widget, variant }) {
                 onOpenNote={setPeekNote}
                 gcalEvents={gcalEvents}
                 onPickDay={pickDay}
+
+                subjectTasks={subjectDueTasks}
+
+                onToggleSubjectTask={handleToggleSubjectTask}
                 allTodos={activeTodos}
                 sessions={sessions}
               />
@@ -438,19 +444,30 @@ export function TimetableWidget({ widget, variant }) {
                   onOpenNote={setPeekNote}
                   gcalEvents={gcalEvents}
                   onPickDay={pickDay}
+
+                  subjectTasks={subjectDueTasks}
+
+                  onToggleSubjectTask={handleToggleSubjectTask}
                   allTodos={activeTodos}
                   sessions={sessions}
                   compact
                 />
               </div>
             ) : viewMode === 'month' ? (
-              <MonthAgenda />
+              <MonthAgenda
+                slots={slots}
+                events={eventTodos}
+                todos={activeTodos}
+                tasks={subjectDueTasks}
+                noteDeadlines={noteDeadlines}
+                sessions={sessions}
+              />
             ) : (
               <TodayAgenda
                 slots={slots}
                 events={eventTodos}
                 dateTasks={chipTodos}
-                tasks={DAY_TASKS}
+                tasks={subjectDueTasks}
                 gcalEvents={gcalEvents}
                 initialDate={pickedDate}
                 noteDeadlines={noteDeadlines}

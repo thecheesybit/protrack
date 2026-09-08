@@ -22,6 +22,8 @@ export function LinkGcalPage() {
     setState('connecting')
     try {
       const provider = new GoogleAuthProvider()
+      // Full read of every calendar (holidays / subscribed / shared) + write.
+      provider.addScope('https://www.googleapis.com/auth/calendar')
       provider.addScope('https://www.googleapis.com/auth/calendar.events')
       provider.setCustomParameters({ prompt: 'consent' })
       

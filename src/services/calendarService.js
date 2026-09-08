@@ -59,6 +59,16 @@ export class CalendarSetupError extends Error {
   }
 }
 
+/** Non-destructive: the token works, but this particular call needs a broader
+ *  OAuth scope (e.g. reading the full calendar list). The connection stays up;
+ *  callers degrade gracefully (e.g. fall back to the primary calendar). */
+export class CalendarScopeError extends Error {
+  constructor(message = 'Reconnect Google Calendar for full access') {
+    super(message)
+    this.name = 'CalendarScopeError'
+  }
+}
+
 export function getCalCredentials() {
   const data = secureStorage.getItemSync(AUTH_CORE_KEY)
   if (!data) return null
@@ -279,13 +289,27 @@ async function calFetch(path, options = {}, _attempt = 0) {
   }
   const { reason, message } = parseGoogleError(body, res.status)
 
-  // ── Auth: expired / revoked / missing scope → one silent refresh, then prompt
+  // ── Missing scope (token is otherwise fine) → non-destructive, degrade
   if (
-    res.status === 401 ||
-    reason === 'authError' ||
-    reason === 'insufficientPermissions' ||
-    /insufficient (authentication scopes|permission)/i.test(message)
+    res.status === 403 &&
+    (reason === 'insufficientPermissions' ||
+      reason === 'insufficientScopes' ||
+      /insufficient (authentication scopes|permission)/i.test(message))
   ) {
+    // On the web with GIS we can silently re-grant the wider scope once.
+    if (_attempt === 0 && isGisAvailable()) {
+      try {
+        await acquireToken({ interactive: false })
+        return calFetch(path, options, _attempt + 1)
+      } catch {
+        /* fall through — caller degrades (e.g. primary-only) */
+      }
+    }
+    throw new CalendarScopeError()
+  }
+
+  // ── Auth: token expired / revoked → one silent refresh, then reconnect prompt
+  if (res.status === 401 || reason === 'authError') {
     if (_attempt === 0 && isGisAvailable()) {
       try {
         await acquireToken({ interactive: false })
@@ -506,6 +530,10 @@ async function writeSyncTokens(map) {
  * shared. `accessRole` in {owner, writer} means we may push to it; {reader,
  * freeBusyReader} is display-only. Cached so a transient failure still renders.
  */
+const PRIMARY_FALLBACK = [
+  { id: 'primary', name: 'Primary', color: '#4285f4', accessRole: 'owner', primary: true, writable: true },
+]
+
 export async function listCalendars() {
   try {
     const data = await calFetch('/users/me/calendarList?minAccessRole=freeBusyReader&maxResults=250')
@@ -519,21 +547,27 @@ export async function listCalendars() {
         primary: Boolean(c.primary),
         writable: c.accessRole === 'owner' || c.accessRole === 'writer',
       }))
-    try {
-      await secureStorage.setItem(CAL_LIST_KEY, JSON.stringify(cals))
-    } catch {
-      /* ignore */
+    if (cals.length) {
+      try {
+        await secureStorage.setItem(CAL_LIST_KEY, JSON.stringify(cals))
+      } catch {
+        /* ignore */
+      }
     }
-    return cals
+    return cals.length ? cals : PRIMARY_FALLBACK
   } catch (err) {
+    // A genuinely expired token / disabled API must still bubble up.
     if (err instanceof CalendarAuthError || err instanceof CalendarSetupError) throw err
+    // Missing the broad scope, or any transient list failure → keep syncing the
+    // primary calendar (readable with just `calendar.events`). The caller
+    // surfaces "reconnect for holidays & all calendars" as a gentle nudge.
     try {
       const cached = JSON.parse((await secureStorage.getItem(CAL_LIST_KEY)) || '[]')
       if (cached.length) return cached
     } catch {
       /* ignore */
     }
-    throw err
+    return PRIMARY_FALLBACK
   }
 }
 
@@ -586,6 +620,7 @@ function normalizeGcalEvent(ev, cal) {
  */
 async function pullAllCalendars() {
   const cals = await listCalendars()
+  const scopeLimited = cals === PRIMARY_FALLBACK // degraded — token lacks the wide read scope
   const tokens = await readSyncTokens()
   const nextTokens = {}
   const events = []
@@ -616,7 +651,9 @@ async function pullAllCalendars() {
           pageToken = null
           continue
         }
-        // One bad calendar must not abort the whole sync.
+        // A genuinely expired token / disabled API must still surface.
+        if (err instanceof CalendarAuthError || err instanceof CalendarSetupError) throw err
+        // Otherwise one bad calendar (scope, 404, transient) must not abort the sync.
         break
       }
       for (const ev of page.items || []) {
@@ -636,7 +673,7 @@ async function pullAllCalendars() {
     }
   }
 
-  return { events, nextTokens, cancelled, calendars: cals }
+  return { events, nextTokens, cancelled, calendars: cals, scopeLimited }
 }
 
 /**
@@ -688,11 +725,12 @@ export async function syncEverything(uid, { modes = [], inboxModeId, slots = [],
 
   /* 1 ── PULL: all calendars → local display cache (no Firestore) ─────────── */
   try {
-    const { events, nextTokens: tok, calendars } = await pullAllCalendars()
+    const { events, nextTokens: tok, calendars, scopeLimited } = await pullAllCalendars()
     nextTokens = tok
     out.events = events
     out.calendars = calendars
     out.pulled = events.length
+    out.scopeLimited = Boolean(scopeLimited)
   } catch (err) {
     if (err instanceof CalendarAuthError || err instanceof CalendarSetupError) throw err
     out.errors.push(`pull: ${err.message}`)

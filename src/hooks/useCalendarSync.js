@@ -46,6 +46,7 @@ export function useCalendarSync() {
 
   const runningRef = useRef(false)
   const lastStateRef = useRef('init') // 'init' | 'ok' | 'auth' | 'setup' | 'error'
+  const scopeNudgedRef = useRef(false)
   const offlineIslandIdRef = useRef(null)
   const refreshTimerRef = useRef(null)
   const dataRef = useRef({ slots, todos, notes })
@@ -94,6 +95,20 @@ export function useCalendarSync() {
         if (res.calendars?.length) setGcalCalendars(res.calendars)
         setGcalSetupError(null)
         scheduleRefresh()
+
+        // Token works but lacks the wide read scope → syncing primary only.
+        // Nudge once (non-sticky) to reconnect for holidays / all calendars.
+        if (res.scopeLimited && !scopeNudgedRef.current) {
+          scopeNudgedRef.current = true
+          pushIsland({
+            kind: 'info',
+            title: 'Syncing your primary calendar',
+            detail: 'Reconnect Google Calendar to also pull holidays & shared calendars.',
+            duration: 6000,
+          })
+        } else if (!res.scopeLimited) {
+          scopeNudgedRef.current = false
+        }
 
         const changed = res.pushed + res.patched + res.deleted
         if (lastStateRef.current !== 'ok' && offlineIslandIdRef.current != null) {
