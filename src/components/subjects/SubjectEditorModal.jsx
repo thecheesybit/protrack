@@ -34,6 +34,14 @@ const REPEATS = {
   fortnightly: { recurrenceType: 'interval', recurrenceInterval: 14 },
   monthly: { recurrenceType: 'interval', recurrenceInterval: 28 },
 }
+const REPEAT_DAYS = { weekly: 7, fortnightly: 14, monthly: 28 }
+const iso = (d) => new Date(d).toISOString().split('T')[0]
+const addDays = (dateStr, n) => {
+  const d = new Date(dateStr)
+  d.setDate(d.getDate() + n)
+  return iso(d)
+}
+
 const blankClass = () => ({
   key: Math.random().toString(36).slice(2),
   dayOfWeek: 0,
@@ -43,6 +51,10 @@ const blankClass = () => ({
   repeat: 'weekly',
   room: '',
   label: '',
+  startDate: iso(new Date()),
+  endMode: 'ongoing', // 'ongoing' | 'onDate' | 'afterN'
+  endDate: '',
+  count: 12,
 })
 
 export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject, order, onDeleted }) {
@@ -99,6 +111,10 @@ export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject,
               : 'weekly',
         room: s.room || '',
         label: s.label || '',
+        startDate: s.recurrenceStartDate || iso(new Date()),
+        endMode: s.recurrenceEndDate ? 'onDate' : 'ongoing',
+        endDate: s.recurrenceEndDate || '',
+        count: 12,
       })),
     )
     // Only re-hydrate on open / when the existing set identity changes.
@@ -115,11 +131,17 @@ export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject,
       if (!keptIds.has(s.id)) await deleteSlot(uid, targetModeId, s.id).catch(() => {})
     }
     // Creates + updates
-    const todayStr = new Date().toISOString().split('T')[0]
     for (const r of classTimes) {
       if (r.endMin <= r.startMin) continue
       const t = CLASS_TYPES[r.type] || CLASS_TYPES.other
       const rep = REPEATS[r.repeat] || REPEATS.weekly
+      const startDate = r.startDate || iso(new Date())
+      let endDate = ''
+      if (r.endMode === 'onDate' && r.endDate) endDate = r.endDate
+      else if (r.endMode === 'afterN') {
+        const n = Math.max(1, Number(r.count) || 1)
+        endDate = addDays(startDate, (n - 1) * (REPEAT_DAYS[r.repeat] || 7))
+      }
       const payload = {
         label: (r.label || '').trim() || t.label || name,
         dayOfWeek: r.dayOfWeek,
@@ -132,7 +154,8 @@ export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject,
         tagStyle: t.tagStyle,
         recurrenceType: rep.recurrenceType,
         recurrenceInterval: rep.recurrenceInterval || 1,
-        recurrenceStartDate: todayStr,
+        recurrenceStartDate: startDate,
+        recurrenceEndDate: endDate || null,
       }
       if (r.id) await updateSlot(uid, targetModeId, r.id, payload).catch(() => {})
       else await addSlot(uid, targetModeId, payload).catch(() => {})
@@ -368,6 +391,45 @@ export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject,
                   placeholder="Custom label (optional)"
                   className="min-w-0 flex-1 rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-[11px] outline-none focus:border-accent"
                 />
+              </div>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
+                <span>Starts</span>
+                <input
+                  type="date"
+                  value={r.startDate}
+                  onChange={(e) => patchClass(r.key, { startDate: e.target.value })}
+                  className="rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-[11px] outline-none focus:border-accent"
+                />
+                <select
+                  value={r.endMode}
+                  onChange={(e) => patchClass(r.key, { endMode: e.target.value })}
+                  className="rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-[11px] outline-none focus:border-accent"
+                >
+                  <option value="ongoing">Runs indefinitely</option>
+                  <option value="onDate">Ends on…</option>
+                  <option value="afterN">Ends after N sessions</option>
+                </select>
+                {r.endMode === 'onDate' && (
+                  <input
+                    type="date"
+                    value={r.endDate}
+                    min={r.startDate}
+                    onChange={(e) => patchClass(r.key, { endDate: e.target.value })}
+                    className="rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-[11px] outline-none focus:border-accent"
+                  />
+                )}
+                {r.endMode === 'afterN' && (
+                  <span className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min="1"
+                      value={r.count}
+                      onChange={(e) => patchClass(r.key, { count: e.target.value })}
+                      className="w-14 rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-[11px] outline-none focus:border-accent"
+                    />
+                    sessions
+                  </span>
+                )}
               </div>
             </div>
           ))}

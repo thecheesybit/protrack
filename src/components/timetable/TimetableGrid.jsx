@@ -740,7 +740,7 @@ export function TimetableGrid({
                 >
                   {/* Recurring slots */}
                   {slots
-                    .filter((s) => isSlotOnDay(s, day))
+                    .filter((s) => isSlotOnDay(s, day, colDate))
                     .map((s) => (
                       <SlotBlock
                         key={s.id}

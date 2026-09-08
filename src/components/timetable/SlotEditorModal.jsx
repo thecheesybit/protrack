@@ -88,6 +88,9 @@ export function SlotEditorModal({ open, onClose, modeId: propModeId, slot, allMo
         recurrenceStartDate: draft.recurrenceStartDate || new Date().toISOString().split('T')[0],
         tag: draft.tag || '',
         tagStyle: draft.tagStyle || 'standard',
+        // Preserve term bounds / room set from the subject editor.
+        recurrenceEndDate: draft.recurrenceEndDate || null,
+        room: draft.room || '',
       }
       const saveToMode = isEdit ? modeId : (targetModeId || modeId)
       if (isEdit) await updateSlot(user.uid, saveToMode, draft.id, payload)

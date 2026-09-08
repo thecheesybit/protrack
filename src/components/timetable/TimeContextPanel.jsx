@@ -87,7 +87,7 @@ export function TimeContextPanel({
 
   // Items that overlap the selected range on this day
   const rangeSlots = slots.filter(
-    (s) => isSlotOnDay(s, dayIndex) && s.startMin < curEndMin && s.endMin > curStartMin,
+    (s) => isSlotOnDay(s, dayIndex, new Date()) && s.startMin < curEndMin && s.endMin > curStartMin,
   )
 
   const rangeTodos = todos.filter((t) => {

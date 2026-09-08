@@ -71,11 +71,32 @@ export function nextOccurrence(dayOfWeek, startMin, endMin) {
   return { startISO: start.toISOString(), endISO: end.toISOString() }
 }
 
+const _midnight = (d) => {
+  const x = new Date(d)
+  x.setHours(0, 0, 0, 0)
+  return x
+}
+
 /**
- * Check if a slot is active on a given day index (0 = Monday, 6 = Sunday).
+ * Check if a slot is active on a given weekday index (0 = Monday, 6 = Sunday).
+ *
+ * @param {object} slot
+ * @param {number} day  weekday index of the column
+ * @param {Date}  [refDate]  the actual calendar date of that column. When given,
+ *   `recurrenceStartDate` / `recurrenceEndDate` are honoured for every
+ *   recurrence type (term start + "ends on / after N sessions"). Omitted →
+ *   date bounds are ignored (legacy behaviour).
  */
-export function isSlotOnDay(slot, day) {
+export function isSlotOnDay(slot, day, refDate = null) {
   if (!slot) return false
+
+  // Term window — only enforced when we know the column's real date.
+  if (refDate && (slot.recurrenceStartDate || slot.recurrenceEndDate)) {
+    const t = _midnight(refDate).getTime()
+    if (slot.recurrenceStartDate && t < _midnight(slot.recurrenceStartDate).getTime()) return false
+    if (slot.recurrenceEndDate && t > _midnight(slot.recurrenceEndDate).getTime()) return false
+  }
+
   if (!slot.recurrenceType || slot.recurrenceType === 'weekly') {
     return slot.dayOfWeek === day
   }
@@ -87,22 +108,21 @@ export function isSlotOnDay(slot, day) {
   }
   if (slot.recurrenceType === 'interval') {
     if (!slot.recurrenceStartDate || !slot.recurrenceInterval) return false
-    
-    // Get the Date object for the column 'day' of the current week.
-    const now = new Date()
-    const currentDayJs = now.getDay() // 0 = Sun, 1 = Mon ...
-    const currentDayMonIndex = currentDayJs === 0 ? 6 : currentDayJs - 1
-    
-    const targetDate = new Date(now)
-    targetDate.setDate(now.getDate() + (day - currentDayMonIndex))
-    targetDate.setHours(0, 0, 0, 0)
-    
-    const startDate = new Date(slot.recurrenceStartDate)
-    startDate.setHours(0, 0, 0, 0)
-    
+
+    let targetDate
+    if (refDate) {
+      targetDate = _midnight(refDate)
+    } else {
+      const now = new Date()
+      const currentDayJs = now.getDay()
+      const currentDayMonIndex = currentDayJs === 0 ? 6 : currentDayJs - 1
+      targetDate = new Date(now)
+      targetDate.setDate(now.getDate() + (day - currentDayMonIndex))
+      targetDate.setHours(0, 0, 0, 0)
+    }
+    const startDate = _midnight(slot.recurrenceStartDate)
     const diffTime = targetDate.getTime() - startDate.getTime()
-    if (diffTime < 0) return false // Before start date
-    
+    if (diffTime < 0) return false
     const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24))
     return diffDays % slot.recurrenceInterval === 0
   }

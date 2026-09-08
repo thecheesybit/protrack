@@ -272,7 +272,7 @@ export function buildDayTimeline({
   }
 
   for (const slot of slots) {
-    if (slot && slot.id != null && isSlotOnDay(slot, dow)) out.push(normalizeSlot(slot))
+    if (slot && slot.id != null && isSlotOnDay(slot, dow, date)) out.push(normalizeSlot(slot))
   }
 
   for (const evt of events) {
