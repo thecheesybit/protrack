@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { AnimatePresence } from 'framer-motion'
-import { CalendarCheck, CalendarPlus, RefreshCw, Flame, Clock, CalendarDays, LayoutGrid, Calendar as CalendarIcon } from 'lucide-react'
+import { CalendarCheck, CalendarPlus, RefreshCw, Flame, Clock, CalendarDays, LayoutGrid, CalendarRange, Calendar as CalendarIcon } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useStore } from '@/store/useStore'
 import { useAuth } from '@/hooks/useAuth'
@@ -12,6 +12,7 @@ import { WidgetFrame } from './WidgetFrame'
 import { cn } from '@/utils/cn'
 import { TimetableGrid } from '@/components/timetable/TimetableGrid'
 import { TodayAgenda } from '@/components/timetable/TodayAgenda'
+import { MonthAgenda } from '@/components/timetable/MonthAgenda'
 import { NoteDeadlinePeek } from '@/components/timetable/NoteDeadlinePeek'
 import { SlotEditorModal } from '@/components/timetable/SlotEditorModal'
 import { NlQuickCapture } from '@/components/calendar/NlQuickCapture'
@@ -24,7 +25,6 @@ import { openItemCounts } from '@/lib/counts'
 import {
   connectCalendar,
   isCalendarConnected,
-  listUpcomingEvents,
 } from '@/services/calendarService'
 import { GCAL_SYNC_NOW_EVENT } from '@/hooks/useCalendarSync'
 
@@ -99,9 +99,18 @@ export function TimetableWidget({ widget, variant }) {
   const [editingSlot, setEditingSlot] = useState(null)
   const [captureSeed, setCaptureSeed] = useState(null)
   const [connected, setConnected] = useState(isCalendarConnected())
-  const [calEvents, setCalEvents] = useState([])
   const [selection, setSelection] = useState(null) // { dayIndex, startMin, endMin }
   const { user } = useAuth()
+
+  // Pulled Google Calendar events (all calendars) — local cache in gcalSlice.
+  const gcalEvents = useStore((s) => s.gcalEvents)
+  const calEvents = useMemo(() => {
+    const now = Date.now()
+    return (gcalEvents || [])
+      .filter((e) => (e.endMs || e.startMs || 0) >= now - 3600_000)
+      .sort((a, b) => (a.startMs || 0) - (b.startMs || 0))
+      .slice(0, 30)
+  }, [gcalEvents])
 
   const isHero = variant === 'hero'
 
@@ -122,19 +131,11 @@ export function TimetableWidget({ widget, variant }) {
     toast.success('Event removed')
   }
 
-  const refreshEvents = async () => {
-    try {
-      setCalEvents(await listUpcomingEvents())
-    } catch (err) {
-      if (!isCalendarConnected()) setConnected(false)
-      toast.error(err.message)
-    }
+  // "Refresh" just asks useCalendarSync (mounted in Dashboard) to run now; the
+  // pulled events flow back through the gcalSlice cache.
+  const refreshEvents = () => {
+    if (isCalendarConnected()) window.dispatchEvent(new Event(GCAL_SYNC_NOW_EVENT))
   }
-
-  useEffect(() => {
-    if (isHero && connected) refreshEvents()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHero])
 
   const connect = async () => {
     try {
@@ -295,6 +296,19 @@ export function TimetableWidget({ widget, variant }) {
             <CalendarIcon className="h-3 w-3" />
             Day
           </button>
+          <button
+            onClick={() => handleSetViewMode('month')}
+            className={cn(
+              'flex items-center gap-1.5 rounded-lg px-2.5 py-1 transition-all',
+              viewMode === 'month'
+                ? 'bg-surface shadow-glass font-bold text-accent'
+                : 'text-muted hover:text-ink',
+            )}
+            title="Month-by-month Google Calendar agenda"
+          >
+            <CalendarRange className="h-3 w-3" />
+            Month
+          </button>
         </div>
       )}
 
@@ -373,17 +387,21 @@ export function TimetableWidget({ widget, variant }) {
                       key={e.id}
                       className="rounded-lg border border-line/50 bg-surface-2/40 px-2.5 py-1.5"
                     >
-                      <span className="block truncate text-xs font-medium">
-                        {e.summary || '(busy)'}
+                      <span className="flex items-center gap-1.5">
+                        <span
+                          className="h-1.5 w-1.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: e.color }}
+                        />
+                        <span className="block truncate text-xs font-medium">{e.title || '(busy)'}</span>
                       </span>
                       <span className="text-[10px] text-muted">
-                        {e.start?.dateTime
-                          ? new Date(e.start.dateTime).toLocaleString([], {
+                        {e.allDay
+                          ? new Date(e.startMs).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
+                          : new Date(e.startMs).toLocaleString([], {
                               weekday: 'short',
                               hour: '2-digit',
                               minute: '2-digit',
-                            })
-                          : e.start?.date}
+                            })}
                       </span>
                     </div>
                   ))}
@@ -414,12 +432,15 @@ export function TimetableWidget({ widget, variant }) {
                   compact
                 />
               </div>
+            ) : viewMode === 'month' ? (
+              <MonthAgenda />
             ) : (
               <TodayAgenda
                 slots={slots}
                 events={eventTodos}
                 dateTasks={chipTodos}
                 tasks={DAY_TASKS}
+                gcalEvents={gcalEvents}
                 noteDeadlines={noteDeadlines}
                 onOpenNote={setPeekNote}
                 allTodos={activeTodos}
@@ -432,7 +453,7 @@ export function TimetableWidget({ widget, variant }) {
                 onDeleteEvent={handleDeleteEvent}
               />
             )}
-            <CompactStats sessions={sessions} stats={stats} />
+            {viewMode !== 'month' && <CompactStats sessions={sessions} stats={stats} />}
           </div>
         )}
       </WidgetFrame>

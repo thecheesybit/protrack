@@ -780,7 +780,14 @@ export function TodosWidget({ widget, variant }) {
   const isHero = variant === 'hero'
 
   const filtered = useMemo(
-    () => todos.filter((t) => activeModeId === 'all' || t.modeId === activeModeId),
+    () =>
+      todos.filter(
+        (t) =>
+          // Pulled Google Calendar events live in the local gcal cache + the
+          // calendar views, never the to-do board (owner: no "happy birthday"
+          // dumped into to-dos).
+          t.source !== 'gcal' && (activeModeId === 'all' || t.modeId === activeModeId),
+      ),
     [todos, activeModeId],
   )
 

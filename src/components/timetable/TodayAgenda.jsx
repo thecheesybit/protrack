@@ -58,6 +58,7 @@ export function TodayAgenda({
   slots = [],
   events = [],
   tasks = [],
+  gcalEvents = [],
   noteDeadlines = [],
   onOpenNote,
   allTodos = [],
@@ -109,10 +110,11 @@ export function TodayAgenda({
         tasks,
         sessions,
         notes: noteDeadlines,
+        gcalEvents,
         date: selectedDate,
         nowMin: isSelectedToday ? nowMin : null,
       }),
-    [slots, events, allTodos, tasks, sessions, noteDeadlines, selectedDate, isSelectedToday, nowMin],
+    [slots, events, allTodos, tasks, sessions, noteDeadlines, gcalEvents, selectedDate, isSelectedToday, nowMin],
   )
 
   const anytime = useMemo(() => timeline.filter((i) => i.startMin == null), [timeline])
@@ -140,12 +142,13 @@ export function TodayAgenda({
         tasks,
         sessions,
         notes: noteDeadlines,
+        gcalEvents,
         date: getWeekDate(d, activeRefDate),
       })
       if (items.length) set.add(d)
     }
     return set
-  }, [slots, events, allTodos, tasks, sessions, noteDeadlines, activeRefDate])
+  }, [slots, events, allTodos, tasks, sessions, noteDeadlines, gcalEvents, activeRefDate])
 
   // Next day (within 2 weeks) that has something, for the empty state.
   const nextBusyDay = useMemo(() => {
@@ -159,12 +162,13 @@ export function TodayAgenda({
         tasks,
         sessions,
         notes: noteDeadlines,
+        gcalEvents,
         date: d,
       })
       if (items.length) return d
     }
     return null
-  }, [selectedDate, slots, events, allTodos, tasks, sessions, noteDeadlines])
+  }, [selectedDate, slots, events, allTodos, tasks, sessions, noteDeadlines, gcalEvents])
 
   const goPrevDay = () => {
     if (selectedDay === 0) {
@@ -198,6 +202,11 @@ export function TodayAgenda({
     // inline per kind.
     if (item.kind === 'note') return onOpenNote?.(item.ref)
     if (item.kind === 'session') return
+    if (item.kind === 'gcal') {
+      // Read-only Google Calendar item — open it in Google if we have the link.
+      if (item.ref?.htmlLink) window.open(item.ref.htmlLink, '_blank', 'noopener')
+      return
+    }
     if (item.kind === 'slot') return onOpenSlot?.(item.ref)
     // event / todo / task → focus on it via the synthetic-slot path
     onOpenSlot?.({
