@@ -60,6 +60,14 @@ import {
 } from '@/hooks/useChronoTheme'
 import { ensureNotificationPermission } from '@/lib/notify'
 import { soundsEnabled, setSoundsEnabled } from '@/lib/sound'
+import {
+  listVoices,
+  primeVoices,
+  getVoicePreference,
+  setVoicePreference,
+  getProviderPreference,
+  setProviderPreference,
+} from '@/lib/tts'
 import { isDesktop, desktopBridge } from '@/desktop/isDesktop'
 import { CHANGELOG } from '@/content/changelog'
 import { CREATOR } from '@/lib/constants'
@@ -225,6 +233,11 @@ export function SettingsPanel() {
   // Google Calendar Connection state
   const [calConnected, setCalConnected] = useState(isCalendarConnected())
 
+  // Assistant voice (TTS) — provider tier + device voice, stored in localStorage
+  const [ttsProvider, setTtsProvider] = useState('auto')
+  const [ttsVoiceURI, setTtsVoiceURI] = useState('')
+  const [ttsVoices, setTtsVoices] = useState([])
+
   // Double confirmation deletion state (System wipe)
   const [deleteStage, setDeleteStage] = useState(0)
   const [deleteInput, setDeleteInput] = useState('')
@@ -287,7 +300,14 @@ export function SettingsPanel() {
       const allCats = ['stoic', 'philosophy', 'productivity', 'proverbs', 'hindi_urdu', 'modern']
       setZenCategories(settings?.zenCategories || allCats)
       setZenVoiceEnabled(settings?.zenVoiceEnabled !== false)
-      
+
+      // Assistant voice — hydrate from localStorage; voices load async on some OSes
+      primeVoices()
+      setTtsProvider(getProviderPreference())
+      setTtsVoiceURI(getVoicePreference())
+      setTtsVoices(listVoices())
+      setTimeout(() => setTtsVoices(listVoices()), 300)
+
       // Initialize profile fields on settings load
       let fName = userDoc?.profile?.firstName || ''
       let lName = userDoc?.profile?.lastName || ''
@@ -1877,6 +1897,47 @@ export function SettingsPanel() {
                           <span className="text-xs font-bold text-ink w-16 text-center bg-surface-2 border border-line/60 rounded px-2 py-1 select-none">
                             {settings?.handsFreeTurnLimit || 6} turns
                           </span>
+                        </div>
+                      </div>
+
+                      {/* Assistant Voice — provider tier + device voice for all spoken output */}
+                      <div className="mt-4 bg-surface-2/15 border border-line/50 rounded-2xl p-4 space-y-3">
+                        <div>
+                          <label className="mb-1.5 block text-xs font-semibold text-ink">Assistant Voice</label>
+                          <p className="text-[11px] text-muted">
+                            Used for Hands-Free replies and spoken quotes. Falls back to the best
+                            device voice when no ElevenLabs / OpenAI key is set.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <select
+                            value={ttsProvider}
+                            onChange={(e) => {
+                              setTtsProvider(e.target.value)
+                              setProviderPreference(e.target.value)
+                            }}
+                            className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink"
+                          >
+                            <option value="auto">Auto (ElevenLabs → OpenAI → device)</option>
+                            <option value="elevenlabs">ElevenLabs only</option>
+                            <option value="openai">OpenAI only</option>
+                            <option value="web">Device voice only</option>
+                          </select>
+                          <select
+                            value={ttsVoiceURI}
+                            onChange={(e) => {
+                              setTtsVoiceURI(e.target.value)
+                              setVoicePreference(e.target.value)
+                            }}
+                            className="min-w-[12rem] flex-1 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink"
+                          >
+                            <option value="">Best available ({'–'} auto)</option>
+                            {ttsVoices.map((v) => (
+                              <option key={v.voiceURI} value={v.voiceURI}>
+                                {v.name} ({v.lang})
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       </div>
                     </div>
