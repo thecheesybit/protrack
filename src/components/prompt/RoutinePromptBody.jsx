@@ -10,7 +10,7 @@ import { cn } from '@/utils/cn'
  * completion and advances the queue; "Snooze" defers to the shell's dismiss,
  * which re-fires the cue once in 5 minutes — one snooze per cue per day, after
  * which the button is disabled and the cue auto-marks missed at `expiresAt`.
- * Ported from HabitReminderToast.
+ * Ported from the old HabitReminderToast (now removed).
  */
 const fmtTime = (ts) =>
   typeof ts === 'number'
