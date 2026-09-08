@@ -3,14 +3,19 @@ import {
   Download,
   Github,
   QrCode,
-  ScanLine,
+  LogIn,
+  LayoutDashboard,
   MonitorSmartphone,
   Timer,
   CalendarRange,
-  BarChart3,
+  CalendarClock,
   ListChecks,
   Layers,
+  GraduationCap,
+  MessageSquareHeart,
+  Mic,
   Bot,
+  BellRing,
   ArrowRight,
 } from 'lucide-react'
 import { AuroraBackground } from '@/components/common/AuroraBackground'
@@ -19,18 +24,69 @@ import { WallOfHonor } from '@/components/support/WallOfHonor'
 import { APP_LINKS, CREATOR } from '@/lib/constants'
 
 const FEATURES = [
-  { icon: Layers, title: 'Workspace modes', body: 'Partition everything by UPSC, M.Tech, GATE — switch context in one tap.' },
-  { icon: Timer, title: 'Gamified deep focus', body: 'Pomodoro sessions that grow a forest and feed your streaks.' },
-  { icon: CalendarRange, title: 'Interactive calendar', body: 'Type anywhere on the grid; a live timeline flag tracks your day.' },
-  { icon: BarChart3, title: 'Activity rings', body: 'Apple-style health circles for focus hours, streaks, and completion.' },
-  { icon: ListChecks, title: 'Habits & Kanban', body: 'Pre-baked habits and a board that auto-syncs syllabus progress.' },
-  { icon: Bot, title: 'AI companion', body: 'A Gemini-powered assistant that understands your active mode.' },
+  {
+    icon: CalendarRange,
+    title: 'Day at a glance',
+    body: 'One vertical timeline merges classes, events, due to-dos, focus sessions and deadlines — with a live "now" line and an end-of-day countdown.',
+  },
+  {
+    icon: Timer,
+    title: 'Deep focus that grows a forest',
+    body: 'Pomodoro sessions plant trees on your calendar. The timer and audio keep running even in the floating mini-window.',
+  },
+  {
+    icon: CalendarClock,
+    title: 'Two-way Google Calendar',
+    body: 'Recurring slots, one-off events and dated to-dos sync both ways while the app is open — edits and deletes included.',
+  },
+  {
+    icon: Layers,
+    title: 'Workspace modes',
+    body: 'Partition everything by UPSC, GATE, M.Tech — switch the whole board in one tap, or see every scope at once.',
+  },
+  {
+    icon: ListChecks,
+    title: 'Habits & Kanban',
+    body: 'Interval habit reminders with a per-day backlog chip, and a board that auto-syncs syllabus progress on drop-to-done.',
+  },
+  {
+    icon: MessageSquareHeart,
+    title: 'Check-ins & calm prompts',
+    body: 'Morning, midday and evening check-ins take over screen-centre behind a blur, ask one question, then hand the screen back. Snooze if unanswered.',
+  },
+  {
+    icon: GraduationCap,
+    title: 'Exam scorecards',
+    body: 'Paste a raw mock-test result or log sectionals by hand. Track score, accuracy and percentile trends with an AI coach on your error patterns.',
+  },
+  {
+    icon: Mic,
+    title: 'Bulk & voice task entry',
+    body: 'Type or dictate "add lesson 18 to 36" inside a subject — one task per lesson in a single write, with a preview before it commits.',
+  },
+  {
+    icon: Bot,
+    title: 'AI companion',
+    body: 'A Gemini assistant that knows your active mode. Slash commands like /done, /todo and /tasks work offline with no API key.',
+  },
 ]
 
 const STEPS = [
-  { icon: Download, title: 'Download the desktop app', body: 'Grab the Windows installer — it sets up in seconds.' },
-  { icon: QrCode, title: 'Launch and see your QR', body: 'The app shows a secure, single-use code on first run.' },
-  { icon: ScanLine, title: 'Scan and sign in on your phone', body: 'Authenticate with Google on mobile; the desktop unlocks instantly.' },
+  {
+    icon: Download,
+    title: 'Download the desktop app',
+    body: 'Grab the Windows installer — it sets up in seconds and updates itself silently.',
+  },
+  {
+    icon: LogIn,
+    title: 'Sign in',
+    body: 'Use "Sign in with Google" on the desktop, or scan the one-time QR with your phone.',
+  },
+  {
+    icon: LayoutDashboard,
+    title: 'Your workspace opens',
+    body: 'Modes, deep focus, the calendar, habits, analytics and the AI companion — one calm board.',
+  },
 ]
 
 export function LandingPage() {
@@ -72,8 +128,9 @@ export function LandingPage() {
               <span className="text-gradient">on one calm desktop.</span>
             </h1>
             <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-muted">
-              PRO TRACK unifies modes, deep focus, an interactive calendar, habits, analytics, and an
-              AI companion into a single hyper-minimal workspace — built to run quietly in your tray.
+              PRO TRACK unifies a day-at-a-glance timeline, deep focus, two-way Google Calendar,
+              habits, exam scorecards, analytics and an AI companion into a single hyper-minimal
+              workspace — built to run quietly in your tray.
             </p>
 
             <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -94,11 +151,13 @@ export function LandingPage() {
                 View source <ArrowRight className="h-4 w-4" />
               </a>
             </div>
-            <p className="mt-3 text-xs text-muted">Free · runs on a zero-cost backend · your data stays yours.</p>
+            <p className="mt-3 text-xs text-muted">
+              Free · no servers to run · your data stays in your own Firebase.
+            </p>
           </motion.div>
         </section>
 
-        {/* How linking works */}
+        {/* How sign-in works */}
         <section className="py-10">
           <h2 className="text-center text-sm font-semibold uppercase tracking-widest text-muted">
             How sign-in works
@@ -121,9 +180,10 @@ export function LandingPage() {
               </motion.div>
             ))}
           </div>
-          <p className="mt-5 text-center text-xs text-muted">
-            Google blocks sign-in inside desktop browsers, so PRO TRACK uses a secure QR handshake —
-            your credentials never touch the desktop directly.
+          <p className="mt-5 flex items-center justify-center gap-1.5 text-center text-xs text-muted">
+            <QrCode className="h-3.5 w-3.5 text-accent" />
+            Google blocks sign-in inside desktop browsers, so the phone QR uses a secure
+            single-use handshake — your credentials never touch the desktop directly.
           </p>
         </section>
 
@@ -145,12 +205,17 @@ export function LandingPage() {
               </motion.div>
             ))}
           </div>
+          <p className="mt-6 flex items-center justify-center gap-1.5 text-center text-xs text-muted/80">
+            <BellRing className="h-3.5 w-3.5 text-accent" />
+            Every notification plays one fitting tone — and a single setting mutes them all.
+          </p>
         </section>
 
-        {/* Wall of Honor — community supporters keeping PRO TRACK free */}
+        {/* Wall of Honor — supporters keeping PRO TRACK free */}
         <section className="py-10">
           <p className="mb-5 text-center text-sm text-muted">
-            PRO TRACK is free and open-source. These supporters keep the servers running.
+            PRO TRACK is free and open-source. There are no servers to run — contributions
+            cover API costs and the maker&rsquo;s time.
           </p>
           <WallOfHonor />
         </section>
