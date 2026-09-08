@@ -1,9 +1,8 @@
-import { useState, useEffect } from 'react'
-import { Sparkles, RefreshCw, Copy, Check, BookOpen, AlertTriangle, ShieldCheck, Zap } from 'lucide-react'
+import { useState } from 'react'
+import { Sparkles, Copy, Check, BookOpen, Zap } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Spinner } from '@/components/ui/Spinner'
 import { generateGeminiExpertAnalysis } from '@/services/scorecardService'
-import { cn } from '@/utils/cn'
 
 const COACH_CACHE_KEY = 'protrack:scorecard_coach_report'
 
@@ -30,13 +29,18 @@ export function ScorecardAiCoach({ scorecards = [], activeScopeName = 'All Exams
       setReport(generated)
       try {
         localStorage.setItem(COACH_CACHE_KEY, generated)
-      } catch (e) {
-        /* storage full */
+      } catch {
+        /* storage full — the report still renders from state */
       }
       toast.success('AI Performance Coach analysis ready!')
     } catch (err) {
       console.error('[AI Coach] generation error:', err)
-      toast.error(err.message || 'Could not generate coach analysis')
+      const noKey = /key missing|api key/i.test(err?.message || '')
+      toast.error(
+        noKey
+          ? 'Add an AI provider key in Settings to generate a coaching report.'
+          : err.message || 'Could not generate coach analysis',
+      )
     } finally {
       setLoading(false)
     }

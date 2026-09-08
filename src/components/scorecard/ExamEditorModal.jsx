@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Trash2, AlertTriangle, Undo2, Layers, Clock } from 'lucide-react'
+import { Trash2, AlertTriangle, Layers, Clock } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
@@ -132,7 +132,7 @@ export function ExamEditorModal({
                 await restoreExam(user.uid, currentModeId, exam.id)
                 toast.dismiss(t.id)
                 toast.success(`Exam "${exam.name}" restored!`)
-              } catch (e) {
+              } catch {
                 toast.error('Failed to restore exam')
               }
             }}

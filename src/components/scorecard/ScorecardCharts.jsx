@@ -10,7 +10,6 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  Legend,
   CartesianGrid,
   Cell,
   ReferenceLine,

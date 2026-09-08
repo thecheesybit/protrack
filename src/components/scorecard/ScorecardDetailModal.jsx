@@ -10,7 +10,6 @@ import {
   X,
   Layers,
   Calendar,
-  Sparkles,
   Copy,
   Check,
   Loader2,

@@ -6,17 +6,10 @@ import {
   AlertCircle,
   Sparkles,
   Calendar,
-  Layers,
   Search,
-  Filter,
-  ArrowUpRight,
-  ChevronRight,
   Pencil,
   Settings2,
   Trash2,
-  Clock,
-  Target,
-  Percent,
   Trophy,
   ClipboardList,
 } from 'lucide-react'
@@ -37,7 +30,6 @@ import { cn } from '@/utils/cn'
 export function ScorecardWidget({ widget, variant }) {
   const activeModeId = useStore((s) => s.activeModeId)
   const modes = useStore((s) => s.modes)
-  const maximizeWidget = useStore((s) => s.maximizeWidget)
 
   // Realtime Exams (active & soft-deleted)
   const { exams, deletedExams, loading: examsLoading } = useExams(activeModeId)
@@ -56,7 +48,7 @@ export function ScorecardWidget({ widget, variant }) {
   }, [exams, selectedExamId])
 
   // Realtime Scorecards: filtered by selectedExamId (or all if selectedExamId === 'all' or empty)
-  const { scorecards, allScorecards, loading: scorecardsLoading, stats } = useScorecards(
+  const { scorecards, allScorecards, stats } = useScorecards(
     activeModeId,
     selectedExamId === 'all' ? null : selectedExamId
   )
@@ -263,8 +255,13 @@ export function ScorecardWidget({ widget, variant }) {
           )
         }
       >
-        {/* ── CASE 1: NO EXAMS EXIST (ASK TO ADD EXAM) ──────────── */}
-        {exams.length === 0 ? (
+        {/* ── CASE 0: STILL LOADING EXAMS (avoid flashing the empty state) ── */}
+        {examsLoading && exams.length === 0 ? (
+          <div className="flex flex-1 items-center justify-center py-12 text-xs text-muted">
+            Loading exams…
+          </div>
+        ) : exams.length === 0 ? (
+          /* ── CASE 1: NO EXAMS EXIST (ASK TO ADD EXAM) ──────────── */
           <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-line/70 p-8 text-center bg-surface-2/20">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/15 text-accent shadow-glow-sm">
               <Trophy className="h-7 w-7" />
