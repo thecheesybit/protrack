@@ -7,15 +7,13 @@ import { secureStorage } from '@/services/cryptoService'
  * and synced with OS keychain / DPAPI via Electron's secureStore on desktop.
  * It is NEVER cleared automatically unless manually removed by the user.
  */
-// Current, non-retired models, fastest → most-capable. The `-latest` aliases
-// auto-resolve to whatever Google is serving, so a hard-coded id going EOL
-// can't brick the assistant. (The 1.5 series is retired — never list it.)
+// Current, non-retired models, fastest → most-capable. Concrete ids only — the
+// `-latest` aliases can silently point at a heavily-loaded model, and the 1.5
+// series is retired (a 404 that just wastes a fallback slot).
 export const GEMINI_MODELS = [
   'gemini-2.5-flash',
-  'gemini-flash-latest',
   'gemini-2.0-flash',
   'gemini-2.5-flash-lite',
-  'gemini-flash-lite-latest',
   'gemini-2.0-flash-lite',
   'gemini-2.5-pro',
 ]
@@ -197,7 +195,7 @@ export async function executeGeminiWithModelFallback(apiKey, taskFn) {
   let lastError = null
   for (let i = 0; i < modelsToTry.length; i++) {
     const modelName = modelsToTry[i]
-    const attempts = i === 0 ? 3 : 2 // give the preferred model a couple more tries
+    const attempts = i === 0 ? 2 : 1 // one extra try on the preferred model
     for (let a = 0; a < attempts; a++) {
       try {
         const res = await taskFn(ai, modelName)
@@ -205,14 +203,14 @@ export async function executeGeminiWithModelFallback(apiKey, taskFn) {
         return res
       } catch (err) {
         lastError = err
-        if (!isRetryableGeminiError(err)) throw err // fatal — don't churn
+        if (!isRetryableGeminiError(err)) throw err // fatal — don't churn the cascade
         const moreForThisModel = a < attempts - 1
         const moreModels = i < modelsToTry.length - 1
         if (!moreForThisModel && !moreModels) throw err
-        const delay = moreForThisModel ? [500, 1200, 2500][a] || 2500 : 300
+        const delay = moreForThisModel ? 600 : 250
         console.warn(
           `[geminiService] '${modelName}' busy (${String(err?.message || err).slice(0, 80)}). ` +
-            (moreForThisModel ? `retry in ${delay}ms` : `falling back to '${modelsToTry[i + 1]}'`),
+            (moreForThisModel ? `retrying in ${delay}ms` : `falling back to '${modelsToTry[i + 1]}'`),
         )
         await _sleep(delay)
         if (!moreForThisModel) break // move to the next model

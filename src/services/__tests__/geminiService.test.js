@@ -57,13 +57,15 @@ describe('geminiService Key Persistence & Resilience', () => {
     expect(isRetryableGeminiError(new Error('Invalid API key'))).toBe(false)
   })
 
-  it('falls back to alternate model when primary model hits 503 high demand', async () => {
+  it('falls back to the next model when the preferred one stays overloaded', async () => {
     setGeminiKey('AIzaSyMockKey')
 
+    const preferred = GEMINI_MODELS[0]
+    const next = GEMINI_MODELS[1]
     const attemptedModels = []
     const mockTask = vi.fn(async (ai, modelName) => {
       attemptedModels.push(modelName)
-      if (modelName === 'gemini-2.0-flash') {
+      if (modelName === preferred) {
         const err = new Error('[503] This model is currently experiencing high demand.')
         err.status = 503
         throw err
@@ -72,13 +74,15 @@ describe('geminiService Key Persistence & Resilience', () => {
     })
 
     const result = await executeGeminiWithModelFallback('AIzaSyMockKey', mockTask)
-    expect(result).toBe('Success with gemini-2.0-flash-lite')
-    expect(attemptedModels[0]).toBe('gemini-2.0-flash')
-    expect(attemptedModels[1]).toBe('gemini-2.0-flash-lite')
+    expect(result).toBe(`Success with ${next}`)
+    // preferred model is retried once before moving on, then the next succeeds
+    expect(attemptedModels.slice(0, 2)).toEqual([preferred, preferred])
+    expect(attemptedModels[2]).toBe(next)
   })
 
-  it('ensures deprecated/overloaded gemini-flash-latest is never in model list', () => {
+  it('lists only concrete, current model ids (no -latest aliases, no retired 1.5)', () => {
     expect(GEMINI_MODELS).not.toContain('gemini-flash-latest')
-    expect(GEMINI_MODELS[0]).toBe('gemini-2.0-flash')
+    expect(GEMINI_MODELS.some((m) => m.includes('1.5'))).toBe(false)
+    expect(GEMINI_MODELS[0]).toBe('gemini-2.5-flash')
   })
 })

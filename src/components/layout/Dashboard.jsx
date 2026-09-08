@@ -186,7 +186,7 @@ export function Dashboard() {
         !e.target.isContentEditable
       ) {
         e.preventDefault()
-        setHelpOpen((v) => !v)
+        setHelpOpen(true)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -344,14 +344,18 @@ export function Dashboard() {
       <HydrationReminder />
       <CenterPrompt />
 
-      {/* Shortcuts / commands — transparent ? button, top-right */}
+      {/* Shortcuts / commands — transparent ? button, clear of the window's
+          title-bar controls (sits below them). */}
       {!focusLocked && !clockCentered && (
         <button
           type="button"
           onClick={() => setHelpOpen(true)}
           title="Shortcuts & commands ( ? )"
           aria-label="Open shortcuts and commands"
-          className="fixed right-4 top-4 z-30 flex h-8 w-8 items-center justify-center rounded-full border border-line/50 bg-surface/40 text-muted backdrop-blur-md transition-colors hover:border-accent/50 hover:text-ink"
+          className={cn(
+            'fixed right-3.5 z-30 flex h-8 w-8 items-center justify-center rounded-full border border-line/50 bg-surface/40 text-muted backdrop-blur-md transition-colors hover:border-accent/50 hover:text-ink',
+            typeof window !== 'undefined' && window.protrack?.isDesktop && !fullscreen ? 'top-12' : 'top-4',
+          )}
         >
           <HelpCircle className="h-4 w-4" />
         </button>
