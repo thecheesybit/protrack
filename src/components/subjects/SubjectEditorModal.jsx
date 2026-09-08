@@ -21,7 +21,29 @@ const fromTime = (v) => {
   const [h, m] = (v || '09:00').split(':').map(Number)
   return h * 60 + (m || 0)
 }
-const blankClass = () => ({ key: Math.random().toString(36).slice(2), dayOfWeek: 0, startMin: 9 * 60, endMin: 10 * 60, label: '' })
+const CLASS_TYPES = {
+  lecture: { label: 'Lecture', tag: 'Lecture', tagStyle: 'standard' },
+  lab: { label: 'Lab', tag: 'Lab', tagStyle: 'striped' },
+  tutorial: { label: 'Tutorial', tag: 'Tutorial', tagStyle: 'dashed' },
+  seminar: { label: 'Seminar', tag: 'Seminar', tagStyle: 'dotted' },
+  other: { label: '', tag: '', tagStyle: 'standard' },
+}
+// Repeat presets → the slot recurrence shape the grid already understands.
+const REPEATS = {
+  weekly: { recurrenceType: 'weekly' },
+  fortnightly: { recurrenceType: 'interval', recurrenceInterval: 14 },
+  monthly: { recurrenceType: 'interval', recurrenceInterval: 28 },
+}
+const blankClass = () => ({
+  key: Math.random().toString(36).slice(2),
+  dayOfWeek: 0,
+  startMin: 9 * 60,
+  endMin: 10 * 60,
+  type: 'lecture',
+  repeat: 'weekly',
+  room: '',
+  label: '',
+})
 
 export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject, order, onDeleted }) {
   const { user } = useAuth()
@@ -67,6 +89,15 @@ export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject,
         dayOfWeek: s.dayOfWeek,
         startMin: s.startMin,
         endMin: s.endMin,
+        type:
+          Object.keys(CLASS_TYPES).find((k) => CLASS_TYPES[k].tag && CLASS_TYPES[k].tag === s.tag) || 'other',
+        repeat:
+          s.recurrenceType === 'interval' && s.recurrenceInterval === 28
+            ? 'monthly'
+            : s.recurrenceType === 'interval'
+              ? 'fortnightly'
+              : 'weekly',
+        room: s.room || '',
         label: s.label || '',
       })),
     )
@@ -84,16 +115,24 @@ export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject,
       if (!keptIds.has(s.id)) await deleteSlot(uid, targetModeId, s.id).catch(() => {})
     }
     // Creates + updates
+    const todayStr = new Date().toISOString().split('T')[0]
     for (const r of classTimes) {
       if (r.endMin <= r.startMin) continue
+      const t = CLASS_TYPES[r.type] || CLASS_TYPES.other
+      const rep = REPEATS[r.repeat] || REPEATS.weekly
       const payload = {
-        label: (r.label || '').trim() || name,
+        label: (r.label || '').trim() || t.label || name,
         dayOfWeek: r.dayOfWeek,
         startMin: r.startMin,
         endMin: r.endMin,
         color,
         subjectId,
-        recurrenceType: 'weekly',
+        room: (r.room || '').trim(),
+        tag: t.tag,
+        tagStyle: t.tagStyle,
+        recurrenceType: rep.recurrenceType,
+        recurrenceInterval: rep.recurrenceInterval || 1,
+        recurrenceStartDate: todayStr,
       }
       if (r.id) await updateSlot(uid, targetModeId, r.id, payload).catch(() => {})
       else await addSlot(uid, targetModeId, payload).catch(() => {})
@@ -258,52 +297,84 @@ export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject,
             <Plus className="h-3 w-3" /> Add time
           </button>
         </div>
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2.5">
           {classTimes.map((r) => (
-            <div key={r.key} className="flex items-center gap-1.5">
-              <select
-                value={r.dayOfWeek}
-                onChange={(e) => patchClass(r.key, { dayOfWeek: Number(e.target.value) })}
-                className="rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-xs outline-none focus:border-accent"
-              >
-                {DAYS.map((d, i) => (
-                  <option key={d} value={i}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="time"
-                value={toTime(r.startMin)}
-                onChange={(e) => patchClass(r.key, { startMin: fromTime(e.target.value) })}
-                className="rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-xs outline-none focus:border-accent"
-              />
-              <span className="text-[11px] text-muted">–</span>
-              <input
-                type="time"
-                value={toTime(r.endMin)}
-                onChange={(e) => patchClass(r.key, { endMin: fromTime(e.target.value) })}
-                className="rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-xs outline-none focus:border-accent"
-              />
-              <input
-                value={r.label}
-                onChange={(e) => patchClass(r.key, { label: e.target.value })}
-                placeholder="Lecture / Lab"
-                className="min-w-0 flex-1 rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-xs outline-none focus:border-accent"
-              />
-              <button
-                type="button"
-                onClick={() => setClassTimes((rows) => rows.filter((x) => x.key !== r.key))}
-                className="shrink-0 text-muted hover:text-rose-400"
-                aria-label="Remove class time"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
+            <div key={r.key} className="rounded-xl border border-line/50 bg-surface-2/20 p-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <select
+                  value={r.type}
+                  onChange={(e) => patchClass(r.key, { type: e.target.value })}
+                  className="rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-xs outline-none focus:border-accent"
+                >
+                  <option value="lecture">Lecture</option>
+                  <option value="lab">Lab</option>
+                  <option value="tutorial">Tutorial</option>
+                  <option value="seminar">Seminar</option>
+                  <option value="other">Other</option>
+                </select>
+                <select
+                  value={r.dayOfWeek}
+                  onChange={(e) => patchClass(r.key, { dayOfWeek: Number(e.target.value) })}
+                  className="rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-xs outline-none focus:border-accent"
+                >
+                  {DAYS.map((d, i) => (
+                    <option key={d} value={i}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="time"
+                  value={toTime(r.startMin)}
+                  onChange={(e) => patchClass(r.key, { startMin: fromTime(e.target.value) })}
+                  className="rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-xs outline-none focus:border-accent"
+                />
+                <span className="text-[11px] text-muted">–</span>
+                <input
+                  type="time"
+                  value={toTime(r.endMin)}
+                  onChange={(e) => patchClass(r.key, { endMin: fromTime(e.target.value) })}
+                  className="rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-xs outline-none focus:border-accent"
+                />
+                <button
+                  type="button"
+                  onClick={() => setClassTimes((rows) => rows.filter((x) => x.key !== r.key))}
+                  className="ml-auto shrink-0 text-muted hover:text-rose-400"
+                  aria-label="Remove class time"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <select
+                  value={r.repeat}
+                  onChange={(e) => patchClass(r.key, { repeat: e.target.value })}
+                  className="rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-[11px] outline-none focus:border-accent"
+                  title="How often this class repeats"
+                >
+                  <option value="weekly">Every week</option>
+                  <option value="fortnightly">Every 2 weeks</option>
+                  <option value="monthly">Every 4 weeks</option>
+                </select>
+                <input
+                  value={r.room}
+                  onChange={(e) => patchClass(r.key, { room: e.target.value })}
+                  placeholder="Room / venue"
+                  className="w-28 rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-[11px] outline-none focus:border-accent"
+                />
+                <input
+                  value={r.label}
+                  onChange={(e) => patchClass(r.key, { label: e.target.value })}
+                  placeholder="Custom label (optional)"
+                  className="min-w-0 flex-1 rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-[11px] outline-none focus:border-accent"
+                />
+              </div>
             </div>
           ))}
           {!classTimes.length && (
             <span className="text-[11px] text-muted">
-              Add lecture / lab times so this subject shows on your timetable.
+              Add lecture / lab / tutorial times — with a repeat and room — so this subject
+              fills your timetable. Same class twice a week? Add two rows.
             </span>
           )}
         </div>
