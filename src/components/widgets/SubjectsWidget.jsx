@@ -99,33 +99,53 @@ export function SubjectsWidget({ widget, variant }) {
                 }}
                 className="flex flex-1 flex-col gap-1.5 overflow-y-auto pr-0.5"
               >
-                {subjects.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => setSelectedId(s.id)}
-                    title={railCollapsed ? `${s.name} (${s.progressPct || 0}%)` : undefined}
-                    className={cn(
-                      'rounded-xl border text-left transition-colors',
-                      railCollapsed ? 'p-2 flex items-center justify-center' : 'px-3 py-2',
-                      selected?.id === s.id
-                        ? 'border-accent/50 bg-surface-2 shadow-xs'
-                        : 'border-line/50 hover:border-accent/30',
-                    )}
-                  >
-                    {railCollapsed ? (
+                {subjects.map((s) =>
+                  railCollapsed ? (
+                    <button
+                      key={s.id}
+                      onClick={() => setSelectedId(s.id)}
+                      title={`${s.name} (${s.progressPct || 0}%)`}
+                      className={cn(
+                        'flex items-center justify-center rounded-xl border p-2 transition-colors',
+                        selected?.id === s.id
+                          ? 'border-accent/50 bg-surface-2 shadow-xs'
+                          : 'border-line/50 hover:border-accent/30',
+                      )}
+                    >
                       <span className="h-3 w-3 rounded-full" style={{ background: s.color }} />
-                    ) : (
-                      <>
-                        <div className="mb-1.5 flex items-center gap-2">
-                          <span className="h-2 w-2 rounded-full" style={{ background: s.color }} />
-                          <span className="min-w-0 flex-1 truncate text-sm font-medium">{s.name}</span>
-                          <span className="text-[10px] text-muted">{s.progressPct || 0}%</span>
-                        </div>
-                        <ProgressBar value={s.progressPct || 0} color={s.color} height="h-1.5" />
-                      </>
-                    )}
-                  </button>
-                ))}
+                    </button>
+                  ) : (
+                    <div
+                      key={s.id}
+                      className={cn(
+                        'group/subrow rounded-xl border px-3 py-2 transition-colors',
+                        selected?.id === s.id
+                          ? 'border-accent/50 bg-surface-2 shadow-xs'
+                          : 'border-line/50 hover:border-accent/30',
+                      )}
+                    >
+                      <div className="mb-1.5 flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full" style={{ background: s.color }} />
+                        <button
+                          onClick={() => setSelectedId(s.id)}
+                          className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:text-accent"
+                        >
+                          {s.name}
+                        </button>
+                        <span className="text-[10px] text-muted">{s.progressPct || 0}%</span>
+                        <button
+                          onClick={() => openEdit(s)}
+                          title="Edit subject & class times"
+                          className="shrink-0 rounded p-0.5 text-muted opacity-0 transition-opacity hover:text-ink group-hover/subrow:opacity-100"
+                          aria-label={`Edit ${s.name}`}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      </div>
+                      <ProgressBar value={s.progressPct || 0} color={s.color} height="h-1.5" />
+                    </div>
+                  ),
+                )}
 
                 {/* Persistent add affordance at bottom of rail */}
                 <button

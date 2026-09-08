@@ -5,10 +5,8 @@ import { useStore } from '@/store/useStore'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { MicroKanban } from './MicroKanban'
 import { SubjectQuickAdd } from './SubjectQuickAdd'
-import { SlotEditorModal } from '@/components/timetable/SlotEditorModal'
 import { useTimetable } from '@/hooks/useTimetable'
-import { deleteSlot } from '@/services/timetableService'
-import { DAYS, minutesToLabel, todayDow } from '@/lib/time'
+import { DAYS, minutesToLabel } from '@/lib/time'
 import {
   adjustProgress,
   addSubjectLink,
@@ -40,7 +38,6 @@ export function SubjectDetail({ modeId, subject, onEdit }) {
         .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startMin - b.startMin),
     [slots, subject.id],
   )
-  const [slotEditor, setSlotEditor] = useState(null) // slot draft | null
   const bumpProgress = (delta) => adjustProgress(user.uid, targetModeId, subject.id, delta)
 
   const addLink = () => {
@@ -202,56 +199,39 @@ export function SubjectDetail({ modeId, subject, onEdit }) {
         </div>
       </div>
 
-      {/* Class / lab schedule */}
-      <div className="mt-4 rounded-xl border border-line/50 bg-surface-2/30 p-2.5">
+      {/* Class / lab schedule — read-only view; edit via the subject editor */}
+      <button
+        type="button"
+        onClick={onEdit}
+        className="group/cs mt-4 w-full rounded-xl border border-line/50 bg-surface-2/30 p-2.5 text-left transition-colors hover:border-accent/40"
+      >
         <div className="mb-1.5 flex items-center justify-between">
           <span className="flex items-center gap-1.5 text-xs font-medium text-muted">
             <CalendarClock className="h-3.5 w-3.5" /> Class schedule
           </span>
-          <button
-            onClick={() =>
-              setSlotEditor({
-                subjectId: subject.id,
-                color: subject.color,
-                label: subject.name,
-                dayOfWeek: todayDow(),
-                startMin: 9 * 60,
-                endMin: 10 * 60,
-              })
-            }
-            className="flex items-center gap-1 text-[11px] font-semibold text-accent hover:underline"
-          >
-            <Plus className="h-3 w-3" /> Add time
-          </button>
+          <span className="flex items-center gap-1 text-[11px] font-semibold text-accent opacity-0 transition-opacity group-hover/cs:opacity-100">
+            <Pencil className="h-3 w-3" /> Edit
+          </span>
         </div>
         <div className="flex flex-col gap-1">
           {classSlots.map((s) => (
-            <div key={s.id} className="group/cs flex items-center gap-2 text-xs">
+            <div key={s.id} className="flex items-center gap-2 text-xs">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: s.color || subject.color }} />
-              <button
-                onClick={() => setSlotEditor({ ...s, _modeId: s._modeId || targetModeId })}
-                className="min-w-0 flex-1 truncate text-left hover:text-accent"
-              >
+              <span className="min-w-0 flex-1 truncate">
                 <span className="font-semibold">{DAYS[s.dayOfWeek]}</span>{' '}
                 {minutesToLabel(s.startMin)}–{minutesToLabel(s.endMin)}
-                {s.label && s.label !== subject.name ? ` · ${s.label}` : ''}
-              </button>
-              <button
-                onClick={() => deleteSlot(user.uid, s._modeId || targetModeId, s.id)}
-                className="opacity-0 transition-opacity group-hover/cs:opacity-100"
-                aria-label="Remove class time"
-              >
-                <X className="h-3 w-3 text-muted hover:text-rose-400" />
-              </button>
+                {s.tag ? ` · ${s.tag}` : s.label && s.label !== subject.name ? ` · ${s.label}` : ''}
+                {s.room ? ` · ${s.room}` : ''}
+              </span>
             </div>
           ))}
           {!classSlots.length && (
             <span className="text-[11px] text-muted">
-              No class times yet — add lectures / labs so they show on the timetable.
+              No class times yet — click to add lectures / labs so they show on the timetable.
             </span>
           )}
         </div>
-      </div>
+      </button>
 
       {/* Kanban */}
       <div className={cn('mt-4 flex min-h-0 flex-1 flex-col')}>
@@ -266,14 +246,6 @@ export function SubjectDetail({ modeId, subject, onEdit }) {
           <MicroKanban modeId={targetModeId} subjectId={subject.id} subjectName={subject.name} />
         </div>
       </div>
-
-      <SlotEditorModal
-        open={Boolean(slotEditor)}
-        onClose={() => setSlotEditor(null)}
-        modeId={targetModeId}
-        slot={slotEditor}
-        subjects={[subject]}
-      />
     </div>
   )
 }
