@@ -5,7 +5,7 @@ import { useStore } from '@/store/useStore'
 import { useIdleDetection } from '@/hooks/useIdleDetection'
 import { useSubjects } from '@/hooks/useSubjects'
 import { useTodos } from '@/hooks/useWellness'
-import { getElevenLabsKey } from '@/services/geminiService'
+import { speak, stopSpeaking } from '@/lib/tts'
 import { classifyDeadline } from '@/lib/deadlines'
 import { cn } from '@/utils/cn'
 
@@ -47,122 +47,16 @@ function computeRecs(subjects, todos) {
   return recs.slice(0, 2)
 }
 
-let activeZenFadeInterval = null
+/** BCP-47 language for a quote — Hindi/Urdu quotes get a Devanagari voice. */
+const zenLang = (quote) =>
+  quote?.language === 'hi' || quote?.language === 'ur' ? 'hi-IN' : 'en-US'
 
-const fadeOutActiveAudio = () => {
-  if (typeof window !== 'undefined' && window.activeZenAudio) {
-    if (activeZenFadeInterval) clearInterval(activeZenFadeInterval)
-    const audio = window.activeZenAudio
-    let vol = audio.volume
-    activeZenFadeInterval = setInterval(() => {
-      if (vol > 0.1) {
-        vol -= 0.1
-        audio.volume = Math.max(0, vol)
-      } else {
-        clearInterval(activeZenFadeInterval)
-        activeZenFadeInterval = null
-        audio.pause()
-        if (audio.src) {
-          try { URL.revokeObjectURL(audio.src) } catch { /* noop */ }
-        }
-        if (window.activeZenAudio === audio) {
-          window.activeZenAudio = null
-        }
-      }
-    }, 100)
-  }
-}
-
-const stopSpeaking = () => {
-  if (typeof window !== 'undefined') {
-    if (activeZenFadeInterval) {
-      clearInterval(activeZenFadeInterval)
-      activeZenFadeInterval = null
-    }
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel()
-    }
-    if (window.activeZenAudio) {
-      window.activeZenAudio.pause()
-      if (window.activeZenAudio.src) {
-        try { URL.revokeObjectURL(window.activeZenAudio.src) } catch { /* noop */ }
-      }
-      window.activeZenAudio = null
-    }
-  }
-}
-
-const speakQuote = async (quote, voiceEnabled) => {
-  if (!voiceEnabled) return
-
-  stopSpeaking()
-  const cleanText = quote.text.replace(/\n/g, ' ')
-
-  const elKey = getElevenLabsKey()
-  if (elKey) {
-    try {
-      const voiceId = '21m00Tcm4TlvDq8ikWAM' // Rachel voice (calm/meditative)
-      const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'xi-api-key': elKey
-        },
-        body: JSON.stringify({
-          text: cleanText,
-          model_id: 'eleven_multilingual_v2',
-          voice_settings: {
-            stability: 0.8,
-            similarity_boost: 0.8,
-            style: 0.0,
-            use_speaker_boost: true
-          }
-        })
-      })
-      if (response.ok) {
-        const blob = await response.blob()
-        const audioUrl = URL.createObjectURL(blob)
-        const audio = new Audio(audioUrl)
-        audio.volume = 0.9
-        window.activeZenAudio = audio
-        audio.onended = () => {
-          try { URL.revokeObjectURL(audioUrl) } catch { /* noop */ }
-          if (window.activeZenAudio === audio) {
-            window.activeZenAudio = null
-          }
-        }
-        audio.onerror = () => {
-          try { URL.revokeObjectURL(audioUrl) } catch { /* noop */ }
-          if (window.activeZenAudio === audio) {
-            window.activeZenAudio = null
-          }
-        }
-        audio.play()
-        return
-      }
-    } catch (err) {
-      console.warn('[zen-tts] ElevenLabs failed, falling back to Web Speech', err)
-    }
-  }
-
-  if (typeof window !== 'undefined' && window.speechSynthesis) {
-    const utterance = new SpeechSynthesisUtterance(cleanText)
-    utterance.rate = 0.75 // low pace
-    utterance.pitch = 0.85 // low pitch
-
-    const voices = window.speechSynthesis.getVoices()
-    if (quote.language === 'hi' || quote.language === 'ur') {
-      const hiVoice = voices.find(v => v.lang.startsWith('hi'))
-      if (hiVoice) utterance.voice = hiVoice
-      utterance.lang = 'hi-IN'
-    } else {
-      const enVoice = voices.find(v => v.lang.startsWith('en'))
-      if (enVoice) utterance.voice = enVoice
-      utterance.lang = 'en-US'
-    }
-
-    window.speechSynthesis.speak(utterance)
-  }
+/**
+ * Speak a quote through the centralized tiered TTS (src/lib/tts.js). A calm
+ * cadence (rate 0.95) reads better for a meditative quote while staying natural.
+ */
+const speakQuote = (quote, voiceEnabled) => {
+  speak(quote.text, { voiceEnabled, lang: zenLang(quote), rate: 0.95 })
 }
 
 export function ZenOverlay() {
@@ -206,10 +100,7 @@ export function ZenOverlay() {
   }, [])
 
   const nextQuote = useCallback(async () => {
-    fadeOutActiveAudio()
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.cancel()
-    }
+    stopSpeaking({ fade: true })
 
     let history = []
     try {

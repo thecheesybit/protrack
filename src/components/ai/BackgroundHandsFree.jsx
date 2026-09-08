@@ -4,13 +4,11 @@ import { useAuth } from '@/hooks/useAuth'
 import { useSubjects } from '@/hooks/useSubjects'
 import { useTimetable } from '@/hooks/useTimetable'
 import { useHabits, useTodos } from '@/hooks/useWellness'
-import { chatWithGemini, hasGeminiKey, getElevenLabsKey } from '@/services/geminiService'
+import { chatWithGemini, hasGeminiKey } from '@/services/geminiService'
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition'
+import { speak, stopSpeaking } from '@/lib/tts'
 import { todayDow } from '@/lib/time'
 import toast from 'react-hot-toast'
-
-// Speech synthesis helpers
-let activeSpeechUtterance = null
 
 function playChime() {
   try {
@@ -36,112 +34,9 @@ function playChime() {
   }
 }
 
-function speakHandsFree(text, voiceEnabled, onStart, onEnd) {
-  if (!voiceEnabled) {
-    onEnd?.()
-    return
-  }
-
-  // Stop any active speech first
-  stopHandsFreeSpeaking()
-
-  const cleanText = text.replace(/\n/g, ' ')
-  const elKey = getElevenLabsKey()
-
-  if (elKey) {
-    const voiceId = '21m00Tcm4TlvDq8ikWAM' // Rachel voice (calm/meditative)
-    fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'xi-api-key': elKey
-      },
-      body: JSON.stringify({
-        text: cleanText,
-        model_id: 'eleven_multilingual_v2',
-        voice_settings: {
-          stability: 0.8,
-          similarity_boost: 0.8,
-          style: 0.0,
-          use_speaker_boost: true
-        }
-      })
-    })
-      .then(async (response) => {
-        if (response.ok) {
-          const blob = await response.blob()
-          const audioUrl = URL.createObjectURL(blob)
-          const audio = new Audio(audioUrl)
-          audio.volume = 0.9
-          window.activeHandsFreeAudio = audio
-          audio.onplay = () => onStart?.()
-          audio.onended = () => {
-            try { URL.revokeObjectURL(audioUrl) } catch { /* noop */ }
-            window.activeHandsFreeAudio = null
-            onEnd?.()
-          }
-          audio.onerror = () => {
-            try { URL.revokeObjectURL(audioUrl) } catch { /* noop */ }
-            window.activeHandsFreeAudio = null
-            onEnd?.()
-          }
-          audio.play()
-        } else {
-          throw new Error('ElevenLabs API returned error status')
-        }
-      })
-      .catch((err) => {
-        console.warn('[hands-free-background-tts] ElevenLabs failed, falling back to Web Speech', err)
-        fallbackWebSpeech(cleanText, onStart, onEnd)
-      })
-  } else {
-    fallbackWebSpeech(cleanText, onStart, onEnd)
-  }
-}
-
-function fallbackWebSpeech(text, onStart, onEnd) {
-  if (typeof window === 'undefined' || !window.speechSynthesis) {
-    onEnd?.()
-    return
-  }
-  const utterance = new SpeechSynthesisUtterance(text)
-  utterance.rate = 0.85
-  utterance.pitch = 0.9
-
-  const voices = window.speechSynthesis.getVoices()
-  const enVoice = voices.find(v => v.lang.startsWith('en'))
-  if (enVoice) utterance.voice = enVoice
-  utterance.lang = 'en-US'
-
-  utterance.onstart = () => onStart?.()
-  utterance.onend = () => {
-    activeSpeechUtterance = null
-    onEnd?.()
-  }
-  utterance.onerror = () => {
-    activeSpeechUtterance = null
-    onEnd?.()
-  }
-
-  activeSpeechUtterance = utterance
-  window.speechSynthesis.speak(utterance)
-}
-
-function stopHandsFreeSpeaking() {
-  if (typeof window !== 'undefined') {
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel()
-    }
-    activeSpeechUtterance = null
-    if (window.activeHandsFreeAudio) {
-      window.activeHandsFreeAudio.pause()
-      if (window.activeHandsFreeAudio.src) {
-        try { URL.revokeObjectURL(window.activeHandsFreeAudio.src) } catch { /* noop */ }
-      }
-      window.activeHandsFreeAudio = null
-    }
-  }
-}
+// TTS is centralized in src/lib/tts.js (tiered ElevenLabs → OpenAI → natural
+// Web Speech). `speak(text, { voiceEnabled, onStart, onEnd })` mirrors the old
+// speakHandsFree signature; `stopSpeaking()` interrupts any tier.
 
 export function BackgroundHandsFree() {
   const { user } = useAuth()
@@ -195,7 +90,7 @@ export function BackgroundHandsFree() {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      stopHandsFreeSpeaking()
+      stopSpeaking()
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
       setHandsFreeStatus('idle')
       setHandsFreeFeedback(null)
@@ -295,11 +190,10 @@ export function BackgroundHandsFree() {
       setHandsFreeStatus('speaking')
       setHandsFreeFeedback({ userText: command, replyText: reply })
 
-      speakHandsFree(
-        reply,
-        true,
-        () => {}, // onStart
-        () => {
+      speak(reply, {
+        voiceEnabled: true,
+        onStart: () => {},
+        onEnd: () => {
           // Speech end callback -> check turn limits & cycle back to listening
           spokenTextRef.current = ''
           latestSpokenRef.current = ''
@@ -308,7 +202,7 @@ export function BackgroundHandsFree() {
             setHandsFreeActive(false)
             setHandsFreeStatus('idle')
             stop()
-            stopHandsFreeSpeaking()
+            stopSpeaking()
             toast(`Hands-free paused (${turnLimit} turn limit reached) to save tokens.`, {
               icon: '🛑',
               duration: 5000
@@ -319,8 +213,8 @@ export function BackgroundHandsFree() {
             lastActivityRef.current = Date.now() // reset activity timestamp
             start()
           }
-        }
-      )
+        },
+      })
     } catch (err) {
       toast.error('AI voice error: ' + err.message)
       setHandsFreeStatus('idle')
@@ -352,10 +246,13 @@ export function BackgroundHandsFree() {
             latestSpokenRef.current = ''
             stop()
             setHandsFreeStatus('speaking')
-            speakHandsFree("Yes, I'm listening. What can I do for you?", true, () => {}, () => {
-              setHandsFreeStatus('listening')
-              lastActivityRef.current = Date.now()
-              start()
+            speak("Yes, I'm listening. What can I do for you?", {
+              voiceEnabled: true,
+              onEnd: () => {
+                setHandsFreeStatus('listening')
+                lastActivityRef.current = Date.now()
+                start()
+              },
             })
           }
         } else {
@@ -427,7 +324,7 @@ export function BackgroundHandsFree() {
         setHandsFreeActive(false)
         setHandsFreeStatus('idle')
         stop()
-        stopHandsFreeSpeaking()
+        stopSpeaking()
         toast('Hands-free mode paused due to inactivity.', {
           icon: '⏳',
           duration: 5000
@@ -442,7 +339,7 @@ export function BackgroundHandsFree() {
   useEffect(() => {
     if (aiOpen) {
       stop()
-      stopHandsFreeSpeaking()
+      stopSpeaking()
     } else {
       start()
     }
