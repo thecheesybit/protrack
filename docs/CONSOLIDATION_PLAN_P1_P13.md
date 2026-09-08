@@ -313,8 +313,53 @@ OTA pending a release pair" — called out in the final summary as a known-unver
 ## 9. Deliverables checklist (from the brief)
 
 - [x] `docs/CONSOLIDATION_PLAN_P1_P13.md` — this file (Step 1)
-- [ ] P1–P13 + scorecard consolidated (Units 1–5, 8)
-- [ ] Electron app matched (PiP via Unit 1; silent update via Unit 7)
-- [ ] Website updated (Unit 6)
-- [ ] Auto-update fully silent (Unit 7)
-- [ ] Final summary of changes + residual risks
+- [x] P1–P13 + scorecard consolidated (Units 2–5, 8)
+- [x] Electron app matched (PiP landed via wave-3's P3 merge; silent update via Unit 7)
+- [x] Website updated (Unit 6)
+- [x] Auto-update fully silent (Unit 7) — code + config; OTA needs a release pair to prove
+- [x] Final summary of changes + residual risks (§10)
+
+---
+
+## 10. Execution log & final summary
+
+Baseline for execution: merged `development` @ `5d103de` (all wave-3 merges in) —
+lint 0 errors / 51 warnings after cleanup (was 71), **412 tests**, web + Electron
+builds green.
+
+| Unit | Commit | What landed |
+|---|---|---|
+| 3 — dead code | `d6ca93b` | delete orphaned `HabitReminderToast.jsx`; drop unused `checkinSlice.checkinPrompt`/`setCheckinPrompt`/`clearCheckinPrompt`; refresh stale comments |
+| 5 — Island chimes | `b14912d` | `chimeForIslandKind`: `update-ready`/`milestone` → success tone, `update-downloading` → silent; test table extended. Verified P9/P10/P11 double-click-add already consistent (native `onDoubleClick`) |
+| 2 — A3 day-view tasks | `214da4a` | comment-only: `DAY_TASKS = []` reframed as a deliberate free-tier decision (not a stub); stale `TODO(P8)` / `TODO(P7)` / `TODO(AI)` markers reworded to reflect real status |
+| 4 — scorecard | `9810d8d` | delint the suite (20 → 0 warnings); "Loading exams…" state so the first paint no longer flashes the empty state; friendlier no-key message in the AI coach |
+| 6 — website | `fc49b17` | `LandingPage.jsx`: FEATURES 6 → 9 accurate cards, STEPS reflect direct Google sign-in + silent update, resolve the "zero-cost backend" copy contradiction; verified rendering in the dev server (no console errors) |
+| 7 — silent auto-update | `0f00680` | `electron-builder.yml` NSIS `oneClick: true`; `quitAndInstall(true, true)`; collapse the dual restart prompt to one non-blocking Island action (owner D2) |
+| 8 — changelog + docs + version | _this commit_ | one coherent `## v2.2.0 — 2026-09-08` CHANGELOG section (folds the interim `v2.1.2`); `package.json` + lock → `2.2.0`; `claude.md` §1/§3/§4/§5b for scorecard + silent update + the day-view task gap; roadmap gains a "Scorecard (extra)" brief |
+
+### Known gaps / residual risks (carried, not regressions)
+
+1. **P8 not built.** P7 shipped the `openModule` nav bus + `tags.js`, but the
+   per-widget consumption (tag pills in every widget, chart drill-downs,
+   Subject→Analytics→History jumps) is unbuilt. `TodayAgenda.openItem` still uses
+   per-kind editors. Scoped as its own phase.
+2. **Day timeline excludes Kanban cards with a due date.** Deliberate free-tier
+   choice — a `collectionGroup('tasks')` listener would violate the "one bounded
+   listener per active collection" rule. To-dos and one-time events with `dueAt`
+   already appear. Building it properly needs a `modeId` field on task docs + a
+   composite index + a rules change.
+3. **Silent auto-update is unverified end-to-end.** Code paths, `electron-builder`
+   config and a local packaged install are the verification here; a real
+   `v2.2.0 → v2.2.1` release cycle is needed to confirm no NSIS wizard appears on
+   an OTA update. `oneClick: true` also removes the install-directory choice for
+   *fresh* installs (acceptable for a single-user desktop app; existing installs
+   upgrade in place).
+4. **Web PiP fallback** (`PipFocusWindow.jsx`, browser-only) still has Expand and
+   Close doing the same thing — P3 fixed this on the desktop morph path (the one
+   that matters); the Document-PiP fallback is low-traffic and left as-is.
+5. **`src/assets/forest/*.jpg`** (~4.9 MB of source sprite sheets) remain in git,
+   unreferenced by code (not bundled). `shrub-*.png` are unused since shrubs were
+   removed. Left in place pending owner decision (plan D5).
+6. **GCal OTA** depends on the GitHub repo/releases being public (roadmap §7
+   manual prereq) — unchanged by this work, flagged for the download link on the
+   site.
