@@ -28,23 +28,75 @@ const CLASS_TYPES = {
   seminar: { label: 'Seminar', tag: 'Seminar', tagStyle: 'dotted' },
   other: { label: '', tag: '', tagStyle: 'standard' },
 }
-// Repeat presets → the slot recurrence shape the grid already understands.
+/**
+ * Repeat presets. `days` = spacing in days between occurrences (for "after N
+ * sessions" math). `needsDay` = show the single weekday picker; `pick` = show
+ * the 7-day multi-select. `once` = a single-date class.
+ */
 const REPEATS = {
-  weekly: { recurrenceType: 'weekly' },
-  fortnightly: { recurrenceType: 'interval', recurrenceInterval: 14 },
-  monthly: { recurrenceType: 'interval', recurrenceInterval: 28 },
+  weekly: { label: 'Every week', rec: { recurrenceType: 'weekly' }, days: 7, needsDay: true },
+  weekdays: {
+    label: 'Every weekday (Mon–Fri)',
+    rec: { recurrenceType: 'custom_days', recurrenceDays: [0, 1, 2, 3, 4] },
+    days: 1,
+  },
+  daily: { label: 'Every day', rec: { recurrenceType: 'daily' }, days: 1 },
+  biweekly: {
+    label: 'Every 2 weeks',
+    rec: { recurrenceType: 'interval', recurrenceInterval: 14 },
+    days: 14,
+    needsDay: true,
+  },
+  triweekly: {
+    label: 'Every 3 weeks',
+    rec: { recurrenceType: 'interval', recurrenceInterval: 21 },
+    days: 21,
+    needsDay: true,
+  },
+  fourweekly: {
+    label: 'Every 4 weeks',
+    rec: { recurrenceType: 'interval', recurrenceInterval: 28 },
+    days: 28,
+    needsDay: true,
+  },
+  pick: { label: 'Specific days…', rec: { recurrenceType: 'custom_days' }, days: 1, pick: true },
+  once: { label: 'Just once', rec: { recurrenceType: 'weekly' }, days: 0, needsDay: false, once: true },
 }
-const REPEAT_DAYS = { weekly: 7, fortnightly: 14, monthly: 28 }
 const iso = (d) => new Date(d).toISOString().split('T')[0]
 const addDays = (dateStr, n) => {
   const d = new Date(dateStr)
   d.setDate(d.getDate() + n)
   return iso(d)
 }
+/** JS 0=Sun..6=Sat → our 0=Mon..6=Sun. */
+const monIndex = (jsDay) => (jsDay + 6) % 7
+/** First date on/after `fromStr` whose weekday is `dow` (0=Mon). */
+const nextOnWeekday = (fromStr, dow) => {
+  const d = new Date(fromStr)
+  const shift = (dow - monIndex(d.getDay()) + 7) % 7
+  d.setDate(d.getDate() + shift)
+  return iso(d)
+}
+/** Existing slot → the repeat preset key it best matches. */
+function slotToRepeatKey(s) {
+  if (s.recurrenceType === 'daily') return 'daily'
+  if (s.recurrenceType === 'custom_days') {
+    const d = [...(s.recurrenceDays || [])].sort().join(',')
+    return d === '0,1,2,3,4' ? 'weekdays' : 'pick'
+  }
+  if (s.recurrenceType === 'interval') {
+    if (s.recurrenceInterval === 21) return 'triweekly'
+    if (s.recurrenceInterval === 28) return 'fourweekly'
+    return 'biweekly'
+  }
+  if (s.recurrenceStartDate && s.recurrenceStartDate === s.recurrenceEndDate) return 'once'
+  return 'weekly'
+}
 
 const blankClass = () => ({
   key: Math.random().toString(36).slice(2),
-  dayOfWeek: 0,
+  dayOfWeek: monIndex(new Date().getDay()),
+  days: [monIndex(new Date().getDay())],
   startMin: 9 * 60,
   endMin: 10 * 60,
   type: 'lecture',
@@ -101,19 +153,16 @@ export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject,
         dayOfWeek: s.dayOfWeek,
         startMin: s.startMin,
         endMin: s.endMin,
+        days: Array.isArray(s.recurrenceDays) && s.recurrenceDays.length ? s.recurrenceDays : [s.dayOfWeek],
         type:
           Object.keys(CLASS_TYPES).find((k) => CLASS_TYPES[k].tag && CLASS_TYPES[k].tag === s.tag) || 'other',
-        repeat:
-          s.recurrenceType === 'interval' && s.recurrenceInterval === 28
-            ? 'monthly'
-            : s.recurrenceType === 'interval'
-              ? 'fortnightly'
-              : 'weekly',
+        repeat: slotToRepeatKey(s),
         room: s.room || '',
         label: s.label || '',
         startDate: s.recurrenceStartDate || iso(new Date()),
-        endMode: s.recurrenceEndDate ? 'onDate' : 'ongoing',
-        endDate: s.recurrenceEndDate || '',
+        endMode:
+          s.recurrenceEndDate && s.recurrenceEndDate !== s.recurrenceStartDate ? 'onDate' : 'ongoing',
+        endDate: s.recurrenceEndDate && s.recurrenceEndDate !== s.recurrenceStartDate ? s.recurrenceEndDate : '',
         count: 12,
       })),
     )
@@ -135,16 +184,30 @@ export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject,
       if (r.endMin <= r.startMin) continue
       const t = CLASS_TYPES[r.type] || CLASS_TYPES.other
       const rep = REPEATS[r.repeat] || REPEATS.weekly
-      const startDate = r.startDate || iso(new Date())
+      let startDate = r.startDate || iso(new Date())
+      let dow = r.dayOfWeek
+      // Interval repeats key off the exact day-offset from the start date, so
+      // anchor the start to the chosen weekday's first occurrence.
+      if (rep.rec.recurrenceType === 'interval') startDate = nextOnWeekday(startDate, r.dayOfWeek)
+      // A one-off lands on whatever weekday its date is.
+      if (rep.once) dow = monIndex(new Date(startDate).getDay())
+
       let endDate = ''
-      if (r.endMode === 'onDate' && r.endDate) endDate = r.endDate
+      if (rep.once) endDate = startDate // a single-date class
+      else if (r.endMode === 'onDate' && r.endDate) endDate = r.endDate
       else if (r.endMode === 'afterN') {
         const n = Math.max(1, Number(r.count) || 1)
-        endDate = addDays(startDate, (n - 1) * (REPEAT_DAYS[r.repeat] || 7))
+        endDate = addDays(startDate, (n - 1) * (rep.days || 7))
       }
+
+      const days =
+        rep.rec.recurrenceType === 'custom_days'
+          ? rep.rec.recurrenceDays || (r.days?.length ? r.days : [r.dayOfWeek])
+          : []
+
       const payload = {
         label: (r.label || '').trim() || t.label || name,
-        dayOfWeek: r.dayOfWeek,
+        dayOfWeek: dow,
         startMin: r.startMin,
         endMin: r.endMin,
         color,
@@ -152,8 +215,9 @@ export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject,
         room: (r.room || '').trim(),
         tag: t.tag,
         tagStyle: t.tagStyle,
-        recurrenceType: rep.recurrenceType,
-        recurrenceInterval: rep.recurrenceInterval || 1,
+        recurrenceType: rep.rec.recurrenceType,
+        recurrenceInterval: rep.rec.recurrenceInterval || 1,
+        recurrenceDays: days,
         recurrenceStartDate: startDate,
         recurrenceEndDate: endDate || null,
       }
@@ -335,17 +399,19 @@ export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject,
                   <option value="seminar">Seminar</option>
                   <option value="other">Other</option>
                 </select>
-                <select
-                  value={r.dayOfWeek}
-                  onChange={(e) => patchClass(r.key, { dayOfWeek: Number(e.target.value) })}
-                  className="rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-xs outline-none focus:border-accent"
-                >
-                  {DAYS.map((d, i) => (
-                    <option key={d} value={i}>
-                      {d}
-                    </option>
-                  ))}
-                </select>
+                {(REPEATS[r.repeat]?.needsDay || REPEATS[r.repeat]?.once) && (
+                  <select
+                    value={r.dayOfWeek}
+                    onChange={(e) => patchClass(r.key, { dayOfWeek: Number(e.target.value) })}
+                    className="rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-xs outline-none focus:border-accent"
+                  >
+                    {DAYS.map((d, i) => (
+                      <option key={d} value={i}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <input
                   type="time"
                   value={toTime(r.startMin)}
@@ -375,9 +441,11 @@ export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject,
                   className="rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-[11px] outline-none focus:border-accent"
                   title="How often this class repeats"
                 >
-                  <option value="weekly">Every week</option>
-                  <option value="fortnightly">Every 2 weeks</option>
-                  <option value="monthly">Every 4 weeks</option>
+                  {Object.entries(REPEATS).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v.label}
+                    </option>
+                  ))}
                 </select>
                 <input
                   value={r.room}
@@ -392,51 +460,82 @@ export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject,
                   className="min-w-0 flex-1 rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-[11px] outline-none focus:border-accent"
                 />
               </div>
+
+              {REPEATS[r.repeat]?.pick && (
+                <div className="mt-1.5 flex gap-1">
+                  {DAYS.map((d, i) => {
+                    const on = (r.days || []).includes(i)
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() =>
+                          patchClass(r.key, {
+                            days: on ? (r.days || []).filter((x) => x !== i) : [...(r.days || []), i],
+                          })
+                        }
+                        className={cn(
+                          'flex-1 rounded-md border py-1 text-[10px] font-semibold transition-colors',
+                          on ? 'border-accent bg-accent/20 text-accent' : 'border-line text-muted hover:text-ink',
+                        )}
+                      >
+                        {d[0]}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
-                <span>Starts</span>
+                <span>{REPEATS[r.repeat]?.once ? 'Date' : 'Starts'}</span>
                 <input
                   type="date"
                   value={r.startDate}
                   onChange={(e) => patchClass(r.key, { startDate: e.target.value })}
                   className="rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-[11px] outline-none focus:border-accent"
                 />
-                <select
-                  value={r.endMode}
-                  onChange={(e) => patchClass(r.key, { endMode: e.target.value })}
-                  className="rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-[11px] outline-none focus:border-accent"
-                >
-                  <option value="ongoing">Runs indefinitely</option>
-                  <option value="onDate">Ends on…</option>
-                  <option value="afterN">Ends after N sessions</option>
-                </select>
-                {r.endMode === 'onDate' && (
-                  <input
-                    type="date"
-                    value={r.endDate}
-                    min={r.startDate}
-                    onChange={(e) => patchClass(r.key, { endDate: e.target.value })}
-                    className="rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-[11px] outline-none focus:border-accent"
-                  />
-                )}
-                {r.endMode === 'afterN' && (
-                  <span className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      min="1"
-                      value={r.count}
-                      onChange={(e) => patchClass(r.key, { count: e.target.value })}
-                      className="w-14 rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-[11px] outline-none focus:border-accent"
-                    />
-                    sessions
-                  </span>
+                {!REPEATS[r.repeat]?.once && (
+                  <>
+                    <select
+                      value={r.endMode}
+                      onChange={(e) => patchClass(r.key, { endMode: e.target.value })}
+                      className="rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-[11px] outline-none focus:border-accent"
+                    >
+                      <option value="ongoing">Runs indefinitely</option>
+                      <option value="onDate">Ends on…</option>
+                      <option value="afterN">Ends after N sessions</option>
+                    </select>
+                    {r.endMode === 'onDate' && (
+                      <input
+                        type="date"
+                        value={r.endDate}
+                        min={r.startDate}
+                        onChange={(e) => patchClass(r.key, { endDate: e.target.value })}
+                        className="rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-[11px] outline-none focus:border-accent"
+                      />
+                    )}
+                    {r.endMode === 'afterN' && (
+                      <span className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="1"
+                          value={r.count}
+                          onChange={(e) => patchClass(r.key, { count: e.target.value })}
+                          className="w-14 rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-[11px] outline-none focus:border-accent"
+                        />
+                        {REPEATS[r.repeat]?.days === 1 ? 'days' : 'sessions'}
+                      </span>
+                    )}
+                  </>
                 )}
               </div>
             </div>
           ))}
           {!classTimes.length && (
             <span className="text-[11px] text-muted">
-              Add lecture / lab / tutorial times — with a repeat and room — so this subject
-              fills your timetable. Same class twice a week? Add two rows.
+              Add lecture / lab / tutorial times — pick a repeat (weekly, every weekday,
+              every day, every N weeks, specific days, or just once), a room and a term
+              window. Same class twice a week? Add two rows.
             </span>
           )}
         </div>
