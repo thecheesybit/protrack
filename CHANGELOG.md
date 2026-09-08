@@ -2,11 +2,11 @@
 
 ## v2.6.0 — 2026-09-09
 
-- **Timetable** now covers a full day — 6 AM straight through to 5:59 AM the next morning — with the "now" line, today's progress bar, drag-to-add and late-night tasks all working past midnight, and the empty strip above the 6 AM row gone.
-- **Deep Focus:** the small widget gets every option the full-screen view has (length, breaks, sounds, background scene), "Your Forest" shows the trees you grew this month with past-month history, and the pop-out mini timer is a tidy top-right square that no longer restarts the scene when you pop in and out.
-- **Exam scorecards** read a pasted SmartKeeda full-length mock on their own — section by section, with each section's score, accuracy and cut-off feeding the AI coach.
-- **Dashboard:** minimise a card on the right and the next one slides up to fill the space; restore it and they drop back.
-- **Polish:** calendar trees fade out while your mouse is over them, and the "what's new" note after an update now comes straight from this changelog.
+- **Timetable** now runs a full day, 6 AM to 6 AM — the clock line, progress and adding sessions all keep working past midnight.
+- **Deep Focus** — full timer options in the small widget, a month-by-month forest view, and a tidier pop-out timer.
+- **Exam scorecards** read a pasted SmartKeeda full-length mock on their own, section by section.
+- **Dashboard** — minimise a card on the right and the next one fills the space.
+- Assorted fixes and polish.
 
 ## v2.4.0 — 2026-09-08
 
