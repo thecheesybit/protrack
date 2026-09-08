@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { motion } from 'framer-motion'
+import { useState, useEffect, useCallback } from 'react'
 import { Calendar, Check, AlertTriangle, Loader2 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { AuroraBackground } from '@/components/common/AuroraBackground'
@@ -9,60 +8,103 @@ import { GoogleAuthProvider } from 'firebase/auth'
 import { auth, db } from '@/lib/firebase'
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { signInWithGooglePopup, friendlyAuthError } from '@/lib/authPopup'
+import { isGisConfigured, acquireToken } from '@/lib/gauth'
 
+const CAL_SCOPES = [
+  'https://www.googleapis.com/auth/calendar',
+  'https://www.googleapis.com/auth/calendar.events',
+]
+
+/**
+ * Desktop → browser Google Calendar handshake. Writes an access token (+ its
+ * expiry) into `users/{uid}/gcal/handshake`; the desktop app grabs it and binds
+ * the connection.
+ *
+ * With `VITE_GOOGLE_OAUTH_CLIENT_ID` set this page tries a SILENT GIS token
+ * first (no popup, no clicks) — so a periodic background re-handshake from the
+ * desktop just flashes a tab and closes. Only if silent fails does it show the
+ * consent button. `?silent=1` also auto-closes the tab on success.
+ */
 export function LinkGcalPage() {
-  const { user, loading } = useAuth()
+  const { loading } = useAuth()
   const qs = new URLSearchParams(window.location.search)
   const targetUid = qs.get('uid')
-  
+  const autoClose = qs.get('silent') === '1'
+
   const [state, setState] = useState('idle') // idle | connecting | done | error
   const [message, setMessage] = useState('')
 
-  const handleConnect = async () => {
-    setState('connecting')
-    try {
-      const provider = new GoogleAuthProvider()
-      // Full read of every calendar (holidays / subscribed / shared) + write.
-      provider.addScope('https://www.googleapis.com/auth/calendar')
-      provider.addScope('https://www.googleapis.com/auth/calendar.events')
-      provider.setCustomParameters({ prompt: 'consent' })
-      
-      // Retries once against the popup/third-party-cookie failure class
-      // (auth/internal-error and friends). No redirect fallback here — this
-      // flow needs the access token back in the same call, and a full
-      // redirect-resume for it isn't wired up yet.
-      const result = await signInWithGooglePopup(auth, provider)
-      const credential = GoogleAuthProvider.credentialFromResult(result)
-      const token = credential?.accessToken
-
-      if (!token) {
-        throw new Error('No calendar access token returned from Google.')
-      }
-
-      const signedInUid = result.user.uid
-
-      if (targetUid && signedInUid !== targetUid) {
-        throw new Error(
-          `Connected account UID does not match the desktop app UID. Please sign in with the correct Google account. (Expected: ${targetUid.slice(0, 8)}..., got: ${signedInUid.slice(0, 8)}...)`
-        );
-      }
-
-      // Write token securely to the user's Firestore handshake document
-      const handshakeRef = doc(db, 'users', signedInUid, 'gcal', 'handshake')
+  const writeToken = useCallback(
+    async (token, uid, expiresAt) => {
+      const handshakeRef = doc(db, 'users', uid, 'gcal', 'handshake')
       await setDoc(handshakeRef, {
         status: 'success',
         accessToken: token,
-        expiresAt: Date.now() + 3599 * 1000,
-        updatedAt: serverTimestamp()
+        expiresAt: expiresAt || Date.now() + 3500 * 1000,
+        updatedAt: serverTimestamp(),
       })
-
       setState('done')
+      if (autoClose) setTimeout(() => window.close(), 1200)
+    },
+    [autoClose],
+  )
+
+  const connectInteractive = useCallback(async () => {
+    setState('connecting')
+    try {
+      if (isGisConfigured()) {
+        // GIS consent popup → token; no Firebase re-auth needed.
+        const token = await acquireToken({ interactive: true })
+        const uid = targetUid || auth.currentUser?.uid
+        if (!uid) throw new Error('Missing desktop user id.')
+        await writeToken(token, uid, Date.now() + 3500 * 1000)
+        return
+      }
+      const provider = new GoogleAuthProvider()
+      CAL_SCOPES.forEach((s) => provider.addScope(s))
+      provider.setCustomParameters({ prompt: 'consent' })
+      const result = await signInWithGooglePopup(auth, provider)
+      const token = GoogleAuthProvider.credentialFromResult(result)?.accessToken
+      if (!token) throw new Error('No calendar access token returned from Google.')
+      const signedInUid = result.user.uid
+      if (targetUid && signedInUid !== targetUid) {
+        throw new Error(
+          `Signed-in account does not match the desktop app. Expected ${targetUid.slice(0, 8)}…, got ${signedInUid.slice(0, 8)}….`,
+        )
+      }
+      await writeToken(token, signedInUid, Date.now() + 3500 * 1000)
     } catch (err) {
-      console.error('[gcal-link] auth/sync failed', err)
+      console.error('[gcal-link] connect failed', err)
       setMessage(friendlyAuthError(err))
       setState('error')
     }
-  }
+  }, [targetUid, writeToken])
+
+  // On load: try a silent token first (works when the Google session is alive
+  // and consent was granted before).
+  useEffect(() => {
+    if (loading) return
+    let cancelled = false
+    ;(async () => {
+      if (isGisConfigured() && targetUid) {
+        try {
+          const token = await acquireToken({ interactive: false })
+          if (!cancelled) await writeToken(token, targetUid, Date.now() + 3500 * 1000)
+          return
+        } catch {
+          /* silent failed — fall through to the button */
+        }
+      }
+      if (!cancelled && autoClose) {
+        // A background refresh that can't go silent → give up quietly.
+        setMessage('Could not refresh silently — open PRO TRACK and reconnect.')
+        setState('error')
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [loading, targetUid, autoClose, writeToken])
 
   return (
     <div className="relative flex h-full items-center justify-center p-6">
@@ -75,7 +117,7 @@ export function LinkGcalPage() {
           </div>
         </div>
 
-        {loading ? (
+        {loading || state === 'connecting' ? (
           <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted" />
         ) : state === 'done' ? (
           <>
@@ -84,7 +126,7 @@ export function LinkGcalPage() {
             </div>
             <h1 className="text-lg font-bold">Calendar Connected</h1>
             <p className="mt-2 text-sm text-muted">
-              Google Calendar tokens have been securely synced to your PRO TRACK desktop app. You can close this tab now.
+              Synced to your PRO TRACK desktop app — you can close this tab.
             </p>
           </>
         ) : state === 'error' ? (
@@ -94,10 +136,7 @@ export function LinkGcalPage() {
             </div>
             <h1 className="text-lg font-bold">Connection Failed</h1>
             <p className="mt-2 text-sm text-muted">{message}</p>
-            <button
-              onClick={() => setState('idle')}
-              className="mt-5 text-sm text-accent hover:underline"
-            >
+            <button onClick={connectInteractive} className="mt-5 text-sm text-accent hover:underline">
               Try again
             </button>
           </>
@@ -105,20 +144,13 @@ export function LinkGcalPage() {
           <>
             <h1 className="text-lg font-bold">Sync Google Calendar</h1>
             <p className="mb-5 mt-2 text-sm text-muted">
-              Connect PRO TRACK with Google Calendar to sync your weekly timetable schedules and events.
+              Connect PRO TRACK with Google Calendar to sync your schedule, events and holidays both ways.
             </p>
             <button
-              onClick={handleConnect}
-              disabled={state === 'connecting'}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-accent px-5 py-3 font-semibold text-white shadow-glow disabled:opacity-60 transition-all hover:bg-accent-hover"
+              onClick={connectInteractive}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-accent px-5 py-3 font-semibold text-white shadow-glow transition-all hover:bg-accent-hover"
             >
-              {state === 'connecting' ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin" /> Connecting…
-                </>
-              ) : (
-                'Connect Google Calendar'
-              )}
+              Connect Google Calendar
             </button>
           </>
         )}

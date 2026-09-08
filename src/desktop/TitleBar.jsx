@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Minus, Square, Copy, Maximize2, Minimize2, X } from 'lucide-react'
 import { desktopBridge } from './isDesktop'
-import { Logo } from '@/components/common/Logo'
 import { useStore } from '@/store/useStore'
 
 /**

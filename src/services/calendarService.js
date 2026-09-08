@@ -694,7 +694,7 @@ async function pullAllCalendars() {
  * @returns {Promise<{pulled:number, pushed:number, patched:number, deleted:number,
  *   errors:string[], events:Array, calendars:Array}>}
  */
-export async function syncEverything(uid, { modes = [], inboxModeId, slots = [], todos = [], notes = [], tasks = [] }) {
+export async function syncEverything(uid, { modes = [], inboxModeId, slots = [], todos = [] }) {
   if (!uid) return { pulled: 0, pushed: 0, patched: 0, deleted: 0, errors: ['no uid'], events: [], calendars: [] }
   if (!isCalendarConnected()) throw new CalendarAuthError('Calendar not connected')
 
@@ -740,19 +740,18 @@ export async function syncEverything(uid, { modes = [], inboxModeId, slots = [],
   const sigs = await readPushSigs()
   const seenEventIds = new Set()
 
+  // Only things the user puts ON the calendar itself go to Google — recurring
+  // timetable slots and one-time calendar events. Plain to-dos, notes and
+  // subject tasks are internal planning and must NOT clutter Google Calendar
+  // (owner). Anything previously pushed from a to-do is no longer "seen" here,
+  // so step 3's delete-reconciliation removes it from Google automatically.
   const pushable = [
     ...slots
       .filter((s) => s.source !== 'gcal')
       .map((s) => ({ item: s, write: (id) => updateSlot(uid, slotModeId(s), s.id, { googleEventId: id }) })),
     ...todos
-      .filter((t) => t.source !== 'gcal' && !t.done && (t.type === 'event' || t.dueAt))
+      .filter((t) => t.source !== 'gcal' && !t.done && t.type === 'event')
       .map((t) => ({ item: t, write: (id) => updateTodo(uid, t.id, { googleEventId: id }) })),
-    ...notes
-      .filter((n) => n.source !== 'gcal' && n.dueAt)
-      .map((n) => ({ item: { text: n.title || n.text || 'Note', dueAt: n.dueAt, allDay: n.allDay, googleEventId: n.googleEventId, id: n.id }, write: null })),
-    ...tasks
-      .filter((t) => t.column !== 'done' && t.dueAt)
-      .map((t) => ({ item: t, write: null })), // no app-wide task writer yet
   ]
 
   for (const { item, write } of pushable) {

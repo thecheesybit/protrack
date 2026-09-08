@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
 import { Monitor, Check, AlertTriangle, Loader2 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { AuroraBackground } from '@/components/common/AuroraBackground'

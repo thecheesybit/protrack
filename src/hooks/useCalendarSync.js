@@ -3,7 +3,6 @@ import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
 import { useTimetable } from '@/hooks/useTimetable'
 import { useTodos } from '@/hooks/useWellness'
-import { useNotes } from '@/hooks/useNotes'
 import {
   isCalendarConnected,
   syncEverything,
@@ -22,7 +21,7 @@ export const GCAL_SYNC_NOW_EVENT = 'protrack:gcal-sync-now'
  * PULL is display-only into the local `gcalSlice` cache — every visible calendar
  * (primary, secondary, subscribed, holidays, shared, Gmail-generated) — so it
  * never touches Firestore write quota. PUSH is two-way for the user's own
- * primary calendar (slots / dated to-dos / dated notes).
+ * primary calendar: recurring slots + one-time events only.
  *
  * Token: with `VITE_GOOGLE_OAUTH_CLIENT_ID` set, GIS refreshes the token
  * silently in the background (proactive timer + retry inside calFetch), so the
@@ -42,15 +41,14 @@ export function useCalendarSync() {
 
   const { slots } = useTimetable('all')
   const todos = useTodos()
-  const notes = useNotes()
 
   const runningRef = useRef(false)
   const lastStateRef = useRef('init') // 'init' | 'ok' | 'auth' | 'setup' | 'error'
   const scopeNudgedRef = useRef(false)
   const offlineIslandIdRef = useRef(null)
   const refreshTimerRef = useRef(null)
-  const dataRef = useRef({ slots, todos, notes })
-  dataRef.current = { slots, todos, notes }
+  const dataRef = useRef({ slots, todos })
+  dataRef.current = { slots, todos }
 
   const autoSyncOn = settings?.gcalAutoSync !== false
 
@@ -87,7 +85,6 @@ export function useCalendarSync() {
           inboxModeId,
           slots: dataRef.current.slots,
           todos: dataRef.current.todos,
-          notes: dataRef.current.notes,
           tasks: [],
         })
 

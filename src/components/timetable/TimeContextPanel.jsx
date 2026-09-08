@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Flag, Repeat, CalendarPlus, Sparkles, Check, Clock, Layers, Play } from 'lucide-react'
+import { X, Flag, Repeat, Sparkles, Check, Clock, Layers, Play } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Crown, Sparkles, MapPin, Globe } from 'lucide-react'
+import { Crown, Globe } from 'lucide-react'
 import { useWall } from '@/hooks/useWall'
 import { cn } from '@/utils/cn'
 

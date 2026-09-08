@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Heart, Github, BadgeCheck, X, Sparkles, ExternalLink, ShieldCheck } from 'lucide-react'
+import { Heart, Github, BadgeCheck, X, Sparkles, ExternalLink } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { ContributionCard } from './ContributionCard'
 import { WallOfHonor } from './WallOfHonor'

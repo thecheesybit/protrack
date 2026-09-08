@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Play, Pause, Sparkles, Volume2, VolumeX, AlertTriangle, Mic, HelpCircle } from 'lucide-react'
+import { Play, Pause, Volume2, VolumeX, AlertTriangle, HelpCircle } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { useAuth } from '@/hooks/useAuth'
 import { useSubjects } from '@/hooks/useSubjects'

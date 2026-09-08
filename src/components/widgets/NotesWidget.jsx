@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import {
   StickyNote,
   Plus,
@@ -6,7 +6,6 @@ import {
   Mic,
   Square,
   Globe,
-  Bookmark,
   Pin,
   Trash2,
   ExternalLink,
@@ -26,7 +25,6 @@ import { useStore } from '@/store/useStore'
 import { useNotes } from '@/hooks/useNotes'
 import {
   addNote,
-  updateNote,
   deleteNote,
   togglePinNote,
   setNoteDeadline,

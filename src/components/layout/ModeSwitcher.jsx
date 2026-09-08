@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Settings2, Sun, Moon, Settings, LogOut, Heart, Minimize2, ChevronRight } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
+import { Plus, Settings2, Sun, Moon, Settings, LogOut, Heart, Minimize2 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useTheme } from '@/hooks/useTheme'
 import { useStore } from '@/store/useStore'

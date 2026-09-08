@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
 import { subscribeToModes } from '@/services/modeService'
-import { subscribeToUserDoc, updateActiveMode } from '@/services/userService'
+import { subscribeToUserDoc } from '@/services/userService'
 import { subscribeVerifiedPatreons } from '@/services/patreonService'
 import { syncRemoteLockConfig } from '@/services/lockService'
 import {

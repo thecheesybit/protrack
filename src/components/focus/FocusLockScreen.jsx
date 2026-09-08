@@ -15,7 +15,6 @@ import {
   Sunset,
   Moon,
   PictureInPicture2,
-  Maximize2,
 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { useAuth } from '@/hooks/useAuth'
