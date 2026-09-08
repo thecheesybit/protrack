@@ -13,7 +13,7 @@ import { WidgetFrame } from './WidgetFrame'
 import { cn } from '@/utils/cn'
 import { TimetableGrid } from '@/components/timetable/TimetableGrid'
 import { TodayAgenda } from '@/components/timetable/TodayAgenda'
-import { MonthAgenda } from '@/components/timetable/MonthAgenda'
+import { MonthGrid } from '@/components/timetable/MonthGrid'
 import { NoteDeadlinePeek } from '@/components/timetable/NoteDeadlinePeek'
 import { SlotEditorModal } from '@/components/timetable/SlotEditorModal'
 import { NlQuickCapture } from '@/components/calendar/NlQuickCapture'
@@ -454,13 +454,14 @@ export function TimetableWidget({ widget, variant }) {
                 />
               </div>
             ) : viewMode === 'month' ? (
-              <MonthAgenda
+              <MonthGrid
                 slots={slots}
                 events={eventTodos}
                 todos={activeTodos}
                 tasks={subjectDueTasks}
                 noteDeadlines={noteDeadlines}
                 sessions={sessions}
+                onPickDay={pickDay}
               />
             ) : (
               <TodayAgenda
