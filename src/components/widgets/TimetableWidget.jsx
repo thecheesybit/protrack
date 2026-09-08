@@ -25,6 +25,7 @@ import {
   isCalendarConnected,
   listUpcomingEvents,
 } from '@/services/calendarService'
+import { GCAL_SYNC_NOW_EVENT } from '@/hooks/useCalendarSync'
 
 function toDate(ts) {
   if (!ts) return null
@@ -138,6 +139,18 @@ export function TimetableWidget({ widget, variant }) {
       refreshEvents()
     } catch (err) {
       toast.error(err.message)
+    }
+  }
+
+  // When already connected, the header button triggers an immediate two-way
+  // sync (useCalendarSync, mounted in Dashboard, listens for this event).
+  const connectOrSync = () => {
+    if (isCalendarConnected()) {
+      window.dispatchEvent(new Event(GCAL_SYNC_NOW_EVENT))
+      toast.success('Syncing Google Calendar…')
+      refreshEvents()
+    } else {
+      connect()
     }
   }
 
@@ -256,8 +269,8 @@ export function TimetableWidget({ widget, variant }) {
 
       {isHero && (
         <button
-          onClick={connect}
-          title="Connect Google Calendar"
+          onClick={connectOrSync}
+          title={connected ? 'Sync Google Calendar now' : 'Connect Google Calendar'}
           className="flex items-center gap-1.5 rounded-lg border border-line bg-surface-2/50 px-2.5 py-1.5 text-xs text-muted transition-colors hover:text-ink"
         >
           {connected ? (

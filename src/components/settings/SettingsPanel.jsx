@@ -66,7 +66,14 @@ import { CREATOR } from '@/lib/constants'
 import { APP_VERSION } from '@/lib/version'
 import { VIDEO_PRESETS, youtubeId, toCanonicalYouTubeUrl } from '@/lib/focusScenes'
 import { cn } from '@/utils/cn'
-import { isCalendarConnected, connectCalendar, clearCalToken } from '@/services/calendarService'
+import {
+  isCalendarConnected,
+  connectCalendar,
+  clearCalToken,
+  resetCalendarSyncState,
+  getLastSyncAt,
+} from '@/services/calendarService'
+import { GCAL_SYNC_NOW_EVENT } from '@/hooks/useCalendarSync'
 
 function prettyAccelerator(acc) {
   if (!acc) return ''
@@ -75,6 +82,16 @@ function prettyAccelerator(acc) {
     .replace('Space', 'Space')
     .split('+')
     .join(' + ')
+}
+
+/** Relative "x ago" label for the last Google Calendar sync (epoch ms). */
+function formatLastSync(ms) {
+  if (!ms) return 'never'
+  const diff = Date.now() - ms
+  if (diff < 60_000) return 'just now'
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} min ago`
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} h ago`
+  return new Date(ms).toLocaleDateString()
 }
 
 function Section({ title, icon, children, defaultOpen = false }) {
@@ -155,6 +172,8 @@ export function SettingsPanel() {
   const open = useStore((s) => s.settingsOpen)
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
   const settings = useStore((s) => s.settings)
+  const modes = useStore((s) => s.modes)
+  const activeModeId = useStore((s) => s.activeModeId)
   const fontScale = useStore((s) => s.fontScale)
   const setFontScale = useStore((s) => s.setFontScale)
   const fontFamily = useStore((s) => s.fontFamily)
@@ -450,15 +469,39 @@ export function SettingsPanel() {
       await connectCalendar()
       setCalConnected(true)
       toast.success('Google Calendar connected')
+      window.dispatchEvent(new Event(GCAL_SYNC_NOW_EVENT))
     } catch (err) {
       toast.error(err.message)
     }
   }
 
   const handleDisconnectCal = () => {
-    clearCalToken()
+    resetCalendarSyncState()
     setCalConnected(false)
     toast.success('Google Calendar disconnected')
+  }
+
+  const handleSyncNow = () => {
+    window.dispatchEvent(new Event(GCAL_SYNC_NOW_EVENT))
+    toast.success('Syncing Google Calendar…')
+  }
+
+  const handleSetGcalInboxMode = async (modeId) => {
+    try {
+      await updateSettings(user.uid, { gcalInboxModeId: modeId })
+    } catch (err) {
+      console.error('[settings] gcal inbox mode save failed', err)
+    }
+  }
+
+  const handleToggleGcalAutoSync = async () => {
+    const next = settings?.gcalAutoSync === false // currently off → turn on
+    try {
+      await updateSettings(user.uid, { gcalAutoSync: next })
+      if (next) window.dispatchEvent(new Event(GCAL_SYNC_NOW_EVENT))
+    } catch (err) {
+      console.error('[settings] gcal auto-sync save failed', err)
+    }
   }
 
   const saveFocusAudio = async (url) => {
@@ -1888,16 +1931,77 @@ export function SettingsPanel() {
                         Synchronizes study session alerts, habits, and tasks directly to your Google Calendar.
                       </p>
                       {calConnected ? (
-                        <div className="flex items-center justify-between rounded-xl border border-emerald-500/25 bg-emerald-500/5 px-4 py-3.5">
-                          <span className="flex items-center gap-2 text-xs font-bold text-emerald-500">
-                            <Check className="h-4 w-4" /> Sync Connected
-                          </span>
-                          <button
-                            onClick={handleDisconnectCal}
-                            className="rounded-lg border border-line bg-surface px-4 py-2 text-xs font-semibold text-muted hover:text-ink hover:border-accent transition-colors"
-                          >
-                            Unlink Calendar
-                          </button>
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between rounded-xl border border-emerald-500/25 bg-emerald-500/5 px-4 py-3.5">
+                            <span className="flex flex-col gap-0.5">
+                              <span className="flex items-center gap-2 text-xs font-bold text-emerald-500">
+                                <Check className="h-4 w-4" /> Sync Connected
+                              </span>
+                              <span className="text-[10px] text-muted font-medium">
+                                Last sync: {formatLastSync(getLastSyncAt())}
+                              </span>
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={handleSyncNow}
+                                className="rounded-lg border border-line bg-surface px-3 py-2 text-xs font-semibold text-ink hover:border-accent transition-colors"
+                              >
+                                Sync now
+                              </button>
+                              <button
+                                onClick={handleDisconnectCal}
+                                className="rounded-lg border border-line bg-surface px-4 py-2 text-xs font-semibold text-muted hover:text-ink hover:border-accent transition-colors"
+                              >
+                                Unlink
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between rounded-xl border border-line bg-surface-2/20 px-4 py-3">
+                            <span className="text-xs font-semibold text-ink">
+                              Auto-sync while the app is open
+                              <span className="block text-[10px] text-muted font-normal mt-0.5">
+                                Syncs on launch, every 5 min, and on focus. The Google
+                                session lapses ~hourly and asks you to reconnect.
+                              </span>
+                            </span>
+                            <button
+                              onClick={handleToggleGcalAutoSync}
+                              className={cn(
+                                'relative h-5 w-9 shrink-0 rounded-full transition-colors',
+                                settings?.gcalAutoSync === false ? 'bg-surface-2 border border-line' : 'bg-accent',
+                              )}
+                              role="switch"
+                              aria-checked={settings?.gcalAutoSync !== false}
+                            >
+                              <span
+                                className={cn(
+                                  'absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform',
+                                  settings?.gcalAutoSync === false ? 'left-0.5' : 'left-0.5 translate-x-4',
+                                )}
+                              />
+                            </button>
+                          </div>
+
+                          {modes?.length > 0 && (
+                            <label className="flex items-center justify-between rounded-xl border border-line bg-surface-2/20 px-4 py-3">
+                              <span className="text-xs font-semibold text-ink">
+                                Inbox scope for new Google events
+                                <span className="block text-[10px] text-muted font-normal mt-0.5">
+                                  Events pulled in from Google land in this mode.
+                                </span>
+                              </span>
+                              <select
+                                value={settings?.gcalInboxModeId || (activeModeId !== 'all' ? activeModeId : modes[0]?.id) || ''}
+                                onChange={(e) => handleSetGcalInboxMode(e.target.value)}
+                                className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink"
+                              >
+                                {modes.map((m) => (
+                                  <option key={m.id} value={m.id}>{m.name}</option>
+                                ))}
+                              </select>
+                            </label>
+                          )}
                         </div>
                       ) : (
                         <div className="flex items-center justify-between rounded-xl border border-line bg-surface-2/20 px-4 py-3.5">

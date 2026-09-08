@@ -36,7 +36,8 @@ src/
 │  └─ settings/           SettingsPanel (shortcuts, changelog, credits)
 ├─ hooks/                 useChronoTheme, useIslandCycle, useNowMinutes,
 │                         useDesktopIntegration, useAutoUpdate, useFocusEngine,
-│                         useDeadlines (Island deadline notifications), …
+│                         useDeadlines (Island deadline notifications),
+│                         useCalendarSync (two-way Google Calendar live sync), …
 ├─ store/slices/          Zustand feature slices (below)
 ├─ services/              Firestore/IPC data access (one module per domain)
 ├─ content/              legal.js, changelog.js
@@ -45,6 +46,7 @@ src/
                           deadlines (pure helpers), priority (taxonomy),
                           dates (ymd/streak/lastNDays),
                           dayAgenda (pure day-timeline aggregator: buildDayTimeline/summarizeDay),
+                          gcalMap (pure event↔item mapping: eventToItem/itemToEvent/mergeStrategy),
                           sound (unified 7-tone bank: playSound(name)/chimeForIslandKind; audioFX is a shim)
 electron/                 main.js, preload.js, (auto-update inline in main)
 functions/                mintDesktopToken
@@ -73,12 +75,13 @@ Orchestration that owns timers/side-effects lives in hooks, never slices: `useFo
 
 ```
 users/{uid}
-  profile, settings { theme, activeModeId, hydrationIntervalMin, onboarding{...} }, statsAggregate
+  profile, settings { theme, activeModeId, hydrationIntervalMin, gcalInboxModeId, gcalAutoSync, onboarding{...} }, statsAggregate
   modes/{modeId}                      { name, icon, accentColor, order }
     subjects/{subjectId}              { name, color, progressPct, links[], flags[] }
       tasks/{taskId}                  { title, column, order }   ← Kanban
-    timetableSlots/{slotId}           { dayOfWeek, startMin, endMin, label, color }
+    timetableSlots/{slotId}           { dayOfWeek, startMin, endMin, label, color, googleEventId?, source? }
     goals/{goalId}
+  gcal/handshake                      { status, accessToken?, expiresAt?, error? }  ← ephemeral (desktop→browser OAuth)
   habits/{habitId}                    { name, icon, color, doneDates[], timesPerWeek, timesPerDay, interval }
   todos/{todoId}                      { text, done, modeId, dueAt, subjectId }
   focusSessions/{id}                  { modeId, subjectId, durationMin, startedAt, hourOfDay }
@@ -89,7 +92,9 @@ users/{uid}
 **Updated field shapes (v1.2):**
 ```
 tasks/{taskId}   { title, column, order, priority, notes, dueAt, createdAt }
-todos/{todoId}   { text, done, modeId, dueAt, subjectId }   ← dueAt already existed; UI now exposes it
+todos/{todoId}   { text, done, modeId, dueAt, subjectId, type?, eventDate?, eventStartMin?, eventEndMin?, googleEventId?, source? }
+                 ← `type:'event'` + eventDate/eventStartMin/eventEndMin for one-time calendar events;
+                   googleEventId/source:'gcal' set when the item is mirrored to Google Calendar (P2)
   devices/{fingerprint}               { label, platform, boundAt, lastSeen }
 desktopHandshakes/{sessionId}         { desktopUid, status, token?, expiresAt }  ← ephemeral
 ```
@@ -113,6 +118,7 @@ Rules (`firestore.rules`): everything under `users/{uid}/**` is owner-only. Hand
   - Main section bottom padding is reduced from `pb-20` to `pb-6` to avoid empty screen space.
   - A yellow "Exit Full Screen" button (with the `Minimize2` icon) is added to `TopBar`. Users can exit fullscreen by hovering near the top edge to slide down the TopBar and clicking the button, or by pressing `Escape` when no other modals/panels are open, or pressing `F` anytime.
 - **NL calendar capture** — `lib/nlParse.parseCapture` (chrono-node) parses locally; one write creates a slot / to-do / subject-linked task. `dueAt` is now stored on tasks too, enabling calendar rendering and the deadline engine.
+- **Google Calendar two-way live sync** (P2) — `src/hooks/useCalendarSync.js` (mounted once in `Dashboard`) runs `calendarService.syncEverything` on launch, every 5 min, on `window` focus, and on the `protrack:gcal-sync-now` event (fired by Settings → *Sync now* and the timetable header button). It is **live while the app is open**: the Firebase Google OAuth token can't refresh in the background on the Spark plan, so a lapse throws `CalendarAuthError` → one sticky `sync-offline` Island prompt (reconnect via Settings / the calendar header — **never** an automatic browser re-open). `lib/gcalMap.js` (pure, tested) maps events↔items: weekly RRULE→slot, one-off timed→`type:'event'` to-do, all-day→dated to-do; conflicts are last-write-wins by `updated` (`mergeStrategy`). Pull is delta-based via a persisted `syncToken` (`secureStorage['protrack:gcal_sync_token']`, `410`→full resync); `cancelled` events delete the mapped local item. Push creates events for local items lacking a `googleEventId` and PATCHes when a cheap content signature (`protrack:gcal_push_sigs`) changed; a `googleEventId` with no surviving local item is deleted from Google. New Google items land in `settings.gcalInboxModeId` (Settings picker; default = active mode). `settings.gcalAutoSync:false` disables the automatic triggers (manual *Sync now* still works). Free-tier: no new always-on listeners — reuses `useTimetable('all')` + the shared todos listener; bounded one-shot API reads. Known gap: Kanban `tasks` aren't fed yet (`TODO(P8)`), and after-mutation debounced sync is a follow-up (interval + focus only for v1).
 - **Kanban → subject sync** — on drop to *Done*, `MicroKanban` recomputes `progressPct = done/total` from in-memory tasks, writes it once, announces via the Island, appends a ledger entry.
 - **Auto-update** — `electron-updater` (GitHub feed) → IPC → `updateSlice` → `UpdateGate` obscures the dashboard and pauses focus until the user restarts to install.
 - **Deadline engine** (`src/hooks/useDeadlines.js`) — mounted in `Dashboard`; uses `getUpcomingItems` from `lib/deadlines.js` (pure, no reads) to check overdue/due-today items from Zustand-cached todos and fires Island notifications with a 60-second debounce. No new Firestore reads.
