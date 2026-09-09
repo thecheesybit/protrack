@@ -1,5 +1,10 @@
 import { memo } from 'react'
+import { useStore } from '@/store/useStore'
+import { getThemeCategory } from '@/hooks/useChronoTheme'
 import { SpaceObjects } from './SpaceObjects'
+import { DaySkyObjects } from './DaySkyObjects'
+import { DawnSkyObjects } from './DawnSkyObjects'
+import { DuskSkyObjects } from './DuskSkyObjects'
 
 /**
  * Deterministic starfield — fixed seed so the sky never re-shuffles between
@@ -25,12 +30,16 @@ const STARS = (() => {
 })()
 
 /**
- * Ambient canvas behind the app: aurora blobs + the 7-slot sky layer
- * (per-slot gradient wash via --sky-wash, starfield + space objects at
- * dusk/evening/deep night via --stars-opacity). Pure CSS/SVG, GPU-friendly,
- * sits at -z-10. Tinted by the chrono accent (--accent), by useChronoTheme.
+ * Ambient canvas behind the app: aurora blobs + the 4-theme celestial sky layer:
+ *  - Night: Moon, stars, tumbling asteroids, blinking satellites, meteors
+ *  - Day: Radiant sun, drifting cumulus clouds, gentle ambient rain
+ *  - Morning: Golden rising sun, morning sunbeams, pastel mist clouds
+ *  - Sunset: Coral setting sun, soaring birds flock, twilight rim clouds
  */
-export const AuroraBackground = memo(function AuroraBackground() {
+export const AuroraBackground = memo(function AuroraBackground({ showCelestial = true }) {
+  const chronoSlot = useStore((s) => s.chronoSlot)
+  const category = getThemeCategory(chronoSlot)
+
   return (
     <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
       <div className="absolute inset-0 bg-bg" />
@@ -41,7 +50,7 @@ export const AuroraBackground = memo(function AuroraBackground() {
         style={{ background: 'var(--sky-wash, transparent)' }}
       />
 
-      {/* Starfield — only visible in the dark slots. */}
+      {/* Starfield — active in the dark starry slots. */}
       <svg
         className="absolute inset-0 h-full w-full transition-opacity duration-[1500ms] ease-out"
         style={{ opacity: 'var(--stars-opacity, 0)' }}
@@ -59,8 +68,11 @@ export const AuroraBackground = memo(function AuroraBackground() {
         ))}
       </svg>
 
-      {/* Moon, meteors, asteroid, spacecraft — night slots only. */}
-      <SpaceObjects />
+      {/* ── 4 Unique Timed Celestial & Atmospheric Sky Systems ── */}
+      {showCelestial && category === 'night' && <SpaceObjects />}
+      {showCelestial && category === 'day' && <DaySkyObjects />}
+      {showCelestial && category === 'morning' && <DawnSkyObjects />}
+      {showCelestial && category === 'sunset' && <DuskSkyObjects />}
 
       {/* Ambient layer — intensity rides the chrono slot (dimmer at night). */}
       <div

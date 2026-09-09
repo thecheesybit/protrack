@@ -8,6 +8,9 @@ export default {
         // `sans` follows the user's typography preference (useFontScale writes
         // --font-sans); DM Sans is the design-system default.
         sans: ['var(--font-sans)', 'DM Sans', 'system-ui', '-apple-system', 'sans-serif'],
+        // Modern geometric sans for brand identity and hero titles.
+        outfit: ['Outfit', 'DM Sans', 'system-ui', 'sans-serif'],
+        brand: ['Outfit', 'Inter', 'DM Sans', 'sans-serif'],
         // Display serif for hero numbers and widget/section titles.
         display: ['Fraunces', 'Lora', 'Georgia', 'serif'],
         // Counters, time labels, badges.

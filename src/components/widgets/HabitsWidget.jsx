@@ -9,6 +9,7 @@ import { getIcon } from '@/lib/icons'
 import { ymd, computeStreak, lastNDays } from '@/lib/dates'
 import { toggleHabitToday, addHabit } from '@/services/habitService'
 import { SCIENTIFIC_HABIT_PRESETS } from '@/lib/constants'
+import { playHabitChime } from '@/lib/sound'
 import { cn } from '@/utils/cn'
 
 const PresetLibrary = memo(function PresetLibrary({ missingPresets, onAddPreset }) {
@@ -45,7 +46,10 @@ const HabitToggle = memo(function HabitToggle({ habit, uid, today }) {
 
   return (
     <button
-      onClick={() => toggleHabitToday(uid, habit)}
+      onClick={() => {
+        if (!isAllDone) playHabitChime()
+        toggleHabitToday(uid, habit)
+      }}
       className={cn(
         'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-all duration-200 relative',
         isAllDone

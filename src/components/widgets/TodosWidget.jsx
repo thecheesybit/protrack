@@ -45,7 +45,7 @@ import { getPriority, nextPriority, PRIORITIES, PRIORITY_ORDER } from '@/lib/pri
 import { classifyDeadline } from '@/lib/deadlines'
 import { parseCapture } from '@/lib/nlParse'
 import toast from 'react-hot-toast'
-import { playPop, playSuccess } from '@/lib/audioFX'
+import { playPop, playSuccess, playTodoChime } from '@/lib/audioFX'
 import { cn } from '@/utils/cn'
 
 // ── Column configuration ──────────────────────────────────────────────────────
@@ -681,6 +681,8 @@ function KanbanColumn({
   onDeadlineClick,
   onPushBack,
   onFocusAdd,
+  onMouseEnter,
+  onMouseLeave,
   style,
 }) {
   const col = COLS[colId]
@@ -688,9 +690,11 @@ function KanbanColumn({
 
   return (
     <div
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       style={style || { flex: '1 1 0%' }}
       className={cn(
-        'flex min-w-0 flex-col rounded-3xl border transition-all duration-300 backdrop-blur-md',
+        'flex min-w-0 flex-col rounded-3xl border transition-all duration-300 ease-out backdrop-blur-md overflow-hidden',
         col.borderClass,
         col.bgClass,
         isOver && 'ring-2 ring-accent/60 bg-accent/[0.06] shadow-glow-sm',
@@ -720,7 +724,7 @@ function KanbanColumn({
               onFocusAdd?.(colId)
             }
           }}
-          className="flex min-h-[56px] flex-1 flex-col gap-2 overflow-y-auto px-2.5 pb-2.5"
+          className="flex min-h-[56px] flex-1 flex-col gap-2 overflow-y-auto no-scrollbar scrollbar-none px-2.5 pb-2.5"
         >
           {todos.map((t) => (
             <KanbanCard
@@ -807,7 +811,31 @@ export function TodosWidget({ widget, variant }) {
     [filtered],
   )
 
-  const doneTodos = useMemo(() => filtered.filter((t) => t.done), [filtered])
+  // Completed tasks sorted with New / Recent on top (as annotated in media_1788918143530.png)
+  const doneTodos = useMemo(() => {
+    const list = filtered.filter((t) => t.done)
+    return list.sort((a, b) => {
+      const parseTime = (item) => {
+        if (item.completedAt) {
+          const t = new Date(item.completedAt).getTime()
+          if (!isNaN(t)) return t
+        }
+        if (item.updatedAt?.toMillis) return item.updatedAt.toMillis()
+        if (item.updatedAt) {
+          const t = new Date(item.updatedAt).getTime()
+          if (!isNaN(t)) return t
+        }
+        if (item.createdAt?.toMillis) return item.createdAt.toMillis()
+        if (item.createdAt) {
+          const t = new Date(item.createdAt).getTime()
+          if (!isNaN(t)) return t
+        }
+        if (typeof item.order === 'number') return item.order
+        return 0
+      }
+      return parseTime(b) - parseTime(a)
+    })
+  }, [filtered])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -858,8 +886,15 @@ export function TodosWidget({ widget, variant }) {
   }
 
   const onToggle = (t) => {
-    if (!t.done) { playSuccess(); if (focusReadyId === t.id) setFocusReadyId(null) }
-    updateTodo(user.uid, t.id, { done: !t.done })
+    const nextDone = !t.done
+    if (nextDone) {
+      playTodoChime()
+      if (focusReadyId === t.id) setFocusReadyId(null)
+    }
+    updateTodo(user.uid, t.id, {
+      done: nextDone,
+      completedAt: nextDone ? new Date().toISOString() : null,
+    })
   }
 
   const onDelete = (id) => {
@@ -1046,32 +1081,76 @@ export function TodosWidget({ widget, variant }) {
 
   const openCount = columns.backlog.length + columns.doing.length
 
-  const { backlogFlex, doingFlex } = useMemo(() => {
+  const [hoveredSection, setHoveredSection] = useState(null)
+
+  const { backlogFlex, doingFlex, completedFlex } = useMemo(() => {
     if (isHero) {
-      return { backlogFlex: '1 1 0%', doingFlex: '1 1 0%' }
+      if (hoveredSection === 'backlog') {
+        return { backlogFlex: '1.6 1 0%', doingFlex: '1 1 0%', completedFlex: 'auto' }
+      }
+      if (hoveredSection === 'doing') {
+        return { backlogFlex: '1 1 0%', doingFlex: '1.6 1 0%', completedFlex: 'auto' }
+      }
+      return { backlogFlex: '1 1 0%', doingFlex: '1 1 0%', completedFlex: 'auto' }
     }
+
+    const hasDone = doneTodos.length > 0
+
+    // Dynamic hover accordion expansion (as requested in media_1788918143530.png)
+    if (hoveredSection === 'backlog') {
+      return {
+        backlogFlex: '2.6 1 0%',
+        doingFlex: hasDone ? '0.7 1 0%' : '0.8 1 0%',
+        completedFlex: '0.7 1 0%',
+      }
+    }
+    if (hoveredSection === 'doing') {
+      return {
+        backlogFlex: hasDone ? '0.7 1 0%' : '0.8 1 0%',
+        doingFlex: '2.6 1 0%',
+        completedFlex: '0.7 1 0%',
+      }
+    }
+    if (hoveredSection === 'completed' && hasDone) {
+      return {
+        backlogFlex: '0.7 1 0%',
+        doingFlex: '0.7 1 0%',
+        completedFlex: '2.6 1 0%',
+      }
+    }
+
+    // Default resting distribution
+    if (hasDone) {
+      return {
+        backlogFlex: '1.1 1 0%',
+        doingFlex: '1.1 1 0%',
+        completedFlex: '0.85 1 0%',
+      }
+    }
+
     const backlogCount = columns.backlog.length
     const doingCount = columns.doing.length
 
     if (backlogCount === 0 && doingCount === 0) {
-      return { backlogFlex: '1 1 0%', doingFlex: '1 1 0%' }
+      return { backlogFlex: '1 1 0%', doingFlex: '1 1 0%', completedFlex: '0 0 auto' }
     }
     if (backlogCount === 0) {
-      return { backlogFlex: '0 0 76px', doingFlex: '1 1 0%' }
+      return { backlogFlex: '0 0 76px', doingFlex: '1 1 0%', completedFlex: '0 0 auto' }
     }
     if (doingCount === 0) {
-      return { backlogFlex: '1 1 0%', doingFlex: '0 0 76px' }
+      return { backlogFlex: '1 1 0%', doingFlex: '0 0 76px', completedFlex: '0 0 auto' }
     }
 
     // Both have tasks, scale proportionally with clamping to prevent extremes
     const total = backlogCount + doingCount
     const ratio = backlogCount / total
-    const clamped = Math.max(0.3, Math.min(0.7, ratio))
+    const clamped = Math.max(0.35, Math.min(0.65, ratio))
     return {
       backlogFlex: `${clamped} ${clamped} 0%`,
       doingFlex: `${1 - clamped} ${1 - clamped} 0%`,
+      completedFlex: '0 0 auto',
     }
-  }, [isHero, columns.backlog.length, columns.doing.length])
+  }, [isHero, hoveredSection, doneTodos.length, columns.backlog.length, columns.doing.length])
 
   return (
     <WidgetFrame widget={widget} variant={variant} subtitle={`${openCount} open`}>
@@ -1081,8 +1160,12 @@ export function TodosWidget({ widget, variant }) {
           <div className="group/capsule flex items-center gap-2 rounded-2xl border border-white/10 bg-surface-2/40 px-3 py-1.5 shadow-inner-sm backdrop-blur-md transition-all focus-within:border-accent/50 focus-within:bg-surface-2/70 focus-within:ring-2 focus-within:ring-accent/20">
             <input
               ref={inputRef}
+              data-todo-input="true"
               value={text}
               onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') e.currentTarget.blur()
+              }}
               placeholder={targetColumn === 'doing' ? "Add to Doing… (e.g. 'Math test 10am')" : "Add a task… (e.g. 'Math test tomorrow 10am')"}
               className="min-w-0 flex-1 bg-transparent text-xs sm:text-sm text-ink placeholder:text-muted/60 outline-none"
             />
@@ -1191,6 +1274,8 @@ export function TodosWidget({ widget, variant }) {
                 onStartFocus={onStartFocus}
                 onDeadlineClick={onDeadlineClick}
                 onPushBack={onPushBack}
+                onMouseEnter={() => setHoveredSection('backlog')}
+                onMouseLeave={() => setHoveredSection((prev) => (prev === 'backlog' ? null : prev))}
                 style={{ flex: backlogFlex }}
               />
               <KanbanColumn
@@ -1205,8 +1290,56 @@ export function TodosWidget({ widget, variant }) {
                 onStartFocus={onStartFocus}
                 onDeadlineClick={onDeadlineClick}
                 onPushBack={onPushBack}
+                onMouseEnter={() => setHoveredSection('doing')}
+                onMouseLeave={() => setHoveredSection((prev) => (prev === 'doing' ? null : prev))}
                 style={{ flex: doingFlex }}
               />
+
+              {/* (C) Completed Section in standard widget layout — expands on hover, inside scrollable without scrollbar (media_1788918143530.png) */}
+              {!isHero && doneTodos.length > 0 && (
+                <div
+                  style={{ flex: completedFlex }}
+                  onMouseEnter={() => setHoveredSection('completed')}
+                  onMouseLeave={() => setHoveredSection((prev) => (prev === 'completed' ? null : prev))}
+                  className="flex min-h-[56px] min-w-0 flex-col rounded-3xl border border-white/[0.08] bg-surface-2/40 px-3 py-2.5 backdrop-blur-md transition-all duration-300 ease-out overflow-hidden"
+                >
+                  <p className="mb-1.5 flex shrink-0 items-center gap-1.5 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                    <Check className="h-3 w-3 text-emerald-400" />
+                    <span>Completed</span>
+                    <span className="ml-auto rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-mono text-[10px] text-muted">
+                      {doneTodos.length}
+                    </span>
+                  </p>
+                  <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto no-scrollbar scrollbar-none pr-0.5">
+                    {doneTodos.map((t) => (
+                      <div
+                        key={t.id}
+                        className="group flex items-center gap-2 rounded-xl px-2 py-1 transition-colors hover:bg-white/5"
+                      >
+                        <button
+                          onClick={() => onToggle(t)}
+                          className="flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 border-transparent bg-emerald-500/80 text-white transition-colors hover:bg-emerald-500 cursor-pointer"
+                          aria-label="Mark not done"
+                          title="Mark not done"
+                        >
+                          <Check className="h-2.5 w-2.5" />
+                        </button>
+                        <span className="min-w-0 flex-1 truncate text-xs text-muted/60 line-through">
+                          {t.text}
+                        </span>
+                        <button
+                          onClick={() => onDelete(t.id)}
+                          className="hidden text-muted/40 hover:text-rose-400 group-hover:block cursor-pointer"
+                          aria-label="Delete"
+                          title="Delete completed task"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <DragOverlay dropAnimation={dropAnimationConfig}>
@@ -1220,22 +1353,20 @@ export function TodosWidget({ widget, variant }) {
           </DndContext>
         )}
 
-        {/* Done section — in normal flow below the board, never overlapping it.
-            Capped height with its own scroll so a long list can't push the
-            board out or float over it in the compact widget. */}
-        {doneTodos.length > 0 && (
-          <div className="mt-1 max-h-[40%] shrink-0 overflow-y-auto rounded-3xl border border-white/[0.08] bg-surface-2/40 px-3 py-2.5 backdrop-blur-md">
+        {/* In Hero expanded mode, show Completed section below the side-by-side columns */}
+        {isHero && doneTodos.length > 0 && (
+          <div className="mt-1 max-h-[30%] shrink-0 overflow-y-auto no-scrollbar scrollbar-none rounded-3xl border border-white/[0.08] bg-surface-2/40 px-3 py-2.5 backdrop-blur-md">
             <p className="mb-1.5 flex items-center gap-1.5 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
               <Check className="h-3 w-3 text-emerald-400" />
               <span>Completed</span>
               <span className="ml-auto rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-mono text-[10px] text-muted">{doneTodos.length}</span>
             </p>
-            <div className="flex flex-col gap-1">
-              {doneTodos.slice(0, isHero ? 50 : 3).map((t) => (
+            <div className="flex flex-col gap-1 overflow-y-auto no-scrollbar scrollbar-none">
+              {doneTodos.map((t) => (
                 <div key={t.id} className="group flex items-center gap-2 rounded-xl px-2 py-1 hover:bg-white/5 transition-colors">
                   <button
                     onClick={() => onToggle(t)}
-                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 border-transparent bg-emerald-500/80 text-white transition-colors hover:bg-emerald-500"
+                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 border-transparent bg-emerald-500/80 text-white transition-colors hover:bg-emerald-500 cursor-pointer"
                     aria-label="Mark not done"
                   >
                     <Check className="h-2.5 w-2.5" />
@@ -1243,7 +1374,7 @@ export function TodosWidget({ widget, variant }) {
                   <span className="min-w-0 flex-1 truncate text-xs text-muted/60 line-through">{t.text}</span>
                   <button
                     onClick={() => onDelete(t.id)}
-                    className="hidden text-muted/40 hover:text-rose-400 group-hover:block"
+                    className="hidden text-muted/40 hover:text-rose-400 group-hover:block cursor-pointer"
                     aria-label="Delete"
                   >
                     <X className="h-3 w-3" />

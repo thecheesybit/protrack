@@ -1,8 +1,8 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { Trophy, Check } from 'lucide-react'
 import { useStore } from '@/store/useStore'
-import { FocusTree } from '@/components/focus/FocusTree'
-import { playSuccess } from '@/lib/audioFX'
+import { SpriteFoliage } from '@/components/focus/ForestSprites'
+import { playFocusChime } from '@/lib/audioFX'
 import { useEffect } from 'react'
 
 export function SessionCompleteModal() {
@@ -12,12 +12,14 @@ export function SessionCompleteModal() {
   useEffect(() => {
     if (congratulations) {
       try {
-        playSuccess()
+        playFocusChime()
       } catch { /* noop */ }
     }
   }, [congratulations])
 
   const durationMin = congratulations?.durationMin ?? 25
+  const plantType = congratulations?.plantType || (durationMin < 10 ? 'flower' : durationMin <= 15 ? 'shrub' : 'tree')
+  const plantLabel = plantType === 'flower' ? 'Flower' : plantType === 'shrub' ? 'Shrub' : 'Tree'
   const label = congratulations?.label ?? 'Deep Focus'
 
   const handleDismiss = () => {
@@ -57,12 +59,15 @@ export function SessionCompleteModal() {
                 initial={{ scale: 0, rotate: -10 }}
                 animate={{ scale: 1, rotate: 0 }}
                 transition={{ type: 'spring', stiffness: 260, damping: 20, delay: 0.1 }}
-                className="flex h-24 w-24 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 shadow-inner"
+                className="flex h-24 w-24 items-end justify-center pb-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 shadow-inner overflow-hidden"
               >
-                <FocusTree variant="oak" durationMin={durationMin} size={64} />
+                <SpriteFoliage
+                  type={plantType}
+                  height={plantType === 'flower' ? 46 : plantType === 'shrub' ? 56 : 74}
+                />
               </motion.div>
               <span className="mt-3 text-[11px] font-bold uppercase tracking-wider text-emerald-400">
-                +1 Tree Planted on Today&apos;s Calendar
+                +1 {plantLabel} Planted on Today&apos;s Calendar
               </span>
             </div>
 

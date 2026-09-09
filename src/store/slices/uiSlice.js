@@ -59,6 +59,7 @@ function persistCollapsed(id, val) {
 
 export const createUiSlice = (set, get) => ({
   maximizedWidgetId: null,
+  activeWidgetId: 'timetable',
   settingsOpen: false,
   aiOpen: false,
   supportOpen: false,
@@ -68,11 +69,13 @@ export const createUiSlice = (set, get) => ({
   fontScale: readInitialFontScale(),
   fontFamily: readInitialFontFamily(),
 
-  maximizeWidget: (id) => set({ maximizedWidgetId: id }),
+  setActiveWidgetId: (activeWidgetId) => set({ activeWidgetId }),
+  maximizeWidget: (id) => set({ maximizedWidgetId: id, activeWidgetId: id || 'timetable' }),
   restoreWidgets: () => set({ maximizedWidgetId: null }),
   toggleWidget: (id) =>
     set((s) => ({
       maximizedWidgetId: s.maximizedWidgetId === id ? null : id,
+      activeWidgetId: id || s.activeWidgetId || 'timetable',
     })),
 
   // Per-widget "minimized to header" state — lifted out of WidgetFrame so the
@@ -101,6 +104,17 @@ export const createUiSlice = (set, get) => ({
   setClockCentered: (clockCentered) => set({ clockCentered }),
   toggleClockCentered: () => set((s) => ({ clockCentered: !s.clockCentered })),
 
+  alarmModalOpen: false,
+  setAlarmModalOpen: (alarmModalOpen) =>
+    set((s) => ({
+      alarmModalOpen:
+        typeof alarmModalOpen === 'function' ? alarmModalOpen(s.alarmModalOpen) : alarmModalOpen,
+    })),
+  activeRingingAlarm: null,
+  setActiveRingingAlarm: (activeRingingAlarm) => set({ activeRingingAlarm }),
+
+  whatsNewOpen: false,
+  setWhatsNewOpen: (whatsNewOpen) => set({ whatsNewOpen }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setAiOpen: (aiOpen) => set({ aiOpen }),
   setSupportOpen: (supportOpen) => set({ supportOpen }),

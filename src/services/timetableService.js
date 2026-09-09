@@ -6,6 +6,8 @@ import {
   deleteDoc,
   doc,
   serverTimestamp,
+  arrayUnion,
+  arrayRemove,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 
@@ -37,4 +39,25 @@ export async function updateSlot(uid, modeId, slotId, patch) {
 
 export async function deleteSlot(uid, modeId, slotId) {
   return deleteDoc(doc(slotsCol(uid, modeId), slotId))
+}
+
+/**
+ * Mark a timetable slot completed or incomplete for a specific date (YYYY-MM-DD).
+ *
+ * @param {string} uid
+ * @param {string} modeId
+ * @param {string} slotId
+ * @param {string} dateStr - 'YYYY-MM-DD'
+ * @param {boolean} [completedState] - explicit boolean, or undefined to toggle based on currentCompletedDates
+ * @param {Array<string>} [currentCompletedDates]
+ */
+export async function toggleSlotCompletion(uid, modeId, slotId, dateStr, completedState, currentCompletedDates) {
+  if (!uid || !modeId || !slotId || !dateStr) return
+  let shouldComplete = completedState
+  if (typeof shouldComplete !== 'boolean') {
+    shouldComplete = !(Array.isArray(currentCompletedDates) && currentCompletedDates.includes(dateStr))
+  }
+  return updateDoc(doc(slotsCol(uid, modeId), slotId), {
+    completedDates: shouldComplete ? arrayUnion(dateStr) : arrayRemove(dateStr),
+  })
 }

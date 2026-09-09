@@ -16,7 +16,7 @@ import { playSound, chimeForIslandKind } from '@/lib/sound'
  * up. Everything else — sync state, deadlines, hydration, plain info — has no
  * existing sound and is exactly what "notifications should chime" is about.
  */
-const SELF_CHIMED = new Set(['focus', 'break', 'progress', 'success'])
+const SELF_CHIMED = new Set(['focus', 'break', 'progress', 'success', 'temple', 'hourly', 'alarm'])
 
 export function useIslandCycle() {
   const activeId = useStore((s) => s.islandActive?.id)

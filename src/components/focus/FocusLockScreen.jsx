@@ -110,6 +110,7 @@ export function FocusLockScreen() {
   const muted = useStore((s) => s.muted)
   const activeModeId = useStore((s) => s.activeModeId)
   const pipActive = useStore((s) => s.pipActive)
+  const completeFocus = useStore((s) => s.completeFocus)
 
   const pause = useStore((s) => s.pause)
   const resume = useStore((s) => s.resume)
@@ -196,6 +197,17 @@ export function FocusLockScreen() {
       duration: 4000,
     })
     setConfirmQuit(false)
+  }
+
+  const elapsedSec = Math.max(0, (phaseTotalSec || 0) - (secondsLeft || 0))
+  const elapsedMin = Math.max(0, Math.floor(elapsedSec / 60))
+  const earlyPlantType = elapsedMin < 10 ? 'flower' : elapsedMin <= 15 ? 'shrub' : 'tree'
+
+  const finishEarly = () => {
+    setConfirmQuit(false)
+    if (completeFocus) {
+      completeFocus(elapsedSec)
+    }
   }
 
   return (
@@ -396,16 +408,16 @@ export function FocusLockScreen() {
               </AnimatePresence>
             </div>
 
-            {/* Give up */}
+            {/* End or Give up */}
             <button
               onClick={() => setConfirmQuit(true)}
-              className="text-xs font-medium text-white/40 transition-colors hover:text-rose-300"
+              className="text-xs font-medium text-white/50 transition-colors hover:text-white"
             >
-              Give up session
+              {elapsedMin >= 1 ? `Finish session (${elapsedMin}m)` : 'Give up session'}
             </button>
           </motion.div>
 
-          {/* ── Give-up confirmation ───────────────────────────────── */}
+          {/* ── End / Give-up confirmation ───────────────────────────────── */}
           <AnimatePresence>
             {confirmQuit && (
               <motion.div
@@ -420,27 +432,41 @@ export function FocusLockScreen() {
                   exit={{ scale: 0.9, y: 12 }}
                   className="max-w-sm rounded-3xl border border-white/10 bg-surface/95 p-6 text-center shadow-glass-lg"
                 >
-                  <span className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10 text-amber-400">
+                  <span className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400">
                     <TreePine className="h-6 w-6 animate-pulse" />
                   </span>
-                  <h3 className="mb-2 text-lg font-bold text-ink">Abandon this session?</h3>
+                  <h3 className="mb-2 text-lg font-bold text-ink">
+                    {elapsedMin >= 1 ? 'Finish & Plant Foliage?' : 'Abandon this session?'}
+                  </h3>
                   <p className="mb-5 text-sm text-muted">
-                    Your growing plant will wither if you leave now. Stay a little longer?
+                    {elapsedMin >= 1
+                      ? `You've focused for ${elapsedMin} min! You can finish now to plant a ${earlyPlantType} on today's calendar, or keep going.`
+                      : 'Your growing plant will wither if you leave now. Stay a little longer?'}
                   </p>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setConfirmQuit(false)}
-                      className="flex-1 rounded-2xl py-2.5 font-semibold text-white transition-transform hover:scale-[1.02] active:scale-95"
-                      style={{ background: accentHex }}
-                    >
-                      Keep going
-                    </button>
-                    <button
-                      onClick={giveUp}
-                      className="rounded-2xl border border-line px-4 py-2.5 text-sm font-semibold text-muted hover:text-ink"
-                    >
-                      Quit anyway
-                    </button>
+                  <div className="flex flex-col gap-2.5">
+                    {elapsedMin >= 1 && (
+                      <button
+                        onClick={finishEarly}
+                        className="w-full rounded-2xl py-2.5 font-semibold text-white transition-transform hover:scale-[1.02] active:scale-95 shadow-md bg-emerald-600 hover:bg-emerald-500"
+                      >
+                        Finish &amp; Plant ({elapsedMin}m {earlyPlantType})
+                      </button>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setConfirmQuit(false)}
+                        className="flex-1 rounded-2xl py-2 font-semibold text-white transition-transform hover:scale-[1.02] active:scale-95"
+                        style={{ background: accentHex }}
+                      >
+                        Keep going
+                      </button>
+                      <button
+                        onClick={giveUp}
+                        className="rounded-2xl border border-line px-3 py-2 text-xs font-semibold text-muted hover:text-rose-400"
+                      >
+                        {elapsedMin >= 1 ? 'Abandon (wither)' : 'Quit anyway'}
+                      </button>
+                    </div>
                   </div>
                 </motion.div>
               </motion.div>

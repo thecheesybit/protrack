@@ -9,8 +9,10 @@
  *
  * @typedef {'deep_night'|'dawn'|'morning'|'midday'|'afternoon'|'dusk'|'evening'} ChronoSlot
  */
+import { getInitialChronoSlot } from '@/lib/chrono'
+
 export const createChronoSlice = (set) => ({
-  chronoSlot: 'morning', // ChronoSlot — corrected by useChronoTheme on mount
+  chronoSlot: getInitialChronoSlot(), // Synchronously resolved to avoid flashing morning slot on load
 
   /** @param {ChronoSlot} chronoSlot */
   setChronoSlot: (chronoSlot) => set({ chronoSlot }),

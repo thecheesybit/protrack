@@ -71,7 +71,14 @@ function hexA(hex, a) {
 
 // ── Block components ──────────────────────────────────────────────────────────
 
-const SlotBlock = memo(function SlotBlock({ slot, onOpen, onEdit, ppm = PX_PER_MIN }) {
+const SlotBlock = memo(function SlotBlock({
+  slot,
+  isDone = false,
+  onOpen,
+  onEdit,
+  onToggleDone,
+  ppm = PX_PER_MIN,
+}) {
   const startAxis = toAxisMin(slot.startMin)
   let endAxis = toAxisMin(slot.endMin)
   if (endAxis <= startAxis) endAxis += GRID_SPAN_MIN // slot runs past midnight
@@ -90,7 +97,7 @@ const SlotBlock = memo(function SlotBlock({ slot, onOpen, onEdit, ppm = PX_PER_M
 
   const bgStyle = isStriped
     ? `repeating-linear-gradient(45deg, ${hexA(accent, 0.7)}, ${hexA(accent, 0.7)} 10px, ${hexA(accent, 0.9)} 10px, ${hexA(accent, 0.9)} 20px)`
-    : hexA(accent, 0.82)
+    : hexA(accent, isDone ? 0.45 : 0.82)
 
   return (
     <div
@@ -100,37 +107,62 @@ const SlotBlock = memo(function SlotBlock({ slot, onOpen, onEdit, ppm = PX_PER_M
         'group/slot absolute inset-x-1 cursor-pointer overflow-hidden rounded-xl px-2.5 py-1.5 text-white shadow-sm transition-all hover:z-30 hover:scale-[1.02] hover:shadow-glow-sm backdrop-blur-md select-none',
         isDashed && 'border-2 border-dashed',
         isDotted && 'border-2 border-dotted',
+        isDone && 'opacity-75 filter grayscale-[20%]',
       )}
       style={{
         top,
         height,
         background: bgStyle,
-        borderLeft: `4px solid ${accent}`,
+        borderLeft: `4px solid ${isDone ? '#10b981' : accent}`,
       }}
     >
       <div className="flex items-start justify-between gap-1">
-        <span className="truncate text-xs font-semibold leading-tight text-white drop-shadow-xs">
-          {slot.label || 'Session'}
+        <span className="flex min-w-0 items-center gap-1.5 truncate text-xs font-semibold leading-tight text-white drop-shadow-xs">
+          {onToggleDone && (
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                onToggleDone()
+              }}
+              className={cn(
+                'flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded transition-all',
+                isDone
+                  ? 'bg-emerald-500 text-white shadow-sm ring-1 ring-emerald-400/50'
+                  : 'border border-white/60 bg-black/20 text-transparent hover:border-white hover:text-white group-hover/slot:border-white',
+              )}
+              title={isDone ? 'Mark incomplete' : 'Mark complete'}
+              aria-label={isDone ? 'Mark incomplete' : 'Mark complete'}
+            >
+              <Check className={cn('h-2.5 w-2.5', isDone ? 'opacity-100 stroke-[3]' : 'opacity-0 hover:opacity-100')} />
+            </button>
+          )}
+          <span className={cn('truncate', isDone && 'line-through opacity-75')}>
+            {slot.label || 'Session'}
+          </span>
           {slot.tag && (
-            <span className="ml-1.5 inline-block rounded-md bg-black/35 px-1.5 py-0.2 text-[9px] font-medium tracking-wider text-white">
+            <span className="ml-1 inline-block rounded-md bg-black/35 px-1.5 py-0.2 text-[9px] font-medium tracking-wider text-white">
               {slot.tag}
             </span>
           )}
         </span>
-        <button
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation()
-            onEdit()
-          }}
-          className="shrink-0 opacity-0 transition-opacity group-hover/slot:opacity-100 text-white/80 hover:text-white"
-          aria-label="Edit session"
-        >
-          <Pencil className="h-3 w-3" />
-        </button>
+        <div className="flex items-center gap-0.5 shrink-0">
+          <button
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              onEdit()
+            }}
+            className="shrink-0 opacity-0 transition-opacity group-hover/slot:opacity-100 text-white/80 hover:text-white p-0.5 rounded hover:bg-white/10"
+            aria-label="Edit session"
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+        </div>
       </div>
       {height > 30 && (
-        <span className="text-[10px] font-medium text-white/80 mt-0.5 block tabular-nums">
+        <span className={cn('text-[10px] font-medium text-white/80 mt-0.5 block tabular-nums', isDone && 'line-through opacity-60')}>
           {minutesToLabel(slot.startMin)} – {minutesToLabel(slot.endMin)}
         </span>
       )}
@@ -336,6 +368,7 @@ export function TimetableGrid({
   gcalEvents = [],
   subjectTasks = [],
   onToggleSubjectTask,
+  onToggleSlot,
   allTodos = [],
   sessions = [],
   compact = false,
@@ -402,6 +435,8 @@ export function TimetableGrid({
     const thurs = getWeekDate(3, activeRefDate)
     return thurs.toLocaleDateString([], { month: 'long', year: 'numeric' })
   }, [activeRefDate])
+
+  const todayDateStr = useMemo(() => ymd(new Date()), [])
 
   // The all-day / tasks shelf only earns its row when the visible week actually
   // has an all-day item, an untimed deadline, or an overdue carry-forward — an
@@ -576,28 +611,32 @@ export function TimetableGrid({
         </div>
       </div>
 
-      {/* Tactile Day Header Strip (Inspired by calendar.me) */}
+      {/* Tactile Day Header Strip (Inspired by calendar.me) — past days greyed out (media_1788918321694.png) */}
       <div className="flex border-b border-white/[0.08] pb-2 pt-1.5 pl-12 pr-1 gap-1.5 shrink-0 bg-surface/20">
         {DAYS.map((d, i) => {
           const colDate = getWeekDate(i, activeRefDate)
           const dateNum = colDate.getDate()
+          const colDateStr = ymd(colDate)
           const isToday = i === today && weekOffset === 0
+          const isPastDay = colDateStr < todayDateStr && !isToday
           return (
             <div
               key={d}
               onClick={() => onPickDay?.(colDate)}
-              title={`Open ${d} ${dateNum} in the day view`}
+              title={`Open ${d} ${dateNum} in the day view${isPastDay ? ' (past day)' : ''}`}
               className={cn(
                 'flex flex-1 flex-col items-center justify-center py-1.5 px-1 rounded-2xl border transition-all cursor-pointer select-none',
                 isToday
                   ? 'bg-gradient-to-b from-emerald-400 to-emerald-500 text-slate-950 font-bold shadow-glow-sm border-emerald-300 ring-2 ring-emerald-400/30'
-                  : 'border-white/[0.06] bg-surface-2/25 text-muted hover:bg-surface-2/50 hover:text-ink hover:border-white/15',
+                  : isPastDay
+                    ? 'border-white/[0.03] bg-surface-2/15 text-muted/50 opacity-55 hover:opacity-80 hover:bg-surface-2/25'
+                    : 'border-white/[0.06] bg-surface-2/25 text-muted hover:bg-surface-2/50 hover:text-ink hover:border-white/15',
               )}
             >
-              <span className={cn('text-[10px] uppercase font-bold tracking-wider', isToday ? 'text-slate-950/80' : 'text-muted')}>
+              <span className={cn('text-[10px] uppercase font-bold tracking-wider', isToday ? 'text-slate-950/80' : isPastDay ? 'text-muted/40' : 'text-muted')}>
                 {d}
               </span>
-              <span className={cn('text-base font-black tracking-tight tabular-nums mt-0.5', isToday ? 'text-slate-950' : 'text-ink')}>
+              <span className={cn('text-base font-black tracking-tight tabular-nums mt-0.5', isToday ? 'text-slate-950' : isPastDay ? 'text-muted/60' : 'text-ink')}>
                 {dateNum}
               </span>
             </div>
@@ -613,6 +652,7 @@ export function TimetableGrid({
           const colDate = getWeekDate(day, activeRefDate)
           const colDateStr = ymd(colDate)
           const isCurrentToday = day === today && weekOffset === 0
+          const isPastDay = colDateStr < todayDateStr && !isCurrentToday
 
           // Tasks for this day's top tray:
           // 1. All-day tasks due on this day or tasks with midnight deadline
@@ -659,6 +699,7 @@ export function TimetableGrid({
               className={cn(
                 'flex-1 border-l border-line/30 p-1 flex flex-wrap items-center content-start gap-1 min-h-[30px] transition-colors overflow-hidden',
                 isCurrentToday && 'bg-accent/5',
+                isPastDay && 'bg-black/20 opacity-60',
               )}
               title={`Double-click to add an all-day item on ${d}`}
             >
@@ -797,6 +838,7 @@ export function TimetableGrid({
               const colDate = getWeekDate(day, activeRefDate)
               const colDateStr = ymd(colDate)
               const isCurrentDayToday = day === today && weekOffset === 0
+              const isPastDay = colDateStr < todayDateStr && !isCurrentDayToday
 
               // This column's 24h span is [colDate 06:00 → nextDate 06:00). An item
               // with a real early-morning time (00:01–05:59) belongs to the
@@ -821,8 +863,9 @@ export function TimetableGrid({
                   onPointerCancel={onUp}
                   onContextMenu={onContextMenu(day)}
                   className={cn(
-                    'relative flex-1 touch-none border-l border-line/30 flex flex-col justify-between overflow-visible',
+                    'relative flex-1 touch-none border-l border-line/30 flex flex-col justify-between overflow-visible transition-colors',
                     isCurrentDayToday && 'bg-accent/5',
+                    isPastDay && 'bg-black/25 opacity-65 backdrop-blur-[0.5px]',
                   )}
                 >
                   {/* Recurring slots — early-morning ones surface in the prior day's tail */}
@@ -832,15 +875,33 @@ export function TimetableGrid({
                         ? isSlotOnDay(s, tailDayIdx, tailDate)
                         : isSlotOnDay(s, day, colDate),
                     )
-                    .map((s) => (
-                      <SlotBlock
-                        key={s.id}
-                        slot={s}
-                        ppm={ppm}
-                        onOpen={() => onOpenSlot(s)}
-                        onEdit={() => onEditSlot(s)}
-                      />
-                    ))}
+                    .map((s) => {
+                      const targetDate = isTailMinute(s.startMin) ? tailDate : colDate
+                      const targetDateStr = ymd(targetDate)
+                      const isDone =
+                        Boolean(s.completedDates?.includes(targetDateStr)) ||
+                        (Array.isArray(sessions) &&
+                          sessions.some((sess) => {
+                            if (!sess || sess.completed === false) return false
+                            if (sess.slotId && sess.slotId === s.id) {
+                              if (sess.targetDate) return sess.targetDate === targetDateStr
+                              const d = sess.startedAt?.toDate ? sess.startedAt.toDate() : new Date(sess.startedAt)
+                              return d && ymd(d) === targetDateStr
+                            }
+                            return false
+                          }))
+                      return (
+                        <SlotBlock
+                          key={s.id}
+                          slot={s}
+                          isDone={isDone}
+                          ppm={ppm}
+                          onOpen={() => onOpenSlot(s, targetDateStr)}
+                          onEdit={() => onEditSlot(s)}
+                          onToggleDone={() => onToggleSlot?.(s, targetDateStr)}
+                        />
+                      )
+                    })}
 
                   {/* One-time event blocks */}
                   {events

@@ -54,6 +54,25 @@ describe('buildDayTimeline — slot recurrence', () => {
     const [item] = buildDayTimeline({ slots, date: DAY })
     expect(item).toMatchObject({ modeId: 'm1', modeName: 'UPSC', modeColor: '#abc123', color: '#abc123' })
   })
+
+  it('marks a slot done if completedDates contains the current date', () => {
+    const slots = [
+      { id: 's7', dayOfWeek: 5, startMin: 600, endMin: 660, label: 'Finance', completedDates: ['2024-06-15'] },
+    ]
+    const [item] = buildDayTimeline({ slots, date: DAY })
+    expect(item).toMatchObject({ id: 'slot:s7', done: true })
+  })
+
+  it('marks a slot done if a matching completed focus session with slotId exists', () => {
+    const slots = [
+      { id: 's8', dayOfWeek: 5, startMin: 600, endMin: 660, label: 'Finance' },
+    ]
+    const sessions = [
+      { id: 'sess1', slotId: 's8', targetDate: '2024-06-15', completed: true, durationMin: 60 },
+    ]
+    const [item] = buildDayTimeline({ slots, sessions, date: DAY })
+    expect(item).toMatchObject({ id: 'slot:s8', done: true })
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -152,6 +171,21 @@ describe('buildDayTimeline — focus sessions', () => {
   it('excludes sessions started on another day', () => {
     const sessions = [{ id: 'f3', startedAt: nextDayAt(8), durationMin: 25 }]
     expect(buildDayTimeline({ sessions, date: DAY })).toHaveLength(0)
+  })
+
+  it('does not render a duplicate session item if the session is linked to a slot (slotId)', () => {
+    const slots = [{ id: 's1', dayOfWeek: 5, startMin: 480, endMin: 540, label: 'Finance' }]
+    const sessions = [{ id: 'f4', startedAt: at(8, 0), durationMin: 50, slotId: 's1' }]
+    const out = buildDayTimeline({ slots, sessions, date: DAY })
+    // Only the slot should appear, marked done, not a separate session item!
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatchObject({ id: 'slot:s1', done: true })
+  })
+
+  it('excludes all session items when includeSessions is false', () => {
+    const sessions = [{ id: 'f5', startedAt: at(8, 0), durationMin: 50 }]
+    const out = buildDayTimeline({ sessions, date: DAY, includeSessions: false })
+    expect(out).toHaveLength(0)
   })
 })
 

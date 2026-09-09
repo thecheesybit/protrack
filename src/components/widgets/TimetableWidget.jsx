@@ -22,6 +22,7 @@ import { NlQuickCapture } from '@/components/calendar/NlQuickCapture'
 import { TimeContextPanel } from '@/components/timetable/TimeContextPanel'
 import { updateTodo, deleteTodo } from '@/services/todoService'
 import { updateTask } from '@/services/subjectService'
+import { toggleSlotCompletion } from '@/services/timetableService'
 import { MODE_PALETTE } from '@/lib/constants'
 import { DAY_START_MIN, todayDow, minutesToLabel, durationLabel } from '@/lib/time'
 import { ymd } from '@/lib/dates'
@@ -169,15 +170,30 @@ export function TimetableWidget({ widget, variant }) {
     setEditingSlot(slot)
     setEditorOpen(true)
   }
-  const openSlotFocus = (slot) => {
+  const openSlotFocus = (slot, targetDateStr = null) => {
     const durMin = Math.max(5, (slot.endMin || 0) - (slot.startMin || 0))
     openFocus({
       title: slot.label || 'Study session',
       subtitle: `${minutesToLabel(slot.startMin)} · ${durationLabel(slot.startMin, slot.endMin)}`,
       color: slot.color,
       slotId: slot.id,
+      targetDate: targetDateStr || ymd(new Date()),
       durationMin: durMin,
+      modeId: slot._modeId || activeModeId,
+      subjectId: slot.subjectId || null,
     })
+  }
+
+  const handleToggleSlot = (slot, dateStr) => {
+    if (!user || !slot?.id) return
+    const targetModeId = slot._modeId || activeModeId
+    const resolvedModeId = targetModeId === 'all'
+      ? (modes[0]?.id || null)
+      : targetModeId
+    if (!resolvedModeId) return
+    const isDone = Array.isArray(slot.completedDates) && slot.completedDates.includes(dateStr)
+    toggleSlotCompletion(user.uid, resolvedModeId, slot.id, dateStr, !isDone, slot.completedDates)
+    toast.success(isDone ? 'Session marked open' : 'Session completed! ✓')
   }
   const quickAdd = (startMin, endMin, dayIndex) =>
     openEditor({
@@ -382,6 +398,7 @@ export function TimetableWidget({ widget, variant }) {
                   allTodos={activeTodos}
                   sessions={sessions}
                   onOpenSlot={openSlotFocus}
+                  onToggleSlot={handleToggleSlot}
                   onAdd={quickAdd}
                   onSelect={handleSelect}
                   onToggleTask={handleToggleTask}
@@ -395,6 +412,7 @@ export function TimetableWidget({ widget, variant }) {
                   defaultColor={defaultColor}
                   onSelect={handleSelect}
                   onOpenSlot={openSlotFocus}
+                  onToggleSlot={handleToggleSlot}
                   onEditSlot={openEditor}
                   onQuickCapture={setCaptureSeed}
                   onToggleTask={handleToggleTask}
@@ -466,6 +484,7 @@ export function TimetableWidget({ widget, variant }) {
                   defaultColor={defaultColor}
                   onSelect={handleSelect}
                   onOpenSlot={openSlotFocus}
+                  onToggleSlot={handleToggleSlot}
                   onEditSlot={openEditor}
                   onQuickCapture={setCaptureSeed}
                   onToggleTask={handleToggleTask}
@@ -508,6 +527,7 @@ export function TimetableWidget({ widget, variant }) {
                 allTodos={activeTodos}
                 sessions={sessions}
                 onOpenSlot={openSlotFocus}
+                onToggleSlot={handleToggleSlot}
                 onAdd={quickAdd}
                 onSelect={handleSelect}
                 onToggleTask={handleToggleTask}

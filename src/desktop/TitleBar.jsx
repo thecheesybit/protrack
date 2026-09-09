@@ -35,7 +35,7 @@ export function TitleBar() {
   if (fullscreen || pipActive) return null
 
   return (
-    <div className="shrink-0">
+    <div className="relative z-50 shrink-0">
       <div
         className="flex h-9 items-center justify-end bg-transparent"
         style={{ WebkitAppRegion: 'drag' }}

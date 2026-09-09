@@ -74,8 +74,17 @@ The Gemini chat assistant can complete tasks, set subject progress, add to-dos (
 ### 🔊 AudioFX Synthesized Sounds
 Lightweight Web Audio API synthesizers that generate zero-latency chimes on Todo completion, timer transitions, and button clicks (customizable in Settings).
 
+### ⏰ Phone Alarm Clock & Resonant Hourly Chime
+Mechanical 3D plunger alarm button beneath the Flip Clock (`Alt+A`) triggers continuous synthesized smartphone marimba ringtones, native OS notifications with `requireInteraction: true`, and an immersive Phone Alarm Clock overlay with vibrating shockwaves, live time, and tactile **TURN OFF ALARM** and **Snooze (+5m)** buttons. Plus, a resonant temple bell rings automatically on every hour (`:00`).
+
+### 🌌 Cosmic Obsidian Aurora & Wildlife
+Zero-bloat loading screen grounded in deep obsidian (`#07080c`), 3 shifting aurora blooms, blueprint matrix grid, and a 90-star celestial starfield with orbital gyroscope brand emblem. Dynamic randomized butterfly flocks, dusk fireflies, and celestial skies shift seamlessly across chrono-slots.
+
+### ⌨️ Rapid Ergonomic Keyboard Shortcuts
+One-touch global productivity shortcuts: `Alt+T` (Add Todo), `Alt+S` (Subjects), `Alt+N` (Notes), `Alt+F` (Deep Focus), `Alt+C` (Calendar), `Alt+E` (Scorecards), `Alt+A` (Alarm).
+
 ### 🕰️ Mechanical Flip-Card Clock
-Draggable, scroll-to-scale (0.5x to 3.0x) split-flap clock with position/scale persisted in localStorage.
+Draggable, scroll-to-scale (0.5x to 3.0x) split-flap clock with tactile 3D alarm plunger button and position/scale persisted in localStorage.
 
 </td>
 </tr>

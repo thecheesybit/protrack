@@ -16,11 +16,18 @@ import { ymd, computeStreak } from '@/lib/dates'
  * Record a completed focus session and atomically roll up the gamification
  * stats (total minutes, trees, active days, streak, longest session).
  */
-export async function logFocusSession(uid, { modeId, subjectId, durationMin, startedAt, hourOfDay }) {
+export async function logFocusSession(uid, { modeId, subjectId, slotId, targetDate, label, color, durationMin, plantType, startedAt, hourOfDay }) {
+  const resolvedPlantType = plantType || (durationMin < 10 ? 'flower' : durationMin <= 15 ? 'shrub' : 'tree')
   await addDoc(collection(db, 'users', uid, 'focusSessions'), {
     modeId: modeId || null,
     subjectId: subjectId || null,
+    slotId: slotId || null,
+    targetDate: targetDate || null,
+    label: label || null,
+    title: label || null,
+    color: color || null,
     durationMin,
+    plantType: resolvedPlantType,
     completed: true,
     hourOfDay,
     startedAt: startedAt || serverTimestamp(),

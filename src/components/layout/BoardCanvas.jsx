@@ -1,10 +1,11 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { ChevronUp, ChevronDown, ChevronLeft } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { getIcon } from '@/lib/icons'
 import { WIDGETS } from '@/components/widgets/widgetRegistry'
 import { getWidgetComponent } from '@/components/widgets/widgetComponents'
+import { getWidgetVideo } from '@/lib/videoPacks'
 import { cn } from '@/utils/cn'
 
 // ── Layout config ─────────────────────────────────────────────────────────────
@@ -77,6 +78,8 @@ function MiniCard({ widget, onSingleClick, onDoubleClick }) {
   const Icon = getIcon(widget.icon)
   const meta = MINI_META[widget.id] || { desc: '', gradient: 'from-accent/15 to-accent-2/10' }
   const clickTimer = useRef(null)
+  const videoRef = useRef(null)
+  const videoSrc = useMemo(() => getWidgetVideo(widget.id), [widget.id])
 
   const handleClick = () => {
     if (clickTimer.current) {
@@ -92,15 +95,45 @@ function MiniCard({ widget, onSingleClick, onDoubleClick }) {
     }
   }
 
+  const handleMouseEnter = () => {
+    if (videoRef.current) {
+      videoRef.current.play().catch(() => {})
+    }
+  }
+
+  const handleMouseLeave = () => {
+    if (videoRef.current) {
+      videoRef.current.pause()
+    }
+  }
+
   return (
     <button
       type="button"
       onClick={handleClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       className="group relative flex flex-1 flex-col items-center justify-center gap-2.5 overflow-hidden rounded-3xl border border-white/[0.08] bg-surface/60 p-4 backdrop-blur-xl transition-all duration-200 hover:-translate-y-1 hover:border-accent/40 hover:bg-surface/80 hover:shadow-glow-sm cursor-pointer select-none isolate [clip-path:inset(0_round_1.5rem)]"
     >
+      {/* Dynamic ambient video background - plays on hover only */}
+      {videoSrc && (
+        <video
+          ref={videoRef}
+          src={videoSrc}
+          loop
+          muted
+          playsInline
+          preload="metadata"
+          className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-30 transition-all duration-700 ease-out group-hover:scale-105 group-hover:opacity-60"
+        />
+      )}
+
+      {/* Glassmorphic scrim over video with balanced transparency for 10% more video clarity & crisp text contrast */}
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-surface/80 via-surface/50 to-surface/20 backdrop-blur-[0.5px]" />
+
       {/* Subtle gradient backdrop */}
       <div className={cn(
-        'absolute inset-0 bg-gradient-to-br opacity-50 transition-opacity duration-300 group-hover:opacity-90',
+        'absolute inset-0 bg-gradient-to-br opacity-40 transition-opacity duration-300 group-hover:opacity-80',
         meta.gradient,
       )} />
 

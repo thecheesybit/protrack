@@ -2,9 +2,9 @@ import { memo, useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ymd } from '@/lib/dates'
 import { cn } from '@/utils/cn'
-import { SpriteTree } from './ForestSprites'
+import { SpriteTree, SpriteFoliage, getSessionFoliageSeed, formatFloraBreakdown } from './ForestSprites'
 
-export { SpriteTree } from './ForestSprites'
+export { SpriteTree, SpriteFoliage, getSessionFoliageSeed, formatFloraBreakdown } from './ForestSprites'
 
 function toDate(ts) {
   if (!ts) return null
@@ -308,10 +308,28 @@ export const IllustratedBush = memo(function IllustratedBush({
 })
 
 /**
- * Helper to build rich, informative tooltips for planted focus trees.
+ * Resolves the botanical type for a session:
+ * - Under 10 minutes: flower
+ * - 10 to 15 minutes: shrub
+ * - 15+ minutes: tree
+ */
+export function getPlantType(s) {
+  if (s?.plantType && ['flower', 'shrub', 'tree'].includes(s.plantType)) {
+    return s.plantType
+  }
+  const dur = Number(s?.durationMin) || 25
+  if (dur < 10) return 'flower'
+  if (dur <= 15) return 'shrub'
+  return 'tree'
+}
+
+/**
+ * Helper to build rich, informative tooltips for planted focus foliage.
  */
 export function getTreeTooltip(s, idx, total) {
   const dur = s.durationMin || 25
+  const plantType = getPlantType(s)
+  const plantLabel = plantType === 'flower' ? 'Flower' : plantType === 'shrub' ? 'Shrub' : 'Tree'
   const title = `${dur}m ${dur >= 50 ? 'Deep Focus' : 'Focus'}`
   const d = toDate(s.startedAt || s.createdAt)
   const timeStr = d && !isNaN(d.getTime())
@@ -319,8 +337,8 @@ export function getTreeTooltip(s, idx, total) {
     : null
   const label = s.label || s.title || (s.modeId ? `${s.modeId} session` : null)
   let detail = label
-    ? `${label} · Tree ${idx + 1} of ${total}`
-    : `Tree ${idx + 1} of ${total}`
+    ? `${label} · ${plantLabel} ${idx + 1} of ${total}`
+    : `${plantLabel} ${idx + 1} of ${total}`
   if (timeStr) {
     detail += ` (${timeStr})`
   }
@@ -362,9 +380,6 @@ export function DayGrove({
 }) {
   const [hoveredTree, setHoveredTree] = useState(null)
   const [hoveredIdx, setHoveredIdx] = useState(null)
-  // Pointing at the grove fades it out so the calendar cells + blocks it sits on
-  // top of stay reachable (owner: the trees are decoration, not an obstacle).
-  const [groveHidden, setGroveHidden] = useState(false)
 
   // Filter completed & successful sessions for this specific day, ordered chronologically
   const daySessions = useMemo(() => {
@@ -381,13 +396,14 @@ export function DayGrove({
     <div
       className={cn(
         'pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col items-center justify-end overflow-visible select-none',
+        count === 0 && 'min-h-0',
         className,
       )}
-      style={{ minHeight: 90 }}
+      style={{ minHeight: count === 0 ? 0 : 90 }}
     >
       {/* ── Hover Tooltip Card ────────────────────────────────────── */}
       <AnimatePresence>
-        {hoveredTree && !groveHidden && (
+        {hoveredTree && (
           <motion.div
             initial={{ opacity: 0, y: 6, scale: 0.92 }}
             animate={{ opacity: 1, y: -4, scale: 1 }}
@@ -408,10 +424,7 @@ export function DayGrove({
       {/* ── Raster focus trees — one per successful session, none on an empty day ── */}
       <div
         className="pointer-events-auto relative flex w-full items-end justify-center px-1 pb-1 transition-opacity duration-200"
-        style={{ opacity: groveHidden ? 0 : 1 }}
-        onMouseEnter={() => count > 0 && setGroveHidden(true)}
         onMouseLeave={() => {
-          setGroveHidden(false)
           setHoveredTree(null)
           setHoveredIdx(null)
         }}
@@ -420,54 +433,35 @@ export function DayGrove({
           /* Empty day: nothing on the baseline (owner: no sapling placeholders). */
           null
         ) : count === 1 ? (
-          /* 1 Session: Center Stately Tree + Bush at its base */
-          <div className="relative flex items-end justify-center">
-            {/* The main tree */}
-            <div
-              className="z-10 cursor-pointer transition-transform hover:scale-105 active:scale-95"
-              onMouseEnter={() => setHoveredTree(getTreeTooltip(daySessions[0], 0, 1))}
-              onMouseLeave={() => setHoveredTree(null)}
-            >
-              <SpriteTree
-                species={daySessions[0].durationMin >= 45 ? 'oak' : 'pine'}
-                variant={0}
-                height={daySessions[0].durationMin >= 45 ? 88 : 84}
-                delay={0.05}
-              />
-            </div>
-          </div>
-        ) : count === 2 ? (
-          /* 2 Sessions: Two distinct trees of different heights */
-          <div className="relative flex items-end justify-center -space-x-2">
-            {/* Tree 1: Left Oak */}
-            <div
-              className="z-10 cursor-pointer transition-transform hover:scale-105 active:scale-95"
-              onMouseEnter={() => setHoveredTree(getTreeTooltip(daySessions[0], 0, 2))}
-              onMouseLeave={() => setHoveredTree(null)}
-            >
-              <SpriteTree species="oak" variant={0} height={86} delay={0.04} />
-            </div>
-
-            {/* Tree 2: Right Pine or Blossom */}
-            <div
-              className="z-15 cursor-pointer transition-transform hover:scale-105 active:scale-95"
-              onMouseEnter={() => setHoveredTree(getTreeTooltip(daySessions[1], 1, 2))}
-              onMouseLeave={() => setHoveredTree(null)}
-            >
-              <SpriteTree
-                species={daySessions[1].durationMin >= 45 ? 'pine' : 'blossom'}
-                variant={1}
-                height={daySessions[1].durationMin >= 45 ? 92 : 80}
-                delay={0.09}
-              />
-            </div>
-          </div>
+          /* 1 Session: Centered flower, shrub, or tree */
+          (() => {
+            const s = daySessions[0]
+            const pType = getPlantType(s)
+            const h = pType === 'flower' ? 34 : pType === 'shrub' ? 50 : (s.durationMin >= 45 ? 90 : 84)
+            return (
+              <div className="relative flex items-end justify-center">
+                <div
+                  className="z-10 cursor-pointer transition-transform hover:scale-105 active:scale-95"
+                  onMouseEnter={() => setHoveredTree(getTreeTooltip(s, 0, 1))}
+                  onMouseLeave={() => setHoveredTree(null)}
+                >
+                  <SpriteFoliage
+                    type={pType}
+                    species="all"
+                    variant={getSessionFoliageSeed(s, 0)}
+                    height={h}
+                    delay={0.05}
+                  />
+                </div>
+              </div>
+            )
+          })()
         ) : (
-          /* 3+ Sessions: Thriving Grove where EVERY single session has its own tree */
+          /* 2+ Sessions: Thriving Grove where EVERY session has its own flower/shrub/tree */
           <div className="relative flex items-end justify-center overflow-visible">
             {daySessions.map((s, idx) => {
-              // Select tree species: long sessions get majestic Pine/Oak, others cycle varieties
-              const speciesList = ['oak', 'pine', 'blossom']
+              const pType = getPlantType(s)
+              const speciesList = ['oak', 'pine', 'blossom', 'palm']
               const species =
                 (s.durationMin || 0) >= 60
                   ? idx % 2 === 0
@@ -475,30 +469,42 @@ export function DayGrove({
                     : 'pine'
                   : speciesList[idx % speciesList.length]
 
-              // Dynamic scale and overlap so any number of trees fits gracefully within column
-              const targetGroveWidth = Math.min(132, Math.max(80, 52 + count * 13))
-              const baseH = Math.max(54, Math.min(92, Math.round(96 - Math.min(count, 14) * 2.6)))
-              const heightFactors = [0.94, 1.06, 0.92, 1.04, 0.96, 1.08, 0.93]
-              const hFactor = heightFactors[idx % heightFactors.length]
-              const h = Math.round(baseH * hFactor)
+              let h = 84
+              if (pType === 'flower') {
+                const fFactors = [0.94, 1.06, 0.96, 1.08]
+                h = Math.round(34 * fFactors[idx % fFactors.length])
+              } else if (pType === 'shrub') {
+                const sFactors = [0.94, 1.06, 0.92, 1.04]
+                h = Math.round(50 * sFactors[idx % sFactors.length])
+              } else {
+                const baseTreeH = Math.max(64, Math.min(92, Math.round(92 - Math.min(count, 12) * 2.2)))
+                const tFactors = [0.94, 1.06, 0.92, 1.04, 0.98]
+                h = Math.round(baseTreeH * tFactors[idx % tFactors.length])
+              }
 
-              const avgWidth = Math.round(baseH * 0.62)
-              const overlapPx = count > 1
-                ? Math.max(6, Math.min(avgWidth - 8, Math.round(avgWidth - (targetGroveWidth - avgWidth) / (count - 1))))
-                : 0
+              const approxWidth = pType === 'flower' ? 24 : pType === 'shrub' ? 36 : Math.round(h * 0.62)
+              const targetGroveWidth = Math.min(132, Math.max(74, 48 + count * 14))
+              const overlapPx =
+                count > 1
+                  ? Math.max(4, Math.min(approxWidth - 6, Math.round((approxWidth * count - targetGroveWidth) / (count - 1))))
+                  : 0
 
-              // Organic depth: alternate back and front layering
-              const isBack = idx % 2 === 1
-              const baseZ = isBack ? 10 + (idx % 3) : 15 + (idx % 3)
+              const isBack = pType === 'tree' ? idx % 2 === 1 : false
+              const baseZ =
+                pType === 'flower'
+                  ? 24 + (idx % 4)
+                  : pType === 'shrub'
+                  ? 18 + (idx % 4)
+                  : isBack ? 10 + (idx % 3) : 14 + (idx % 3)
 
               return (
                 <div
-                  key={s.id || `${dateStr}-tree-${idx}`}
+                  key={s.id || `${dateStr}-foliage-${idx}`}
                   className="cursor-pointer transition-all duration-150 hover:scale-115 active:scale-95 hover:drop-shadow-lg"
                   style={{
                     marginLeft: idx === 0 ? 0 : -overlapPx,
-                    zIndex: hoveredIdx === idx ? 40 : baseZ,
-                    transform: isBack ? 'translateY(-3px)' : 'translateY(0)',
+                    zIndex: hoveredIdx === idx ? 50 : baseZ,
+                    transform: isBack ? 'translateY(-2px)' : 'translateY(0)',
                   }}
                   onMouseEnter={() => {
                     setHoveredIdx(idx)
@@ -509,9 +515,10 @@ export function DayGrove({
                     setHoveredTree(null)
                   }}
                 >
-                  <SpriteTree
-                    species={species}
-                    variant={idx}
+                  <SpriteFoliage
+                    type={pType}
+                    species="all"
+                    variant={getSessionFoliageSeed(s, idx)}
                     height={h}
                     delay={Math.min(0.35, idx * 0.04)}
                   />

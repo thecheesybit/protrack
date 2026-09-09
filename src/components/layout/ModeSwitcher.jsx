@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
-import { Plus, Settings2, Sun, Moon, Settings, LogOut, Heart, Minimize2 } from 'lucide-react'
+import { Plus, Settings2, Sun, Moon, Settings, LogOut, Heart, Minimize2, ChevronDown, ChevronUp } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useTheme } from '@/hooks/useTheme'
 import { useStore } from '@/store/useStore'
@@ -14,13 +15,13 @@ import { cn } from '@/utils/cn'
 /**
  * Vertical mode pill — compact icon button with a colored indicator and tooltip.
  */
-function VerticalModePill({ mode, active, onSelect, onEdit, onContextMenu }) {
+function VerticalModePill({ mode, active, onSelect, onEdit, onContextMenu, onHover }) {
   const Icon = getIcon(mode.icon)
   const accentColor = mode.accentColor || 'rgb(var(--accent))'
   const isEditable = mode.id !== 'all'
 
   return (
-    <div className="group relative">
+    <div className="group relative shrink-0">
       <button
         onClick={onSelect}
         onContextMenu={(e) => {
@@ -35,8 +36,10 @@ function VerticalModePill({ mode, active, onSelect, onEdit, onContextMenu }) {
             onEdit()
           }
         }}
+        onMouseEnter={(e) => onHover?.(e, mode)}
+        onMouseLeave={() => onHover?.(null, null)}
         className={cn(
-          'relative flex h-12 w-12 items-center justify-center rounded-2xl transition-all duration-200',
+          'relative flex h-12 w-12 items-center justify-center rounded-2xl transition-all duration-200 cursor-pointer',
           active
             ? 'text-ink'
             : 'text-muted hover:scale-105 hover:bg-ink/5 hover:text-ink',
@@ -64,25 +67,27 @@ function VerticalModePill({ mode, active, onSelect, onEdit, onContextMenu }) {
         <Icon className="h-6 w-6" style={active ? { color: accentColor } : {}} />
       </button>
 
-      {/* Tooltip & Edit Action Popover — seamlessly attached with pl-2 to avoid dead zone */}
-      <div className="pointer-events-none absolute left-full top-1/2 z-30 -translate-y-1/2 pl-2 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
-        <div className="flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-line/60 bg-surface/95 px-2.5 py-1.5 text-xs font-semibold text-ink shadow-glass backdrop-blur-md">
-          <span>{mode.name}</span>
-          {isEditable && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                onEdit()
-              }}
-              title={`Edit or delete ${mode.name}`}
-              className="ml-1 flex h-5 w-5 items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-ink transition-colors cursor-pointer"
-              aria-label={`Edit ${mode.name}`}
-            >
-              <Settings2 className="h-3.5 w-3.5" />
-            </button>
-          )}
+      {/* Fallback inline tooltip for non-scrolling layouts */}
+      {!onHover && (
+        <div className="pointer-events-none absolute left-full top-1/2 z-30 -translate-y-1/2 pl-2 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
+          <div className="flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-line/60 bg-surface/95 px-2.5 py-1.5 text-xs font-semibold text-ink shadow-glass backdrop-blur-md">
+            <span>{mode.name}</span>
+            {isEditable && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onEdit()
+                }}
+                title={`Edit or delete ${mode.name}`}
+                className="ml-1 flex h-5 w-5 items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-ink transition-colors cursor-pointer"
+                aria-label={`Edit ${mode.name}`}
+              >
+                <Settings2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
@@ -194,6 +199,45 @@ export function ModeSwitcher({ vertical = false }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editorOpen, deleteModalOpen, contextMenu.open])
 
+  const modesScrollRef = useRef(null)
+  const [canScrollUp, setCanScrollUp] = useState(false)
+  const [canScrollDown, setCanScrollDown] = useState(false)
+  const [hoveredPill, setHoveredPill] = useState(null)
+  const hoverLeaveTimerRef = useRef(null)
+
+  const checkModesScroll = () => {
+    const el = modesScrollRef.current
+    if (!el) return
+    const hasOverflow = el.scrollHeight > el.clientHeight + 2
+    setCanScrollUp(el.scrollTop > 4)
+    setCanScrollDown(hasOverflow && el.scrollTop + el.clientHeight < el.scrollHeight - 4)
+  }
+
+  useEffect(() => {
+    checkModesScroll()
+  }, [modes.length])
+
+  const handlePillHover = (e, mode) => {
+    if (hoverLeaveTimerRef.current) {
+      clearTimeout(hoverLeaveTimerRef.current)
+      hoverLeaveTimerRef.current = null
+    }
+
+    if (!e || !mode) {
+      hoverLeaveTimerRef.current = setTimeout(() => {
+        setHoveredPill(null)
+      }, 150)
+      return
+    }
+
+    const rect = e.currentTarget.getBoundingClientRect()
+    setHoveredPill({
+      mode,
+      top: rect.top + rect.height / 2,
+      left: rect.right + 10,
+    })
+  }
+
   const handleRailMouseEnter = () => {
     clearHideTimer()
     setIsRetracted(false)
@@ -201,6 +245,8 @@ export function ModeSwitcher({ vertical = false }) {
 
   const handleRailMouseLeave = () => {
     startHideTimer()
+    if (hoverLeaveTimerRef.current) clearTimeout(hoverLeaveTimerRef.current)
+    setHoveredPill(null)
   }
 
 
@@ -279,11 +325,21 @@ export function ModeSwitcher({ vertical = false }) {
   )
 
   // ── Vertical: unified sidebar rail (DESIGN_SYSTEM.md §5) ──────────────────
-  // One continuous glass rail — modes on top, utilities below a hairline —
-  // with 5s auto-retract all the way inside after mouse inactivity.
+  // One continuous glass rail — 4 visible modes on top (scrollable if >4),
+  // fixed action utilities below — with 5s auto-retract all the way inside after mouse inactivity.
   if (vertical) {
     const railAction =
-      'flex h-12 w-12 items-center justify-center rounded-2xl text-muted transition-all duration-200 hover:scale-105 hover:bg-ink/5 hover:text-ink'
+      'flex h-12 w-12 items-center justify-center rounded-2xl text-muted transition-all duration-200 hover:scale-105 hover:bg-ink/5 hover:text-ink cursor-pointer'
+
+    const allModes = [allMode, ...sortedModes]
+    const hasMoreThan4 = allModes.length > 4
+
+    const handleRailWheel = (e) => {
+      if (modesScrollRef.current) {
+        modesScrollRef.current.scrollTop += e.deltaY
+        checkModesScroll()
+      }
+    }
 
     return (
       <>
@@ -301,6 +357,7 @@ export function ModeSwitcher({ vertical = false }) {
         <div
           onMouseEnter={handleRailMouseEnter}
           onMouseLeave={handleRailMouseLeave}
+          onWheel={handleRailWheel}
           className="relative select-none"
         >
           <motion.div
@@ -312,71 +369,136 @@ export function ModeSwitcher({ vertical = false }) {
             transition={{ type: 'spring', stiffness: 320, damping: 28 }}
             className="relative flex shrink-0 flex-col items-center gap-2 rounded-[1.75rem] border border-line/60 bg-surface/80 px-2 py-3 shadow-premium-md backdrop-blur-xl transition-shadow duration-300"
           >
-            <VerticalModePill
-              key="all"
-              mode={allMode}
-              active={activeModeId === 'all'}
-              onSelect={() => selectMode('all')}
-              onEdit={() => openEdit(allMode)}
-            />
+            {/* ── Scrollable Modes Container: 4 Visible at a Time ── */}
+            <div className="relative flex flex-col items-center w-full">
+              {canScrollUp && (
+                <button
+                  type="button"
+                  onClick={() => modesScrollRef.current?.scrollBy({ top: -56, behavior: 'smooth' })}
+                  className="absolute -top-2.5 z-20 flex h-5 w-5 items-center justify-center rounded-full bg-surface-2/90 text-muted shadow-sm hover:text-ink transition-all cursor-pointer"
+                  title="Scroll up for previous modes"
+                >
+                  <ChevronUp className="h-3.5 w-3.5" />
+                </button>
+              )}
 
-            {sortedModes.map((mode) => (
-              <VerticalModePill
-                key={mode.id}
-                mode={mode}
-                active={mode.id === activeModeId}
-                onSelect={() => selectMode(mode.id)}
-                onEdit={() => openEdit(mode)}
-                onContextMenu={handleContextMenu}
-              />
-            ))}
-
-            <button onClick={openCreate} title="New mode" className={railAction}>
-              <Plus className="h-6 w-6" />
-            </button>
-
-            {/* Hairline between modes and utilities */}
-            <div className="my-1 h-[1px] w-6 bg-line/60" />
-
-            {fullscreen && (
-              <button
-                onClick={() => window.protrack?.window?.toggleFullScreen?.()}
-                title="Exit Full Screen"
-                className="flex h-10 w-10 items-center justify-center rounded-xl text-amber-400 transition-all duration-200 hover:scale-105 hover:bg-amber-500/10 hover:text-amber-500"
+              <div
+                ref={modesScrollRef}
+                onScroll={checkModesScroll}
+                className="flex flex-col items-center gap-2 overflow-y-auto no-scrollbar scroll-smooth overscroll-contain w-full py-0.5"
+                style={{
+                  maxHeight: hasMoreThan4 ? '224px' : 'none',
+                }}
               >
-                <Minimize2 className="h-6 w-6" />
+                {allModes.map((mode) => (
+                  <VerticalModePill
+                    key={mode.id}
+                    mode={mode}
+                    active={mode.id === activeModeId}
+                    onSelect={() => selectMode(mode.id)}
+                    onEdit={() => openEdit(mode)}
+                    onContextMenu={handleContextMenu}
+                    onHover={handlePillHover}
+                  />
+                ))}
+              </div>
+
+              {canScrollDown && (
+                <button
+                  type="button"
+                  onClick={() => modesScrollRef.current?.scrollBy({ top: 56, behavior: 'smooth' })}
+                  className="absolute -bottom-2 z-20 flex h-5 w-5 items-center justify-center rounded-full bg-surface-2/90 text-muted shadow-sm hover:text-ink transition-all cursor-pointer animate-pulse"
+                  title="Scroll down for more modes (4 visible at a time)"
+                >
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* ── Fixed Bottom Actions Cluster (matching user sketch) ── */}
+            <div className="flex shrink-0 flex-col items-center gap-2 w-full pt-1.5 border-t border-line/60">
+              <button onClick={openCreate} title="New mode" className={railAction}>
+                <Plus className="h-6 w-6" />
               </button>
-            )}
 
-            <button
-              onClick={toggleTheme}
-              title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
-              className={railAction}
-            >
-              {theme === 'dark' ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
-            </button>
+              {fullscreen && (
+                <button
+                  onClick={() => window.protrack?.window?.toggleFullScreen?.()}
+                  title="Exit Full Screen"
+                  className="flex h-12 w-12 items-center justify-center rounded-2xl text-amber-400 transition-all duration-200 hover:scale-105 hover:bg-amber-500/10 hover:text-amber-500 cursor-pointer"
+                >
+                  <Minimize2 className="h-6 w-6" />
+                </button>
+              )}
 
-            <button onClick={() => setSettingsOpen(true)} title="Settings" className={railAction}>
-              <Settings className="h-6 w-6" />
-            </button>
+              <button
+                onClick={toggleTheme}
+                title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+                className={railAction}
+              >
+                {theme === 'dark' ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
+              </button>
 
-            <button
-              onClick={() => setSupportOpen(true)}
-              title="Support Corner"
-              className="flex h-10 w-10 items-center justify-center rounded-xl text-rose-400 transition-all duration-200 hover:scale-105 hover:bg-rose-500/10 hover:text-rose-500"
-            >
-              <Heart className="h-6 w-6 fill-rose-400/20" />
-            </button>
+              <button onClick={() => setSettingsOpen(true)} title="Settings" className={railAction}>
+                <Settings className="h-6 w-6" />
+              </button>
 
-            <button
-              onClick={signOut}
-              title="Sign out"
-              className="flex h-10 w-10 items-center justify-center rounded-xl text-muted transition-all duration-200 hover:scale-105 hover:bg-red-500/10 hover:text-red-500"
-            >
-              <LogOut className="h-6 w-6" />
-            </button>
+              <button
+                onClick={() => setSupportOpen(true)}
+                title="Support Corner"
+                className="flex h-12 w-12 items-center justify-center rounded-2xl text-rose-400 transition-all duration-200 hover:scale-105 hover:bg-rose-500/10 hover:text-rose-500 cursor-pointer"
+              >
+                <Heart className="h-6 w-6 fill-rose-400/20" />
+              </button>
+
+              <button
+                onClick={signOut}
+                title="Sign out"
+                className="flex h-12 w-12 items-center justify-center rounded-2xl text-muted transition-all duration-200 hover:scale-105 hover:bg-red-500/10 hover:text-red-500 cursor-pointer"
+              >
+                <LogOut className="h-6 w-6" />
+              </button>
+            </div>
           </motion.div>
         </div>
+
+        {/* ── Zero-Clip Floating Mode Tooltip / Quick Edit Popover Portaled to Body ── */}
+        {typeof document !== 'undefined' && hoveredPill && createPortal(
+          <div
+            style={{
+              position: 'fixed',
+              top: hoveredPill.top,
+              left: hoveredPill.left,
+              transform: 'translateY(-50%)',
+              zIndex: 9999,
+            }}
+            onMouseEnter={() => {
+              if (hoverLeaveTimerRef.current) {
+                clearTimeout(hoverLeaveTimerRef.current)
+                hoverLeaveTimerRef.current = null
+              }
+            }}
+            onMouseLeave={() => setHoveredPill(null)}
+            className="flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-line/60 bg-surface/95 px-2.5 py-1.5 text-xs font-semibold text-ink shadow-glass backdrop-blur-md pointer-events-auto"
+          >
+            <span>{hoveredPill.mode.name}</span>
+            {hoveredPill.mode.id !== 'all' && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  openEdit(hoveredPill.mode)
+                  setHoveredPill(null)
+                }}
+                title={`Edit or delete ${hoveredPill.mode.name}`}
+                className="ml-1 flex h-5 w-5 items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-ink transition-colors cursor-pointer"
+                aria-label={`Edit ${hoveredPill.mode.name}`}
+              >
+                <Settings2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>,
+          document.body,
+        )}
 
         {sharedDialogs}
       </>

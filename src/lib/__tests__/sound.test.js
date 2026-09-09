@@ -157,6 +157,10 @@ describe('chimeForIslandKind', () => {
     ['break', 'chime'],
     ['deadline', 'error'],
     ['error', 'error'],
+    ['temple', 'temple'],
+    ['hourly', 'temple'],
+    ['alarm', 'alarm'],
+    ['reminder', 'notification'],
     ['info', 'notify'],
     ['sync-offline', 'notify'],
     ['cancelled', 'notify'],
@@ -200,13 +204,42 @@ describe('playSound', () => {
   it('drives the AudioContext for each known sound when enabled', async () => {
     const { playSound } = await loadSound()
 
-    for (const name of ['chime', 'pop', 'success', 'habit', 'notify', 'error', 'prompt']) {
+    for (const name of [
+      'chime',
+      'pop',
+      'success',
+      'habit',
+      'notify',
+      'error',
+      'prompt',
+      'temple',
+      'todo',
+      'focus',
+      'notification',
+      'alarm',
+    ]) {
       playSound(name)
     }
 
     expect(FakeAudioContext.instances).toBeGreaterThanOrEqual(1)
-    // success + habit fire 4 notes each; every sound makes at least one oscillator.
-    expect(oscillators.length).toBeGreaterThanOrEqual(7)
+    expect(oscillators.length).toBeGreaterThanOrEqual(12)
+  })
+
+  it('exports individual distinct event chime functions', async () => {
+    const mod = await loadSound()
+    expect(typeof mod.playTempleBell).toBe('function')
+    expect(typeof mod.playTodoChime).toBe('function')
+    expect(typeof mod.playFocusChime).toBe('function')
+    expect(typeof mod.playNotificationChime).toBe('function')
+    expect(typeof mod.playAlarmChime).toBe('function')
+
+    // Calling them drives the audio context
+    mod.playTempleBell()
+    mod.playTodoChime()
+    mod.playFocusChime()
+    mod.playNotificationChime()
+    mod.playAlarmChime()
+    expect(FakeAudioContext.instances).toBeGreaterThanOrEqual(1)
   })
 
   it('ignores an unknown sound name without touching audio', async () => {

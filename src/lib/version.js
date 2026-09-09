@@ -10,4 +10,6 @@
  * constant is the simplest single source for display.
  */
 export const APP_VERSION =
-  typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0'
+  typeof __APP_VERSION__ !== 'undefined' && __APP_VERSION__ !== '0.0.0'
+    ? __APP_VERSION__
+    : '2.6.0'

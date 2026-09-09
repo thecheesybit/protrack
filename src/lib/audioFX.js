@@ -6,4 +6,14 @@
  *
  * New code should import from ./sound.js directly and prefer `playSound(name)`.
  */
-export { playChime, playPop, playSuccess, playHabitChime } from './sound'
+export {
+  playChime,
+  playPop,
+  playSuccess,
+  playHabitChime,
+  playTempleBell,
+  playTodoChime,
+  playFocusChime,
+  playNotificationChime,
+  playAlarmChime,
+} from './sound'

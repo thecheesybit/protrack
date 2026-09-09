@@ -185,7 +185,6 @@ const isStoreBuild = Boolean(process.windowsStore)
 const SHORTCUTS = {
   toggleWindow: 'CommandOrControl+Shift+P',
   toggleFocus: 'CommandOrControl+Shift+Space',
-  toggleFullScreen: 'CommandOrControl+Shift+F',
   hideToTray: 'CommandOrControl+Shift+H',
   toggleMute: 'CommandOrControl+Shift+M',
 }
@@ -375,7 +374,7 @@ function createWindow() {
     show: false,
     frame: false,
     titleBarStyle: 'hidden',
-    backgroundColor: '#09090e',
+    backgroundColor: '#07080c',
     icon: ICON,
     webPreferences: {
       preload: PRELOAD,
@@ -648,9 +647,6 @@ if (!gotLock) {
     reg(SHORTCUTS.toggleFocus, () =>
       win?.webContents.send('shortcut:focus-toggle'),
     )
-    reg(SHORTCUTS.toggleFullScreen, () => {
-      if (win) win.setFullScreen(!win.isFullScreen())
-    })
     reg(SHORTCUTS.hideToTray, () => win?.hide())
     reg(SHORTCUTS.toggleMute, () =>
       win?.webContents.send('shortcut:mute'),

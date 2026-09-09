@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react'
 import {
   Settings,
   Sun,
+  Moon,
+  Sunrise,
+  Sunset,
+  Clock,
   KeyRound,
   Check,
   ExternalLink,
@@ -20,7 +24,10 @@ import {
   Loader2,
   Lock,
   Shield,
+  Play,
+  Sparkles,
 } from 'lucide-react'
+import whatsNewVideo from '@/assets/video-pack/whats-new.mp4'
 import { AnimatePresence, motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
@@ -49,7 +56,10 @@ import {
   CHRONO_SLOTS,
   CHRONO_OVERRIDE_KEY,
   CHRONO_OVERRIDE_EVENT,
+  TIMED_THEMES,
+  getThemeCategory,
   readChronoOverride,
+  setChronoOverride as setGlobalChronoOverride,
 } from '@/hooks/useChronoTheme'
 import { ensureNotificationPermission } from '@/lib/notify'
 import { soundsEnabled, setSoundsEnabled } from '@/lib/sound'
@@ -164,6 +174,7 @@ export function SettingsPanel() {
   const updateVersion = useStore((s) => s.updateVersion)
   const updateError = useStore((s) => s.updateError)
   const userDoc = useStore((s) => s.userDoc)
+  const setWhatsNewOpen = useStore((s) => s.setWhatsNewOpen)
   const [checking, setChecking] = useState(false)
   const [activeTab, setActiveTab] = useState('account')
 
@@ -204,18 +215,18 @@ export function SettingsPanel() {
   // Daily check-ins
   const [checkinsEnabled, setCheckinsEnabled] = useState(true)
 
-  // DEV-only chrono slot preview (drives useChronoTheme via localStorage)
+  // Dynamic Celestial Sky Theme (drives useChronoTheme via localStorage & event)
   const [chronoOverride, setChronoOverrideState] = useState(() => readChronoOverride())
-  const setChronoOverride = (slot) => {
-    try {
-      if (slot) localStorage.setItem(CHRONO_OVERRIDE_KEY, slot)
-      else localStorage.removeItem(CHRONO_OVERRIDE_KEY)
-    } catch {
-      /* private mode — preview just won't persist */
-    }
-    setChronoOverrideState(slot)
-    window.dispatchEvent(new Event(CHRONO_OVERRIDE_EVENT))
+  const handleSetChrono = (val) => {
+    setGlobalChronoOverride(val)
+    setChronoOverrideState(readChronoOverride())
   }
+
+  useEffect(() => {
+    const handleSync = () => setChronoOverrideState(readChronoOverride())
+    window.addEventListener(CHRONO_OVERRIDE_EVENT, handleSync)
+    return () => window.removeEventListener(CHRONO_OVERRIDE_EVENT, handleSync)
+  }, [])
 
   // Zen & Motivation
   const [zenEnabled, setZenEnabled] = useState(true)
@@ -1336,6 +1347,69 @@ export function SettingsPanel() {
                       </div>
                     </div>
 
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-xs font-bold uppercase tracking-widest text-muted flex items-center gap-2">
+                          <Sparkles className="h-3.5 w-3.5 text-accent" /> What's New Video
+                        </h4>
+                        <button
+                          type="button"
+                          onClick={() => setWhatsNewOpen(true)}
+                          className="text-xs font-semibold text-accent hover:underline flex items-center gap-1 transition-colors"
+                        >
+                          Launch full tour →
+                        </button>
+                      </div>
+                      <div
+                        onClick={() => setWhatsNewOpen(true)}
+                        className="group relative cursor-pointer overflow-hidden rounded-2xl border border-line bg-surface-2/20 shadow-glass transition-all duration-300 hover:border-accent/50 hover:shadow-glow-sm"
+                      >
+                        <div className="relative aspect-video w-full overflow-hidden bg-black/60">
+                          <video
+                            src={whatsNewVideo}
+                            muted
+                            playsInline
+                            loop
+                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+                            onMouseEnter={(e) => e.currentTarget.play().catch(() => {})}
+                            onMouseLeave={(e) => e.currentTarget.pause()}
+                          />
+                          {/* Overlay gradient & controls */}
+                          <div className="absolute inset-0 flex flex-col justify-between p-4 bg-gradient-to-t from-black/85 via-black/30 to-black/40">
+                            <div className="flex items-center justify-between">
+                              <span className="rounded-full border border-white/20 bg-black/60 px-2.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-white backdrop-blur-md">
+                                v{appInfo?.version || APP_VERSION} Update Tour
+                              </span>
+                              <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-[10px] font-medium text-white/80 backdrop-blur-sm">
+                                Hover to preview · Click for full tour
+                              </span>
+                            </div>
+
+                            <div className="flex items-end justify-between gap-4">
+                              <div>
+                                <p className="font-display text-base font-bold text-white drop-shadow">
+                                  PRO TRACK Feature Walkthrough
+                                </p>
+                                <p className="text-xs text-white/80">
+                                  Explore timetable updates, deep focus, scorecard &amp; shortcuts
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setWhatsNewOpen(true)
+                                }}
+                                className="flex items-center gap-2 rounded-xl bg-accent px-3.5 py-2 text-xs font-bold text-white shadow-glow-sm transition-all hover:scale-105 active:scale-95 hover:brightness-110"
+                              >
+                                <Play className="h-3.5 w-3.5 fill-current" /> Watch Tour
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="border-t border-line/40 pt-6">
                       <h4 className="text-xs font-bold uppercase tracking-widest text-muted mb-4 flex items-center gap-2">
                         <History className="h-4.5 w-4.5 text-accent" /> Changelog & Release Notes
@@ -1419,21 +1493,87 @@ export function SettingsPanel() {
                         <span className="font-medium">Active Theme Mode</span>
                         <span className="font-bold capitalize text-accent">{theme === 'auto' ? 'Auto (Time of Day)' : theme}</span>
                       </button>
+                    </div>
 
-                      {/* DEV-only: preview any of the 7 chrono slots without waiting
-                          for the clock. Never ships — guarded by import.meta.env.DEV. */}
+                    {/* Dynamic Celestial Atmosphere & Sky Themes */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <h4 className="text-xs font-bold uppercase tracking-widest text-muted">Celestial Atmosphere & Sky Themes</h4>
+                          <p className="text-[11px] text-muted/70 mt-0.5">
+                            Dynamic atmospheric skies with animated celestial bodies, clouds, and particle effects.
+                          </p>
+                        </div>
+                        <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-accent/15 text-accent border border-accent/20 capitalize">
+                          {!chronoOverride ? 'Auto (Clock)' : `${getThemeCategory(chronoOverride)} Sky`}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5 mt-3">
+                        {TIMED_THEMES.map((item) => {
+                          const IconComp =
+                            item.id === 'auto'
+                              ? Clock
+                              : item.id === 'morning'
+                              ? Sunrise
+                              : item.id === 'day'
+                              ? Sun
+                              : item.id === 'sunset'
+                              ? Sunset
+                              : Moon
+                          const isSelected =
+                            (!chronoOverride && item.id === 'auto') ||
+                            (chronoOverride && getThemeCategory(chronoOverride) === item.id)
+
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => handleSetChrono(item.id)}
+                              className={cn(
+                                'group relative flex flex-col items-start rounded-2xl border p-3 text-left transition-all duration-200 cursor-pointer',
+                                isSelected
+                                  ? 'border-accent bg-accent/15 shadow-glow-sm ring-1 ring-accent/30'
+                                  : 'border-line/70 bg-surface-2/30 hover:border-line hover:bg-surface-2/60',
+                              )}
+                            >
+                              <div className="flex w-full items-center justify-between mb-2">
+                                <span
+                                  className={cn(
+                                    'flex h-8 w-8 items-center justify-center rounded-xl transition-colors',
+                                    isSelected
+                                      ? 'bg-accent text-white shadow-sm'
+                                      : 'bg-surface text-muted group-hover:text-ink',
+                                  )}
+                                >
+                                  <IconComp className="h-4 w-4" />
+                                </span>
+                                {isSelected && (
+                                  <span className="flex h-2 w-2 rounded-full bg-accent animate-pulse" />
+                                )}
+                              </div>
+                              <span className="font-semibold text-xs text-ink">{item.label}</span>
+                              <span className="text-[10px] text-muted/80 leading-tight mt-0.5 line-clamp-2">
+                                {item.desc}
+                              </span>
+                            </button>
+                          )
+                        })}
+                      </div>
+
+                      {/* DEV-only: preview any of the 7 granular chrono slots */}
                       {import.meta.env.DEV && (
-                        <div className="mt-4">
-                          <label className="mb-2.5 block text-xs font-medium text-muted/80">
-                            Chrono Slot Preview (dev only)
+                        <div className="mt-4 pt-3 border-t border-line/40">
+                          <label className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-muted/60">
+                            Granular Chrono Slot (dev inspection)
                           </label>
-                          <div className="grid grid-cols-4 gap-2">
+                          <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
                             {['live', ...CHRONO_SLOTS].map((slot) => (
                               <button
                                 key={slot}
-                                onClick={() => setChronoOverride(slot === 'live' ? null : slot)}
+                                onClick={() => handleSetChrono(slot === 'live' ? 'auto' : slot)}
                                 className={cn(
-                                  'rounded-xl border py-2 text-[10px] font-bold uppercase tracking-wider transition-colors',
+                                  'rounded-lg border py-1.5 px-2 text-[9px] font-bold uppercase tracking-wider transition-colors text-center',
                                   (chronoOverride || 'live') === slot
                                     ? 'border-accent/50 bg-accent/15 text-accent shadow-glow-sm'
                                     : 'border-line text-muted hover:text-ink hover:bg-surface-2/30',

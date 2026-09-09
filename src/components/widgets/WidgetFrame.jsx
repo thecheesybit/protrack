@@ -29,6 +29,7 @@ export function WidgetFrame({
   const Icon = getIcon(widget.icon)
   const toggleWidget = useStore((s) => s.toggleWidget)
   const toggleWidgetCollapsed = useStore((s) => s.toggleWidgetCollapsed)
+  const setActiveWidgetId = useStore((s) => s.setActiveWidgetId)
   const isHero = variant === 'hero'
 
   // Collapse state is board-level (uiSlice) so BoardCanvas can auto-promote a
@@ -42,6 +43,8 @@ export function WidgetFrame({
 
   return (
     <div
+      onPointerEnter={() => setActiveWidgetId?.(widget.id)}
+      onClickCapture={() => setActiveWidgetId?.(widget.id)}
       className={cn(
         'edge-light group relative flex flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-surface/70 backdrop-blur-2xl transition-colors duration-200 hover:border-accent/40',
         isHero

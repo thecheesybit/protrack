@@ -39,9 +39,10 @@ const TASK_COLOR = '#38bdf8'
 const SESSION_COLOR = '#10b981'
 const NOTE_COLOR = '#fbbf24'
 const GCAL_COLOR = '#4285f4'
+const ALARM_COLOR = '#f43f5e'
 
 // Deterministic tie-break when two timed items share a start minute.
-const KIND_ORDER = { session: 0, slot: 1, event: 2, gcal: 3, task: 4, todo: 5, note: 6 }
+const KIND_ORDER = { alarm: 0, session: 1, slot: 2, event: 3, gcal: 4, task: 5, todo: 6, note: 7 }
 
 function toDate(value) {
   if (!value) return null
@@ -57,8 +58,9 @@ function toDate(value) {
 /** True when `value` lands on the same local calendar day as `day`. */
 function sameLocalDay(value, day) {
   const d = toDate(value)
-  if (!d) return false
-  return ymd(d) === ymd(day)
+  const target = toDate(day)
+  if (!d || !target) return false
+  return ymd(d) === ymd(target)
 }
 
 /**
@@ -91,8 +93,20 @@ function stampPast(item, nowMin) {
 
 // ── per-source normalizers ────────────────────────────────────────────────────
 
-function normalizeSlot(slot) {
+function normalizeSlot(slot, dateStr = null, sessions = []) {
   const { modeId, modeName, modeColor } = modeMeta(slot)
+  const isCompleted =
+    (Array.isArray(slot.completedDates) && dateStr && slot.completedDates.includes(dateStr)) ||
+    (Array.isArray(sessions) &&
+      sessions.some((s) => {
+        if (!s || s.completed === false) return false
+        if (s.slotId && s.slotId === slot.id) {
+          if (s.targetDate) return s.targetDate === dateStr
+          return dateStr ? sameLocalDay(s.startedAt, dateStr) : true
+        }
+        return false
+      }))
+
   return {
     id: `slot:${slot.id}`,
     kind: 'slot',
@@ -105,7 +119,7 @@ function normalizeSlot(slot) {
     modeName,
     modeColor,
     source: slot.googleEventId ? 'gcal' : 'local',
-    done: false,
+    done: Boolean(isCompleted),
     ref: slot,
   }
 }
@@ -225,6 +239,26 @@ function normalizeNote(n) {
   }
 }
 
+function normalizeAlarm(a) {
+  const [hStr, mStr] = (a.time || '00:00').split(':')
+  const startMin = (parseInt(hStr, 10) || 0) * 60 + (parseInt(mStr, 10) || 0)
+  return {
+    id: `alarm:${a.id}`,
+    kind: 'alarm',
+    startMin,
+    endMin: null,
+    title: a.label ? `Alarm: ${a.label}` : 'Alarm',
+    color: ALARM_COLOR,
+    subjectId: null,
+    modeId: null,
+    modeName: null,
+    modeColor: null,
+    source: 'alarm',
+    done: !a.enabled,
+    ref: a,
+  }
+}
+
 // ── public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -237,6 +271,7 @@ function normalizeNote(n) {
  * @param {Array}   [input.tasks]     kanban tasks; included when due on `date`
  * @param {Array}   [input.sessions]  completed focus sessions
  * @param {Array}   [input.notes]     notes carrying a `dueAt`
+ * @param {Array}   [input.alarms]    alarms with visibleOnCalendar: true
  * @param {Date}    [input.date]      the day to build (defaults to now)
  * @param {number}  [input.nowMin]    live minutes-from-midnight, for `past` stamping (today only)
  * @returns {Array} normalized items — "anytime" bucket first, then ascending by start time
@@ -249,9 +284,11 @@ export function buildDayTimeline({
   sessions = [],
   notes = [],
   gcalEvents = [],
+  alarms = [],
   date = new Date(),
   nowMin = null,
   carryForward = true,
+  includeSessions = true,
 } = {}) {
   const dow = (date.getDay() + 6) % 7 // 0 = Monday … 6 = Sunday
   const dayStr = ymd(date)
@@ -272,7 +309,9 @@ export function buildDayTimeline({
   }
 
   for (const slot of slots) {
-    if (slot && slot.id != null && isSlotOnDay(slot, dow, date)) out.push(normalizeSlot(slot))
+    if (slot && slot.id != null && isSlotOnDay(slot, dow, date)) {
+      out.push(normalizeSlot(slot, dayStr, sessions))
+    }
   }
 
   for (const evt of events) {
@@ -314,14 +353,33 @@ export function buildDayTimeline({
     }
   }
 
-  for (const s of sessions) {
-    if (!s || s.completed === false) continue
-    if (sameLocalDay(s.startedAt, date)) out.push(normalizeSession(s))
+  if (includeSessions !== false) {
+    for (const s of sessions) {
+      if (!s || s.completed === false) continue
+      // If the session was linked to a slot or todo, it is represented by that slot/todo
+      if (s.slotId || s.todoId) continue
+      if (sameLocalDay(s.startedAt, date)) out.push(normalizeSession(s))
+    }
   }
 
   for (const n of notes) {
     if (!n || n.id == null || !n.dueAt) continue
     if (sameLocalDay(n.dueAt, date)) out.push(normalizeNote(n))
+  }
+
+  for (const a of alarms) {
+    if (!a || !a.visibleOnCalendar) continue
+    let applies = false
+    if (a.repeat === 'daily') {
+      applies = true
+    } else if (a.repeat === 'weekdays') {
+      applies = dow < 5
+    } else if (a.repeat === 'once') {
+      applies = isCurrentToday || (a.createdAt && sameLocalDay(a.createdAt, date))
+    }
+    if (applies) {
+      out.push(normalizeAlarm(a))
+    }
   }
 
   const stamped = out.map((item) => stampPast(item, nowMin))

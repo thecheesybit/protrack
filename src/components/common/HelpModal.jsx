@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Command, Keyboard, MonitorSmartphone } from 'lucide-react'
+import { Command, Keyboard, MonitorSmartphone, LayoutGrid } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { isDesktop, desktopBridge } from '@/desktop/isDesktop'
 
@@ -9,15 +9,26 @@ const fmt = (acc) =>
     .replace('Command', 'Cmd')
     .replace(/\+/g, ' + ')
 
+/** Navigation shortcuts for instant access to board modules. */
+const NAVIGATION = [
+  ['T', 'Add to-do (focuses task input)'],
+  ['C', 'Open Calendar & Timetable'],
+  ['D', 'Open Deep Focus'],
+  ['N', 'Open Notes'],
+  ['S', 'Open Subjects'],
+  ['E / X', 'Open Scorecard (exams & mocks)'],
+  ['M / Double-click', 'Maximize / restore widget'],
+]
+
 /** In-app keys handled by the Dashboard keydown listener + window controls. */
 const IN_APP = [
   ['Ctrl / Cmd + K', 'Open the AI companion'],
   ['Ctrl / Cmd + T', 'Center the clock (Zen)'],
+  ['Alt + A', 'Set Alarm / Reminder (Flip Clock)'],
   ['F', 'Toggle fullscreen (when idle or already fullscreen)'],
   ['Esc', 'Close the top overlay — panel, modal, maximized widget, then fullscreen'],
-  ['Double-click a widget', 'Maximize it'],
   ['Double-click empty space', 'Quick-add (subject, to-do, timetable cell)'],
-  ['?', 'Open this shortcuts sheet'],
+  ['?', 'Toggle this shortcuts sheet (open / close)'],
 ]
 
 const WINDOW = [
@@ -37,7 +48,7 @@ function Row({ k, v }) {
 }
 
 /**
- * Keyboard & command reference. Opens from the ⌗ button top-right or the `?`
+ * Keyboard & command reference. Opens from the ? button top-right or the `?`
  * key. Global (OS-wide) shortcuts come from the Electron main process via
  * `app:info`; the rest are the in-app handlers.
  */
@@ -61,14 +72,32 @@ export function HelpModal({ open, onClose }) {
               <Command className="h-3.5 w-3.5" /> Global (works anywhere)
             </h3>
             <div className="space-y-1.5">
-              <Row k={fmt(globals.toggleWindow)} v="Show / hide the PRO TRACK window" />
-              <Row k={fmt(globals.toggleFocus)} v="Pause / resume the focus timer" />
-              <Row k={fmt(globals.toggleFullScreen)} v="Toggle fullscreen" />
-              <Row k={fmt(globals.hideToTray)} v="Hide to the tray" />
-              <Row k={fmt(globals.toggleMute)} v="Mute / unmute sounds" />
+              {globals.toggleWindow && (
+                <Row k={fmt(globals.toggleWindow)} v="Show / hide the PRO TRACK window" />
+              )}
+              {globals.toggleFocus && (
+                <Row k={fmt(globals.toggleFocus)} v="Pause / resume the focus timer" />
+              )}
+              {globals.hideToTray && (
+                <Row k={fmt(globals.hideToTray)} v="Hide to the tray" />
+              )}
+              {globals.toggleMute && (
+                <Row k={fmt(globals.toggleMute)} v="Mute / unmute sounds" />
+              )}
             </div>
           </section>
         )}
+
+        <section>
+          <h3 className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">
+            <LayoutGrid className="h-3.5 w-3.5" /> Quick Navigation
+          </h3>
+          <div className="space-y-1.5">
+            {NAVIGATION.map(([k, v]) => (
+              <Row key={k} k={k} v={v} />
+            ))}
+          </div>
+        </section>
 
         <section>
           <h3 className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">
@@ -95,7 +124,7 @@ export function HelpModal({ open, onClose }) {
         )}
 
         <p className="pt-1 text-center text-[11px] text-muted/70">
-          More in Settings → Shortcuts.
+          Press <kbd className="rounded border border-line/70 bg-surface px-1.5 py-0.5 font-mono text-[10px] text-ink">?</kbd> or <kbd className="rounded border border-line/70 bg-surface px-1.5 py-0.5 font-mono text-[10px] text-ink">Esc</kbd> anytime to close.
         </p>
       </div>
     </Modal>

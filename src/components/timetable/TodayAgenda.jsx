@@ -13,6 +13,7 @@ import {
   SquareKanban,
   CalendarClock,
   ArrowRight,
+  Bell,
 } from 'lucide-react'
 import { DAYS, DAY_FULL, todayDow, minutesToLabel, durationLabel } from '@/lib/time'
 import { getWeekDate, ymd } from '@/lib/dates'
@@ -20,12 +21,15 @@ import { classifyDeadline } from '@/lib/deadlines'
 import { useNowMinutes } from '@/hooks/useNowMinutes'
 import { useStore } from '@/store/useStore'
 import { buildDayTimeline, summarizeDay } from '@/lib/dayAgenda'
+import { getAlarms, toggleAlarm, deleteAlarm, ALARMS_CHANGED_EVENT } from '@/services/alarmService'
+import { DayGrove } from '@/components/focus/CalendarForest'
 import { cn } from '@/utils/cn'
 
 // -------------------------------------------------------------------
 // Per-kind presentation. Icons are named Lucide imports (never `* as`).
 // -------------------------------------------------------------------
 const KIND_UI = {
+  alarm: { Icon: Bell, noun: 'Alarm' },
   slot: { Icon: GraduationCap, noun: 'Session' },
   event: { Icon: Sparkles, noun: 'Event' },
   todo: { Icon: Flag, noun: 'To-do' },
@@ -66,6 +70,7 @@ export function TodayAgenda({
   onOpenSlot,
   onAdd,
   onSelect,
+  onToggleSlot,
   onToggleTask,
   onDeleteTask,
   onDeleteEvent,
@@ -115,6 +120,14 @@ export function TodayAgenda({
   const selectedDateStr = useMemo(() => ymd(selectedDate), [selectedDate])
   const isSelectedToday = selectedDay === today && weekOffset === 0
 
+  const [alarms, setAlarms] = useState(() => getAlarms())
+
+  useEffect(() => {
+    const sync = () => setAlarms(getAlarms())
+    window.addEventListener(ALARMS_CHANGED_EVENT, sync)
+    return () => window.removeEventListener(ALARMS_CHANGED_EVENT, sync)
+  }, [])
+
   // Merged, sorted timeline for the selected day.
   const timeline = useMemo(
     () =>
@@ -126,10 +139,12 @@ export function TodayAgenda({
         sessions,
         notes: noteDeadlines,
         gcalEvents,
+        alarms,
         date: selectedDate,
         nowMin: isSelectedToday ? nowMin : null,
+        includeSessions: false,
       }),
-    [slots, events, allTodos, tasks, sessions, noteDeadlines, gcalEvents, selectedDate, isSelectedToday, nowMin],
+    [slots, events, allTodos, tasks, sessions, noteDeadlines, gcalEvents, alarms, selectedDate, isSelectedToday, nowMin],
   )
 
   const anytime = useMemo(() => timeline.filter((i) => i.startMin == null), [timeline])
@@ -222,18 +237,23 @@ export function TodayAgenda({
       if (item.ref?.htmlLink) window.open(item.ref.htmlLink, '_blank', 'noopener')
       return
     }
-    if (item.kind === 'slot') return onOpenSlot?.(item.ref)
+    if (item.kind === 'alarm') {
+      useStore.getState().setAlarmModalOpen(true)
+      return
+    }
+    if (item.kind === 'slot') return onOpenSlot?.(item.ref, selectedDateStr)
     // event / todo / task → focus on it via the synthetic-slot path
     onOpenSlot?.({
       label: item.title,
       startMin: item.startMin ?? nowMin,
       endMin: item.endMin ?? Math.min((item.startMin ?? nowMin) + 30, 24 * 60),
       color: item.color,
-    })
+    }, selectedDateStr)
   }
 
   const removeItem = (item) => {
-    if (item.kind === 'event') onDeleteEvent?.(item.ref.id)
+    if (item.kind === 'alarm') deleteAlarm(item.ref.id)
+    else if (item.kind === 'event') onDeleteEvent?.(item.ref.id)
     else if (item.kind === 'todo' || item.kind === 'task') onDeleteTask?.(item.ref.id)
   }
 
@@ -353,12 +373,16 @@ export function TodayAgenda({
                     modeDot={isAllScopes ? item.modeColor || modeColorById[item.modeId] : null}
                     onOpen={() => openItem(item)}
                     onToggle={
-                      item.kind === 'todo' || item.kind === 'task'
-                        ? () => onToggleTask?.(item.ref)
-                        : null
+                      item.kind === 'slot'
+                        ? () => onToggleSlot?.(item.ref, selectedDateStr)
+                        : item.kind === 'alarm'
+                          ? () => toggleAlarm(item.ref.id)
+                          : item.kind === 'todo' || item.kind === 'task'
+                            ? () => onToggleTask?.(item.ref)
+                            : null
                     }
                     onDelete={
-                      item.kind === 'event' || item.kind === 'todo' || item.kind === 'task'
+                      item.kind === 'event' || item.kind === 'todo' || item.kind === 'task' || item.kind === 'alarm'
                         ? () => removeItem(item)
                         : null
                     }
@@ -395,12 +419,16 @@ export function TodayAgenda({
                         modeDot={isAllScopes ? item.modeColor || modeColorById[item.modeId] : null}
                         onOpen={() => openItem(item)}
                         onToggle={
-                          item.kind === 'todo' || item.kind === 'task'
-                            ? () => onToggleTask?.(item.ref)
-                            : null
+                          item.kind === 'slot'
+                            ? () => onToggleSlot?.(item.ref, selectedDateStr)
+                            : item.kind === 'alarm'
+                              ? () => toggleAlarm(item.ref.id)
+                              : item.kind === 'todo' || item.kind === 'task'
+                                ? () => onToggleTask?.(item.ref)
+                                : null
                         }
                         onDelete={
-                          item.kind === 'event' || item.kind === 'todo' || item.kind === 'task'
+                          item.kind === 'event' || item.kind === 'todo' || item.kind === 'task' || item.kind === 'alarm'
                             ? () => removeItem(item)
                             : null
                         }
@@ -438,6 +466,15 @@ export function TodayAgenda({
               )}
             </div>
           )}
+
+          {/* ── Day Grove baseline: planted focus foliage for this day ── */}
+          <DayGrove
+            sessions={sessions}
+            dateStr={selectedDateStr}
+            dayIndex={selectedDay}
+            isToday={isSelectedToday}
+            className="relative inset-auto w-full mt-auto pt-4"
+          />
         </div>
       </div>
 

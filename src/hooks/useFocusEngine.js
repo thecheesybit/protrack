@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
 import { playChime, playEventSound, MultiTrackMixer } from '@/lib/audioEngine'
@@ -6,6 +6,8 @@ import { notify, ensureNotificationPermission } from '@/lib/notify'
 import { logFocusSession } from '@/services/focusService'
 import { addLedgerEntry } from '@/services/ledgerService'
 import { updateTodo } from '@/services/todoService'
+import { toggleSlotCompletion } from '@/services/timetableService'
+import { ymd } from '@/lib/dates'
 
 /**
  * Mounted once (in Dashboard). Owns the 1s tick interval, the ambient sound
@@ -61,7 +63,7 @@ export function useFocusEngine() {
     }
   }, [focusLocked])
 
-  const complete = async () => {
+  const complete = useCallback(async (overrideElapsedSec = null) => {
     if (completingRef.current) return
     completingRef.current = true
     const st = useStore.getState()
@@ -69,13 +71,20 @@ export function useFocusEngine() {
     if (!st.muted) playChime()
 
     if (st.phase === 'focus') {
-      const durationMin = Math.max(1, Math.round((st.phaseTotalSec || st.focusMin * 60) / 60))
+      const elapsedSec = overrideElapsedSec != null
+        ? overrideElapsedSec
+        : Math.max(0, (st.phaseTotalSec || 0) - (st.secondsLeft || 0))
+      const durationMin = Math.max(1, Math.round(elapsedSec / 60))
+      const plantType = durationMin < 10 ? 'flower' : durationMin <= 15 ? 'shrub' : 'tree'
+      const plantLabel = plantType === 'flower' ? 'flower' : plantType === 'shrub' ? 'shrub' : 'tree'
+      const plantEmoji = plantType === 'flower' ? '🌸' : plantType === 'shrub' ? '🌿' : '🌲'
+
       st.bumpCompleted()
-      notify('Focus complete! 🌲', `Congratulations! You completed your ${durationMin}-minute session.`)
+      notify(`Focus complete! ${plantEmoji}`, `Congratulations! You completed your ${durationMin}-minute session.`)
       st.pushIsland({
         kind: 'success',
         title: '🎉 Focus session complete!',
-        detail: `Planted a tree on today's calendar! (${durationMin} min)`,
+        detail: `Planted a ${plantLabel} on today's calendar! (${durationMin} min)`,
         duration: 5000,
       })
 
@@ -83,6 +92,7 @@ export function useFocusEngine() {
       useStore.setState({
         congratulations: {
           durationMin,
+          plantType,
           label: st.session?.label || 'Deep Focus',
           timestamp: Date.now(),
         },
@@ -98,7 +108,12 @@ export function useFocusEngine() {
         await logFocusSession(uid, {
           modeId: resolvedModeId,
           subjectId: st.session?.subjectId || null,
+          slotId: st.session?.slotId || null,
+          targetDate: st.session?.targetDate || null,
+          label: st.session?.label || 'Deep focus',
+          color: st.session?.color || null,
           durationMin,
+          plantType,
           startedAt: st.startedAt ? new Date(st.startedAt) : new Date(),
           hourOfDay: (st.startedAt ? new Date(st.startedAt) : new Date()).getHours(),
         })
@@ -108,6 +123,12 @@ export function useFocusEngine() {
           detail: st.session?.label || 'Deep focus',
           modeId: resolvedModeId,
         })
+        if (st.session?.slotId) {
+          const targetDate = st.session.targetDate || ymd()
+          toggleSlotCompletion(uid, resolvedModeId, st.session.slotId, targetDate, true).catch((err) =>
+            console.error('[focus] slot mark-done failed', err),
+          )
+        }
         if (st.session?.todoId) {
           updateTodo(uid, st.session.todoId, { done: true }).catch((err) =>
             console.error('[focus] todo mark-done failed', err),
@@ -117,7 +138,7 @@ export function useFocusEngine() {
         console.error('[focus] failed to log session', err)
       }
 
-      // Automatically end session and return to dashboard with newly planted tree
+      // Automatically end session and return to dashboard with newly planted foliage
       st.endToIdle()
       window.protrack?.window?.setFullScreen?.(false)
     } else {
@@ -125,13 +146,21 @@ export function useFocusEngine() {
       st.pushIsland({
         kind: 'focus',
         title: 'Break over',
-        detail: 'Ready for another deep focus session?',
+        detail: 'Ready for another deep session?',
         duration: 4500,
       })
       st.endToIdle()
     }
     completingRef.current = false
-  }
+  }, [user])
+
+  // Expose completeFocus on store so UI can trigger completion & planting
+  useEffect(() => {
+    useStore.setState({ completeFocus: complete })
+    return () => {
+      useStore.setState({ completeFocus: null })
+    }
+  }, [complete])
 
   // Tick loop — restarts whenever status flips to running.
   useEffect(() => {

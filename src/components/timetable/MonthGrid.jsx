@@ -61,6 +61,7 @@ export function MonthGrid({
         gcalEvents,
         date: d,
         carryForward: false,
+        includeSessions: false,
       })
       cells.push({
         date: d,

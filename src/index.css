@@ -365,26 +365,203 @@ input, textarea, select, button {
   }
 }
 
-/* ── Ambient space objects (SpaceObjects.jsx) ──────────────────────────────
-   Each meteor/drifter is spawned by JS with randomized start position, target
-   (--mx/--my), direction and duration, then removed on animationend — so no
-   two passes share a spot, interval, or heading. */
+/* ── Ambient celestial & space objects (SpaceObjects, DaySkyObjects, etc.) ── */
 @keyframes shooting-star-once {
   0% { transform: translate(0, 0); opacity: 0; }
   8% { opacity: 1; }
   100% { transform: translate(var(--mx), var(--my)); opacity: 0; }
 }
 @keyframes drift-ltr {
-  0% { transform: translateX(-14vw); opacity: 0; }
+  0% { transform: translateX(-14vw) translateY(0); opacity: 0; }
   14% { opacity: var(--drift-op, 0.5); }
   86% { opacity: var(--drift-op, 0.5); }
-  100% { transform: translateX(114vw); opacity: 0; }
+  100% { transform: translateX(114vw) translateY(var(--drift-y, 0px)); opacity: 0; }
 }
 @keyframes drift-rtl {
-  0% { transform: translateX(114vw) scaleX(-1); opacity: 0; }
+  0% { transform: translateX(114vw) translateY(0) scaleX(-1); opacity: 0; }
   14% { opacity: var(--drift-op, 0.5); }
   86% { opacity: var(--drift-op, 0.5); }
-  100% { transform: translateX(-14vw) scaleX(-1); opacity: 0; }
+  100% { transform: translateX(-14vw) translateY(var(--drift-y, 0px)) scaleX(-1); opacity: 0; }
+}
+@keyframes asteroid-tumble {
+  0% { transform: rotate(0deg); }
+  50% { transform: rotate(180deg) scale(1.06); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes beacon-blink {
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 6px #ef4444); }
+  45% { opacity: 1; }
+  50% { opacity: 0.15; filter: none; }
+  90% { opacity: 0.15; filter: none; }
+  95% { opacity: 1; filter: drop-shadow(0 0 6px #ef4444); }
+}
+@keyframes sun-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.06); opacity: 1; }
+}
+@keyframes sun-ray-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes cloud-drift-slow {
+  0% { transform: translateX(-30vw); }
+  100% { transform: translateX(125vw); }
+}
+@keyframes cloud-drift-mid {
+  0% { transform: translateX(-25vw); }
+  100% { transform: translateX(120vw); }
+}
+@keyframes rain-streak {
+  0% { transform: translate(0, -60px); opacity: 0; }
+  15% { opacity: 0.65; }
+  85% { opacity: 0.65; }
+  100% { transform: translate(-35px, 105vh); opacity: 0; }
+}
+@keyframes bird-flap {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.65) translateY(1px); }
+}
+@keyframes bird-glide-across {
+  0% { transform: translateX(-15vw) translateY(0); opacity: 0; }
+  10% { opacity: 0.7; }
+  90% { opacity: 0.7; }
+  100% { transform: translateX(115vw) translateY(-12vh); opacity: 0; }
+}
+@keyframes god-ray-shimmer {
+  0%, 100% { opacity: 0.25; transform: rotate(-25deg) scaleY(1); }
+  50% { opacity: 0.45; transform: rotate(-23deg) scaleY(1.08); }
+}
+@keyframes morning-bird-soar {
+  0% { transform: translateX(-10vw) translateY(10vh) scale(0.7); opacity: 0; }
+  15% { opacity: 0.65; }
+  85% { opacity: 0.65; }
+  100% { transform: translateX(110vw) translateY(-25vh) scale(1.1); opacity: 0; }
+}
+@keyframes dew-sparkle-rise {
+  0% { transform: translateY(0) scale(0.8); opacity: 0; }
+  25% { opacity: 0.7; }
+  75% { opacity: 0.5; }
+  100% { transform: translateY(-40px) scale(1.1); opacity: 0; }
+}
+@keyframes evening-star-glint {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.25); opacity: 1; filter: drop-shadow(0 0 10px rgba(254, 240, 138, 0.9)); }
+}
+@keyframes solar-halo-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.15; }
+  50% { transform: scale(1.04); opacity: 0.25; }
+}
+
+/* ── Realistic Wildlife & Organic Nature Animations ── */
+@keyframes wing-flap-left {
+  0%, 100% { transform: scaleX(1) rotate(0deg); }
+  50% { transform: scaleX(0.16) rotate(-14deg); }
+}
+@keyframes wing-flap-right {
+  0%, 100% { transform: scaleX(1) rotate(0deg); }
+  50% { transform: scaleX(0.16) rotate(14deg); }
+}
+@keyframes butterfly-flight-path {
+  0% { transform: translateX(-10vw) translateY(0) rotate(2deg); opacity: 0; }
+  8% { opacity: 0.85; }
+  25% { transform: translateX(20vw) translateY(-6vh) rotate(-5deg); }
+  50% { transform: translateX(50vw) translateY(4vh) rotate(4deg); }
+  75% { transform: translateX(80vw) translateY(-5vh) rotate(-3deg); }
+  92% { opacity: 0.85; }
+  100% { transform: translateX(112vw) translateY(2vh) rotate(2deg); opacity: 0; }
+}
+@keyframes butterfly-fly-ltr {
+  0% { transform: translateX(-8vw) translateY(0) rotate(3deg); opacity: 0; }
+  6% { opacity: 0.9; }
+  25% { transform: translateX(25vw) translateY(calc(var(--drift-y, 0px) * 0.3 - 4vh)) rotate(-6deg); }
+  50% { transform: translateX(50vw) translateY(calc(var(--drift-y, 0px) * 0.6 + 3vh)) rotate(4deg); }
+  75% { transform: translateX(75vw) translateY(calc(var(--drift-y, 0px) * 0.85 - 3vh)) rotate(-4deg); }
+  94% { opacity: 0.9; }
+  100% { transform: translateX(108vw) translateY(var(--drift-y, 0px)) rotate(2deg); opacity: 0; }
+}
+@keyframes butterfly-fly-rtl {
+  0% { transform: translateX(108vw) translateY(0) scaleX(-1) rotate(3deg); opacity: 0; }
+  6% { opacity: 0.9; }
+  25% { transform: translateX(75vw) translateY(calc(var(--drift-y, 0px) * 0.3 - 4vh)) scaleX(-1) rotate(-6deg); }
+  50% { transform: translateX(50vw) translateY(calc(var(--drift-y, 0px) * 0.6 + 3vh)) scaleX(-1) rotate(4deg); }
+  75% { transform: translateX(25vw) translateY(calc(var(--drift-y, 0px) * 0.85 - 3vh)) scaleX(-1) rotate(-4deg); }
+  94% { opacity: 0.9; }
+  100% { transform: translateX(-8vw) translateY(var(--drift-y, 0px)) scaleX(-1) rotate(2deg); opacity: 0; }
+}
+@keyframes firefly-wander {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(14px, -18px); }
+  50% { transform: translate(-10px, -28px); }
+  75% { transform: translate(18px, -12px); }
+}
+@keyframes firefly-glow {
+  0%, 100% { opacity: 0.15; transform: scale(0.85); filter: drop-shadow(0 0 2px rgba(250, 204, 21, 0.4)); }
+  50% { opacity: 0.95; transform: scale(1.2); filter: drop-shadow(0 0 8px rgba(234, 179, 8, 0.95)) drop-shadow(0 0 16px rgba(163, 230, 53, 0.6)); }
+}
+@keyframes dandelion-drift-ltr {
+  0% { transform: translateX(-8vw) translateY(0) rotate(0deg); opacity: 0; }
+  15% { opacity: 0.6; }
+  50% { transform: translateX(50vw) translateY(calc(var(--drift-y, 0px) * 0.5 - 4vh)) rotate(90deg); }
+  85% { opacity: 0.6; }
+  100% { transform: translateX(108vw) translateY(var(--drift-y, -12vh)) rotate(180deg); opacity: 0; }
+}
+@keyframes dandelion-drift-rtl {
+  0% { transform: translateX(108vw) translateY(0) scaleX(-1) rotate(0deg); opacity: 0; }
+  15% { opacity: 0.6; }
+  50% { transform: translateX(50vw) translateY(calc(var(--drift-y, 0px) * 0.5 - 4vh)) scaleX(-1) rotate(-90deg); }
+  85% { opacity: 0.6; }
+  100% { transform: translateX(-8vw) translateY(var(--drift-y, -12vh)) scaleX(-1) rotate(-180deg); opacity: 0; }
+}
+@keyframes thermal-hawk-soar {
+  0% { transform: translateX(-15vw) translateY(0) scale(0.65) rotate(4deg); opacity: 0; }
+  12% { opacity: 0.55; }
+  35% { transform: translateX(25vw) translateY(-4vh) scale(0.72) rotate(-3deg); }
+  65% { transform: translateX(65vw) translateY(3vh) scale(0.68) rotate(5deg); }
+  88% { opacity: 0.55; }
+  100% { transform: translateX(115vw) translateY(-6vh) scale(0.65) rotate(-2deg); opacity: 0; }
+}
+@keyframes hawk-soar-ltr {
+  0% { transform: translateX(-12vw) translateY(0) scale(0.65) rotate(4deg); opacity: 0; }
+  10% { opacity: 0.55; }
+  35% { transform: translateX(30vw) translateY(calc(var(--drift-y, 0px) * 0.4 - 3vh)) scale(0.72) rotate(-3deg); }
+  70% { transform: translateX(70vw) translateY(calc(var(--drift-y, 0px) * 0.8 + 2vh)) scale(0.68) rotate(4deg); }
+  90% { opacity: 0.55; }
+  100% { transform: translateX(112vw) translateY(var(--drift-y, 0px)) scale(0.65) rotate(-2deg); opacity: 0; }
+}
+@keyframes hawk-soar-rtl {
+  0% { transform: translateX(112vw) translateY(0) scaleX(-1) scale(0.65) rotate(4deg); opacity: 0; }
+  10% { opacity: 0.55; }
+  35% { transform: translateX(70vw) translateY(calc(var(--drift-y, 0px) * 0.4 - 3vh)) scaleX(-1) scale(0.72) rotate(-3deg); }
+  70% { transform: translateX(30vw) translateY(calc(var(--drift-y, 0px) * 0.8 + 2vh)) scaleX(-1) scale(0.68) rotate(4deg); }
+  90% { opacity: 0.55; }
+  100% { transform: translateX(-12vw) translateY(var(--drift-y, 0px)) scaleX(-1) scale(0.65) rotate(-2deg); opacity: 0; }
+}
+@keyframes bird-fly-ltr {
+  0% { transform: translateX(-12vw) translateY(0); opacity: 0; }
+  12% { opacity: 0.65; }
+  88% { opacity: 0.65; }
+  100% { transform: translateX(112vw) translateY(var(--drift-y, -15vh)); opacity: 0; }
+}
+@keyframes bird-fly-rtl {
+  0% { transform: translateX(112vw) translateY(0) scaleX(-1); opacity: 0; }
+  12% { opacity: 0.65; }
+  88% { opacity: 0.65; }
+  100% { transform: translateX(-12vw) translateY(var(--drift-y, -15vh)) scaleX(-1); opacity: 0; }
+}
+@keyframes flora-sway {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(0.9deg) translateY(-0.5px); }
+  75% { transform: rotate(-0.9deg) translateY(0.5px); }
+}
+
+.no-scrollbar::-webkit-scrollbar,
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar,
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

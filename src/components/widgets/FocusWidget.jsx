@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import toast from 'react-hot-toast'
 import { motion } from 'framer-motion'
 import { Play, Pause, RotateCcw, Flame, Clock, TreePine, Sprout, PictureInPicture2 } from 'lucide-react'
@@ -6,7 +6,7 @@ import { useStore } from '@/store/useStore'
 import { WidgetFrame } from './WidgetFrame'
 import { MonthlyForest } from '@/components/focus/MonthlyForest'
 import { FocusSetup } from '@/components/focus/FocusSetup'
-import { SpriteTree } from '@/components/focus/ForestSprites'
+import { SpriteTree, SpriteFoliage, formatFloraBreakdown } from '@/components/focus/ForestSprites'
 import { useFocusSessions } from '@/hooks/useFocusSessions'
 import { cn } from '@/utils/cn'
 import { useAuth } from '@/hooks/useAuth'
@@ -141,6 +141,7 @@ export function FocusWidget({ widget, variant }) {
   const pause = useStore((s) => s.pause)
   const resume = useStore((s) => s.resume)
   const reset = useStore((s) => s.reset)
+  const completeFocus = useStore((s) => s.completeFocus)
   const setVolume = useStore((s) => s.adjustTrackVolume)
   const toggleMute = useStore((s) => s.toggleMute)
 
@@ -157,6 +158,14 @@ export function FocusWidget({ widget, variant }) {
   const [motivation] = useState(
     () => MOTIVATION_LINES[Math.floor(Math.random() * MOTIVATION_LINES.length)],
   )
+
+  const elapsedSec = Math.max(0, (phaseTotalSec || 0) - (secondsLeft || 0))
+  const elapsedMin = Math.max(0, Math.floor(elapsedSec / 60))
+  const earlyPlantType = elapsedMin < 10 ? 'flower' : elapsedMin <= 15 ? 'shrub' : 'tree'
+
+  const floraSummary = useMemo(() => {
+    return formatFloraBreakdown(sessions)
+  }, [sessions])
 
   const [bgImage, setBgImage] = useState(() => {
     const idx = Math.floor(Math.random() * FOCUS_IMAGES.length)
@@ -303,7 +312,7 @@ export function FocusWidget({ widget, variant }) {
     else resume()
   }
 
-  const subtitle = `${stats?.currentStreak || 0}-day streak · ${stats?.treesGrown || 0} trees`
+  const subtitle = `${stats?.currentStreak || 0}-day streak · ${floraSummary}`
 
   const pipHeaderAction = !isIdle ? (
     <button
@@ -433,7 +442,7 @@ export function FocusWidget({ widget, variant }) {
             <div className="mb-4 grid grid-cols-3 gap-2">
               <GlassStat icon={<Flame className="h-4 w-4 text-amber-400" />} label="Streak" value={`${stats?.currentStreak || 0}d`} />
               <GlassStat icon={<Clock className="h-4 w-4 text-sky-400" />} label="Total" value={`${Math.round((stats?.totalFocusMin || 0) / 60)}h`} />
-              <GlassStat icon={<TreePine className="h-4 w-4 text-emerald-400" />} label="Trees" value={stats?.treesGrown || 0} />
+              <GlassStat icon={<TreePine className="h-4 w-4 text-emerald-400" />} label="Forest" value={floraSummary} />
             </div>
 
             {/* This month's forest — one tree per completed session */}
@@ -441,7 +450,7 @@ export function FocusWidget({ widget, variant }) {
               <Sprout className="h-4 w-4 text-emerald-400" />
               <span className="text-xs font-semibold text-white/70">Your Forest</span>
               <span className="ml-auto rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-400">
-                {stats?.treesGrown || 0} all-time
+                {floraSummary}
               </span>
             </div>
             <MonthlyForest sessions={sessions} />
@@ -545,7 +554,7 @@ export function FocusWidget({ widget, variant }) {
             <span className="text-white/20">·</span>
             <span className="flex items-center gap-1 text-xs text-white/60">
               <TreePine className="h-3 w-3 text-emerald-400" />
-              {stats?.treesGrown || 0} trees
+              {floraSummary}
             </span>
           </div>
          </div>
@@ -564,30 +573,55 @@ export function FocusWidget({ widget, variant }) {
             <motion.span
               animate={{ rotate: [-5, 5, -5, 0] }}
               transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 1 }}
-              className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/10 text-amber-500"
+              className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500"
             >
-              <TreePine className="h-8 w-8" />
+              <SpriteFoliage
+                type={earlyPlantType}
+                height={earlyPlantType === 'flower' ? 38 : earlyPlantType === 'shrub' ? 44 : 50}
+              />
             </motion.span>
-            <h3 className="mb-2 text-lg font-bold text-ink">A tree is planting!</h3>
+            <h3 className="mb-2 text-lg font-bold text-ink">
+              {elapsedMin >= 1
+                ? `A ${earlyPlantType} is growing!`
+                : 'A plant takes root!'}
+            </h3>
             <p className="mb-5 text-sm text-muted">
-              Urging you to stay! If you abandon this deep focus session, your plant will die.
+              {elapsedMin >= 1
+                ? `You've focused for ${elapsedMin} min! You can finish now to plant a ${earlyPlantType} on today's calendar, or keep going.`
+                : 'Urging you to stay! If you abandon this deep focus session, your plant will die.'}
             </p>
-            <div className="mb-4 text-xs font-semibold text-amber-500">
-              Attempt {exitAttempts} of 2 warning pushes.
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowExitConfirm(false)}
-                className="flex-1 rounded-2xl bg-accent py-2.5 font-semibold text-white transition-transform hover:scale-[1.02] active:scale-95"
-              >
-                Keep Focus
-              </button>
-              <button
-                onClick={handleReset}
-                className="rounded-2xl border border-line px-4 py-2.5 text-sm font-semibold text-muted hover:text-ink"
-              >
-                Quit anyway
-              </button>
+            {elapsedMin < 1 && (
+              <div className="mb-4 text-xs font-semibold text-amber-500">
+                Attempt {exitAttempts} of 2 warning pushes.
+              </div>
+            )}
+            <div className="flex flex-col gap-2.5">
+              {elapsedMin >= 1 && (
+                <button
+                  onClick={() => {
+                    setShowExitConfirm(false)
+                    setExitAttempts(0)
+                    completeFocus?.(elapsedSec)
+                  }}
+                  className="w-full rounded-2xl py-2.5 font-semibold text-white transition-transform hover:scale-[1.02] active:scale-95 shadow-md bg-emerald-600 hover:bg-emerald-500"
+                >
+                  Finish &amp; Plant ({elapsedMin}m {earlyPlantType})
+                </button>
+              )}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowExitConfirm(false)}
+                  className="flex-1 rounded-2xl bg-accent py-2.5 font-semibold text-white transition-transform hover:scale-[1.02] active:scale-95"
+                >
+                  Keep Focus
+                </button>
+                <button
+                  onClick={handleReset}
+                  className="rounded-2xl border border-line px-4 py-2.5 text-sm font-semibold text-muted hover:text-rose-400"
+                >
+                  {elapsedMin >= 1 ? 'Abandon (wither)' : 'Quit anyway'}
+                </button>
+              </div>
             </div>
           </motion.div>
         </div>

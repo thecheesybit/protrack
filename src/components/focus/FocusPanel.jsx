@@ -19,7 +19,10 @@ export function FocusPanel() {
       label: ctx.title,
       color: ctx.color,
       subjectId: ctx.subjectId || null,
-      modeId: activeModeId,
+      slotId: ctx.slotId || null,
+      targetDate: ctx.targetDate || null,
+      todoId: ctx.todoId || null,
+      modeId: ctx.modeId || activeModeId,
       durationMin: ctx.durationMin,
     })
     maximizeWidget('focus')

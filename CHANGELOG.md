@@ -2,11 +2,41 @@
 
 ## v2.6.0 — 2026-09-09
 
-- **Timetable** now runs a full day, 6 AM to 6 AM — the clock line, progress and adding sessions all keep working past midnight.
-- **Deep Focus** — full timer options in the small widget, a month-by-month forest view, and a tidier pop-out timer.
-- **Exam scorecards** read a pasted SmartKeeda full-length mock on their own, section by section.
-- **Dashboard** — minimise a card on the right and the next one fills the space.
-- Assorted fixes and polish.
+### ⏰ Phone Alarm Clock & Resonant Hourly Chime
+- **Tactile 3D Alarm Plunger on Flip Clock**: Added a mechanical, physical plunger button positioned directly below the Flip Clock chassis with realistic spring depression physics and tactile pop sound. Toggleable via `Alt+A` or direct click.
+- **Continuous Smartphone Marimba Ringtone**: Procedurally synthesized multi-bar upbeat marimba melody with dual-frequency harmonic overtones and bassline (`E3`, `A3`, `B3`) looping continuously until turned off or snoozed.
+- **Interactive Desktop OS Notification**: High-priority native notification pinned with `requireInteraction: true` that prompts "Click to turn off alarm", instantly restoring and focusing the app window when clicked.
+- **Full-Screen Phone Alarm Clock Ringing HUD**: Immersive overlay with vibrating bell shockwaves, live real-time digital clock, bold alarm label, giant tactile **TURN OFF ALARM** button, and **Snooze (+5m)** button. Supports one-key dismissal via `Space`, `Enter`, or `Escape`.
+- **Temple Bell Hourly Chime**: Resonant dual-tone gong chime ringing automatically on the hour (`:00`) to keep users mindful of time without opening the window.
+
+### 🌌 Aesthetic Obsidian Aurora Boot Canvas
+- **Video & Bloat Removal**: Completely eliminated heavy background videos and clashing white-background GIFs from the loading screen, saving ~3 MB from the initial boot bundle.
+- **Signature Cosmic Atmosphere**: Grounded in ProTrack's authentic obsidian canvas (`#07080c`) with 3 shifting aurora blooms (`animate-aurora`), dotted blueprint grid (`bg-grid`), and a 90-star deterministic starfield matching `AuroraBackground`.
+- **Celestial Gyroscope Emblem**: Dual counter-revolving orbital rings carrying glowing starlight nodes (`#818cf8` and `#c084fc`) surrounding a frosted glass shield with the floating `a9.png` brand mark.
+- **Seamless Window Header**: Seamless full-screen alignment (`fixed inset-0 z-40`) behind frameless desktop titlebar controls, removing all color seams. Centered brand heading with adjacent version pill (`v2.6.0`) and scaled creator attribution ("Crafted with obsession by AYUSH KUMAR").
+
+### 🚀 What's New Video Tour
+- **First-Boot Post-Update Showcase**: Automatic focused pop-up on restart after updates featuring an optimized, silent video preview of new capabilities, smoothly transitioning to release highlights and a thank-you screen. Launchable on demand from **Settings → Updates**.
+
+### ⌨️ Global Shortcuts & Ergonomics
+- **Instant Access Shortcuts**: Added one-key shortcuts across the app:
+  - `Alt+T` / `T`: Quick add to-do pre-focused on Backlog.
+  - `Alt+S` / `S`: Open Subjects manager.
+  - `Alt+N` / `N`: Open Notes & quick capture.
+  - `Alt+F` / `F`: Launch Deep Focus session.
+  - `Alt+C` / `C`: Switch to Timetable / Calendar.
+  - `Alt+E` / `E`: Open Exam Scorecards.
+  - `Alt+A` / `A`: Open Alarm scheduler.
+- **Sidebar Tooltip Alignment**: Portaled floating icon tooltips directly to `document.body` to eradicate vertical translation drift.
+
+### 📋 To-Dos (MicroKanban) Hover Accordion & Ordering
+- **Dynamic Hover Accordion**: Hovering over Backlog, In Progress, or Completed smoothly expands that section to ~60% height while compressing sibling columns.
+- **Invisible Scrollbars**: Implemented `.no-scrollbar` styling so all task columns scroll seamlessly with mousewheel without visual bar clutter.
+- **Recent-on-Top Sorting**: Completed tasks sort descending by completion timestamp so newly finished tasks land at the top of the Completed column.
+
+### 📅 Timetable Past Days Greying Out
+- **Visual Past Days Dimming**: In Week View, all past days are clearly greyed out and dimmed across header pills, all-day trays, and column bodies, highlighting today and the upcoming week.
+- **Full 24-Hour Cycle**: Full day support from 6 AM to 6 AM past midnight.
 
 ## v2.4.0 — 2026-09-08
 

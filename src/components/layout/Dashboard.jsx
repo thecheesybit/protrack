@@ -36,6 +36,10 @@ import { HydrationReminder } from '@/components/wellness/HydrationReminder'
 import { CenterPrompt } from '@/components/prompt/CenterPrompt'
 import { HelpModal } from '@/components/common/HelpModal'
 import { WhatsNewModal } from '@/components/common/WhatsNewModal'
+import { useHourlyChime } from '@/hooks/useHourlyChime'
+import { useAlarmWatcher } from '@/hooks/useAlarmWatcher'
+import { AlarmModal } from '@/components/alarm/AlarmModal'
+import { AlarmRingingBanner } from '@/components/alarm/AlarmRingingBanner'
 import { HelpCircle } from 'lucide-react'
 
 const SettingsPanel = React.lazy(() =>
@@ -74,7 +78,13 @@ export function Dashboard() {
   const handsFreeStatus = useStore((s) => s.handsFreeStatus)
   const handsFreeFeedback = useStore((s) => s.handsFreeFeedback)
   const clockCentered = useStore((s) => s.clockCentered)
+  const alarmModalOpen = useStore((s) => s.alarmModalOpen)
+  const setAlarmModalOpen = useStore((s) => s.setAlarmModalOpen)
   const [helpOpen, setHelpOpen] = useState(false)
+  const helpOpenRef = useRef(helpOpen)
+  useEffect(() => {
+    helpOpenRef.current = helpOpen
+  }, [helpOpen])
 
   const clickCountRef = useRef(0)
   const clickTimerRef = useRef(null)
@@ -112,12 +122,19 @@ export function Dashboard() {
   useNoteReminders() // fires reminders for notes with a deadline (2 days ahead)
   useCheckIns()      // offers the occasional daily check-in question (lib/checkin)
   useCalendarSync()  // two-way Google Calendar sync while the app is open (P2)
+  useHourlyChime()   // rings temple bell on every :00 and pushes mindful island pill
+  useAlarmWatcher()  // monitors scheduled alarms and triggers audio + visual overlay
 
-  // Global shortcuts: Esc unwinds overlays/maximize; ⌘/Ctrl+K opens the AI.
-  // When focus is locked, suppress all shortcuts except focus-related ones.
+  // In-app keyboard shortcuts
   useEffect(() => {
     const onKey = (e) => {
       const st = useStore.getState()
+      const isTyping =
+        e.target &&
+        (e.target.tagName === 'INPUT' ||
+          e.target.tagName === 'TEXTAREA' ||
+          e.target.tagName === 'SELECT' ||
+          Boolean(e.target.isContentEditable))
 
       // When focus is locked, block almost everything
       if (st.focusLocked) {
@@ -132,60 +149,140 @@ export function Dashboard() {
           e.preventDefault()
           return
         }
-        if (e.key.toLowerCase() === 'f' && !e.target.tagName.match(/INPUT|TEXTAREA/) && !e.target.isContentEditable) {
+        if (e.key.toLowerCase() === 'f' && !isTyping) {
           e.preventDefault()
           return
         }
         return
       }
 
+      // ── Escape: dismiss overlays, help modal, panels, maximized widgets ──
       if (e.key === 'Escape') {
-        if (st.clockCentered) st.setClockCentered(false)
+        if (helpOpenRef.current) {
+          setHelpOpen(false)
+          return
+        }
+        if (st.alarmModalOpen) st.setAlarmModalOpen(false)
+        else if (st.clockCentered) st.setClockCentered(false)
         else if (st.focusContext) st.closeFocus()
+        else if (st.whatsNewOpen) st.setWhatsNewOpen(false)
         else if (st.aiOpen) st.setAiOpen(false)
         else if (st.settingsOpen) st.setSettingsOpen(false)
         else if (st.supportOpen) st.setSupportOpen(false)
         else if (st.maximizedWidgetId) st.restoreWidgets()
         else if (st.fullscreen) window.protrack?.window?.toggleFullScreen?.()
+        return
       }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 't') {
-        if (
-          e.target.tagName === 'INPUT' ||
-          e.target.tagName === 'TEXTAREA' ||
-          e.target.isContentEditable
-        ) {
-          return
-        }
+
+      // ── Alt + A : Set Alarm / Reminder (works in Normal Mode and Centered Desk Clock Mode) ──
+      if (e.altKey && e.key.toLowerCase() === 'a') {
         e.preventDefault()
-        useStore.getState().toggleClockCentered()
+        st.setAlarmModalOpen((prev) => !prev)
+        return
       }
+
+      // ── ? : toggle shortcuts modal open AND close ──
+      if (e.key === '?' && !e.metaKey && !e.ctrlKey && !isTyping) {
+        e.preventDefault()
+        setHelpOpen((prev) => !prev)
+        return
+      }
+
+      // ── Ctrl / Cmd + T : Center clock (Zen mode) ──
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 't') {
+        if (isTyping) return
+        e.preventDefault()
+        st.toggleClockCentered()
+        return
+      }
+
+      // ── Ctrl / Cmd + K : Open AI companion ──
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
-        useStore.getState().setAiOpen(true)
+        st.setAiOpen(true)
+        return
       }
-      if (e.key.toLowerCase() === 'f') {
+
+      // Single-letter or Alt-prefixed shortcuts (suppressed while typing)
+      if (isTyping && !e.altKey) return
+      if (e.metaKey || e.ctrlKey) return
+
+      const k = e.key.toLowerCase()
+
+      // ── F : Fullscreen ──
+      if (k === 'f' && !e.altKey) {
         if (st.fullscreen || st.status === 'idle') {
-          if (
-            e.target.tagName === 'INPUT' ||
-            e.target.tagName === 'TEXTAREA' ||
-            e.target.isContentEditable
-          ) {
-            return
-          }
           e.preventDefault()
           window.protrack?.window?.toggleFullScreen?.()
         }
+        return
       }
-      if (
-        e.key === '?' &&
-        !e.metaKey &&
-        !e.ctrlKey &&
-        e.target.tagName !== 'INPUT' &&
-        e.target.tagName !== 'TEXTAREA' &&
-        !e.target.isContentEditable
-      ) {
+
+      // ── T : Add To-Do (opens/maximizes todos and focuses task input) ──
+      if (k === 't') {
         e.preventDefault()
-        setHelpOpen(true)
+        if (st.maximizedWidgetId && st.maximizedWidgetId !== 'todos') {
+          st.maximizeWidget('todos')
+        } else if (!st.maximizedWidgetId) {
+          const input = document.querySelector('[data-todo-input="true"]')
+          if (!input) {
+            st.openModule('todos')
+          }
+        }
+        setTimeout(() => {
+          const input = document.querySelector('[data-todo-input="true"]')
+          if (input) {
+            input.focus()
+            input.select?.()
+          }
+        }, 50)
+        return
+      }
+
+      // ── C : Calendar & Timetable ──
+      if (k === 'c') {
+        e.preventDefault()
+        st.toggleWidget('timetable')
+        return
+      }
+
+      // ── D : Deep Focus ──
+      if (k === 'd') {
+        e.preventDefault()
+        st.toggleWidget('focus')
+        return
+      }
+
+      // ── N : Notes ──
+      if (k === 'n') {
+        e.preventDefault()
+        st.toggleWidget('notes')
+        return
+      }
+
+      // ── S : Subjects ──
+      if (k === 's') {
+        e.preventDefault()
+        st.toggleWidget('subjects')
+        return
+      }
+
+      // ── E / X : Scorecard ──
+      if (k === 'e' || k === 'x') {
+        e.preventDefault()
+        st.toggleWidget('scorecard')
+        return
+      }
+
+      // ── M : Maximize / Restore (/ Maxm) ──
+      if (k === 'm') {
+        e.preventDefault()
+        if (st.maximizedWidgetId) {
+          st.restoreWidgets()
+        } else {
+          st.maximizeWidget(st.activeWidgetId || 'timetable')
+        }
+        return
       }
     }
     window.addEventListener('keydown', onKey)
@@ -349,7 +446,7 @@ export function Dashboard() {
       {!focusLocked && !clockCentered && (
         <button
           type="button"
-          onClick={() => setHelpOpen(true)}
+          onClick={() => setHelpOpen((v) => !v)}
           title="Shortcuts & commands ( ? )"
           aria-label="Open shortcuts and commands"
           className={cn(
@@ -362,6 +459,8 @@ export function Dashboard() {
       )}
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
       <WhatsNewModal />
+      <AlarmModal open={alarmModalOpen} onClose={() => setAlarmModalOpen(false)} />
+      <AlarmRingingBanner />
 
       <Suspense fallback={null}>
         <AIAssistant />
