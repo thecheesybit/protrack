@@ -36,15 +36,29 @@ export function slotForHour(hour) {
  * Per-slot accent palette. The global `--accent` (every glow, ring, gradient,
  * button, and aurora blob) rotates through the day in BOTH themes. RGB channel
  * triplets for Tailwind's `<alpha-value>`, plus a hex for raw consumers.
+ *
+ * Light mode uses darker shades to maintain ≥4.5:1 contrast against parchment
+ * and white surfaces (WCAG AA). Dark mode keeps the vibrant originals.
  */
 export const CHRONO_ACCENT = {
   deep_night: { accent: '139 92 246', accent2: '167 139 250', hex: '#8b5cf6' },
-  dawn: { accent: '245 158 11', accent2: '251 113 133', hex: '#f59e0b' },
-  morning: { accent: '14 165 233', accent2: '56 189 248', hex: '#0ea5e9' },
-  midday: { accent: '14 165 233', accent2: '74 222 128', hex: '#0ea5e9' },
-  afternoon: { accent: '245 158 11', accent2: '251 191 36', hex: '#f59e0b' },
-  dusk: { accent: '244 63 94', accent2: '251 146 60', hex: '#f43f5e' },
-  evening: { accent: '124 58 237', accent2: '167 139 250', hex: '#7c3aed' },
+  dawn:       { accent: '245 158 11', accent2: '251 113 133', hex: '#f59e0b' },
+  morning:    { accent: '14 165 233', accent2: '56 189 248',  hex: '#0ea5e9' },
+  midday:     { accent: '14 165 233', accent2: '74 222 128',  hex: '#0ea5e9' },
+  afternoon:  { accent: '245 158 11', accent2: '251 191 36',  hex: '#f59e0b' },
+  dusk:       { accent: '244 63 94',  accent2: '251 146 60',  hex: '#f43f5e' },
+  evening:    { accent: '124 58 237', accent2: '167 139 250', hex: '#7c3aed' },
+}
+
+/** WCAG-safe light-mode overrides — darker shades that pass ≥4.5:1 on white. */
+export const CHRONO_ACCENT_LIGHT = {
+  deep_night: { accent: '109 40 217',  accent2: '139 92 246',  hex: '#6d28d9' },
+  dawn:       { accent: '180 83 9',    accent2: '194 65 12',   hex: '#b45309' },
+  morning:    { accent: '3 105 161',   accent2: '14 116 144',  hex: '#0369a1' },
+  midday:     { accent: '3 105 161',   accent2: '22 101 52',   hex: '#0369a1' },
+  afternoon:  { accent: '180 83 9',    accent2: '161 98 7',    hex: '#b45309' },
+  dusk:       { accent: '190 18 60',   accent2: '194 65 12',   hex: '#be123c' },
+  evening:    { accent: '109 40 217',  accent2: '139 92 246',  hex: '#6d28d9' },
 }
 
 /** Slots whose canvas turns dark in BOTH themes (drives auto theme + stars). */

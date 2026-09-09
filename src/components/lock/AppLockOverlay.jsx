@@ -226,7 +226,7 @@ export function AppLockOverlay() {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.25 }}
-        className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#09090e]/95 backdrop-blur-2xl select-none p-4 overflow-y-auto"
+        className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-bg/95 dark:bg-[#09090e]/95 backdrop-blur-2xl select-none p-4 overflow-y-auto"
       >
         {/* Desktop window controls (minimize / close) so user is never trapped */}
         {desktopBridge?.window && (

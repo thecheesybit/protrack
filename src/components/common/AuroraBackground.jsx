@@ -1,10 +1,21 @@
-import { memo } from 'react'
+import { memo, useState, useEffect } from 'react'
 import { useStore } from '@/store/useStore'
 import { getThemeCategory } from '@/hooks/useChronoTheme'
+import { useLowPowerMode } from '@/lib/lowPower'
 import { SpaceObjects } from './SpaceObjects'
 import { DaySkyObjects } from './DaySkyObjects'
 import { DawnSkyObjects } from './DawnSkyObjects'
 import { DuskSkyObjects } from './DuskSkyObjects'
+import { RainWeatherOverlay } from './weather/RainWeatherOverlay'
+import { WindWeatherOverlay } from './weather/WindWeatherOverlay'
+import { FogMistOverlay } from './weather/FogMistOverlay'
+import { HeatHazeOverlay } from './weather/HeatHazeOverlay'
+import {
+  getActiveIndianSeason,
+  computeWeatherState,
+  isWeatherEffectsEnabled,
+  CLIMATE_OVERRIDE_EVENT,
+} from '@/lib/indianClimate'
 
 /**
  * Deterministic starfield — fixed seed so the sky never re-shuffles between
@@ -14,7 +25,6 @@ import { DuskSkyObjects } from './DuskSkyObjects'
 const STARS = (() => {
   let seed = 42
   const rand = () => {
-    // Park–Miller PRNG — tiny, deterministic, good enough for star scatter.
     seed = (seed * 16807) % 2147483647
     return seed / 2147483647
   }
@@ -23,22 +33,66 @@ const STARS = (() => {
     x: rand() * 100,
     y: rand() * 70,
     r: rand() < 0.8 ? 0.9 : 1.6,
-    // Varied delay AND duration so stars twinkle out of sync, like a real sky.
     delay: rand() * 5,
-    dur: 2.2 + rand() * 4.5, // 2.2s–6.7s
+    dur: 2.2 + rand() * 4.5,
   }))
 })()
 
 /**
- * Ambient canvas behind the app: aurora blobs + the 4-theme celestial sky layer:
- *  - Night: Moon, stars, tumbling asteroids, blinking satellites, meteors
- *  - Day: Radiant sun, drifting cumulus clouds, gentle ambient rain
- *  - Morning: Golden rising sun, morning sunbeams, pastel mist clouds
- *  - Sunset: Coral setting sun, soaring birds flock, twilight rim clouds
+ * Ambient canvas behind the app:
+ * - Time-adaptive celestial objects (Space, Day, Dawn, Dusk)
+ * - Indian Climate & Seasonal Weather System:
+ *    • Occasional rain showers (mostly in Monsoon, passing intervals)
+ *    • Wind & seasonal drifting particles (spring petals, summer Loo dust/leaves, autumn leaves)
+ *    • Winter morning fog & mist (Kohra)
+ *    • Summer midday heat haze & mirage shimmer
  */
 export const AuroraBackground = memo(function AuroraBackground({ showCelestial = true }) {
   const chronoSlot = useStore((s) => s.chronoSlot)
   const category = getThemeCategory(chronoSlot)
+  const [isLowPower] = useLowPowerMode()
+
+  const [season, setSeason] = useState(() => getActiveIndianSeason())
+  const [weather, setWeather] = useState(() => computeWeatherState(getActiveIndianSeason().id))
+  const [effectsEnabled, setEffectsEnabled] = useState(() => isWeatherEffectsEnabled())
+
+  useEffect(() => {
+    const updateWeather = () => {
+      const activeSeason = getActiveIndianSeason()
+      const nextWeather = computeWeatherState(activeSeason.id)
+      const nextEffects = isWeatherEffectsEnabled()
+
+      setSeason((prev) => (prev?.id === activeSeason.id ? prev : activeSeason))
+      setWeather((prev) => {
+        if (
+          prev &&
+          prev.condition === nextWeather.condition &&
+          prev.intensity === nextWeather.intensity &&
+          prev.isRaining === nextWeather.isRaining &&
+          prev.hasFog === nextWeather.hasFog &&
+          prev.hasHeatHaze === nextWeather.hasHeatHaze &&
+          prev.hasWindGusts === nextWeather.hasWindGusts &&
+          prev.windSpeed === nextWeather.windSpeed &&
+          prev.windAngle === nextWeather.windAngle
+        ) {
+          return prev
+        }
+        return nextWeather
+      })
+      setEffectsEnabled((prev) => (prev === nextEffects ? prev : nextEffects))
+    }
+
+    updateWeather()
+    const timer = setInterval(updateWeather, 60 * 1000)
+    window.addEventListener(CLIMATE_OVERRIDE_EVENT, updateWeather)
+
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener(CLIMATE_OVERRIDE_EVENT, updateWeather)
+    }
+  }, [])
+
+  const isNight = category === 'night' || chronoSlot === 'dusk' || chronoSlot === 'deep_night'
 
   return (
     <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
@@ -69,10 +123,38 @@ export const AuroraBackground = memo(function AuroraBackground({ showCelestial =
       </svg>
 
       {/* ── 4 Unique Timed Celestial & Atmospheric Sky Systems ── */}
-      {showCelestial && category === 'night' && <SpaceObjects />}
-      {showCelestial && category === 'day' && <DaySkyObjects />}
-      {showCelestial && category === 'morning' && <DawnSkyObjects />}
-      {showCelestial && category === 'sunset' && <DuskSkyObjects />}
+      {!isLowPower && showCelestial && category === 'night' && <SpaceObjects />}
+      {!isLowPower && showCelestial && category === 'day' && <DaySkyObjects />}
+      {!isLowPower && showCelestial && category === 'morning' && <DawnSkyObjects />}
+      {!isLowPower && showCelestial && category === 'sunset' && <DuskSkyObjects />}
+
+      {/* ── Indian Climate & Procedural Weather Overlays ── */}
+      {!isLowPower && showCelestial && effectsEnabled && (
+        <>
+          {/* Occasional Rain (active when weather state is raining) */}
+          {weather.isRaining && (
+            <RainWeatherOverlay
+              intensity={weather.intensity}
+              windAngle={weather.windAngle}
+              seasonId={season.id}
+              isNight={isNight}
+            />
+          )}
+
+          {/* Seasonal Wind & Drifting Particles */}
+          <WindWeatherOverlay
+            seasonId={season.id}
+            windSpeed={weather.windSpeed}
+            hasWindGusts={weather.hasWindGusts}
+          />
+
+          {/* Winter Morning Mist / Fog (Kohra) */}
+          {weather.hasFog && <FogMistOverlay intensity={weather.intensity} />}
+
+          {/* Summer Midday Heat Haze */}
+          {weather.hasHeatHaze && <HeatHazeOverlay />}
+        </>
+      )}
 
       {/* Ambient layer — intensity rides the chrono slot (dimmer at night). */}
       <div
@@ -80,16 +162,23 @@ export const AuroraBackground = memo(function AuroraBackground({ showCelestial =
         style={{ opacity: 'var(--aurora-opacity, 1)' }}
       >
         <div className="absolute inset-0 bg-grid opacity-30" />
-        <div className="absolute -left-40 -top-40 h-[42rem] w-[42rem] animate-aurora rounded-full bg-accent/15 blur-[140px]" />
-        <div
-          className="absolute -right-40 top-1/4 h-[38rem] w-[38rem] animate-aurora rounded-full bg-accent-2/12 blur-[140px]"
-          style={{ animationDelay: '-7s' }}
-        />
-        <div
-          className="absolute bottom-0 left-1/3 h-[34rem] w-[34rem] animate-aurora rounded-full bg-accent/10 blur-[150px]"
-          style={{ animationDelay: '-14s' }}
-        />
+        {isLowPower ? (
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(99,102,241,0.08)_0%,transparent_70%)]" />
+        ) : (
+          <>
+            <div className="gpu-layer absolute -left-40 -top-40 h-[40rem] w-[40rem] animate-aurora rounded-full bg-accent/15 blur-[90px]" />
+            <div
+              className="gpu-layer absolute -right-40 top-1/4 h-[36rem] w-[36rem] animate-aurora rounded-full bg-accent-2/12 blur-[90px]"
+              style={{ animationDelay: '-7s' }}
+            />
+            <div
+              className="gpu-layer absolute bottom-0 left-1/3 h-[32rem] w-[32rem] animate-aurora rounded-full bg-accent/10 blur-[100px]"
+              style={{ animationDelay: '-14s' }}
+            />
+          </>
+        )}
       </div>
+
       {/* Top vignette for depth, so chrome reads cleanly over content. */}
       <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/20 to-transparent dark:from-black/40" />
     </div>

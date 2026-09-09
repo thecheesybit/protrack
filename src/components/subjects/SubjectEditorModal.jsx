@@ -205,16 +205,17 @@ export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject,
           ? rep.rec.recurrenceDays || (r.days?.length ? r.days : [r.dayOfWeek])
           : []
 
+      const customLabel = (r.label || '').trim()
       const payload = {
-        label: (r.label || '').trim() || t.label || name,
+        label: customLabel || name,
         dayOfWeek: dow,
         startMin: r.startMin,
         endMin: r.endMin,
         color,
         subjectId,
         room: (r.room || '').trim(),
-        tag: t.tag,
-        tagStyle: t.tagStyle,
+        tag: t.tag || 'Lecture',
+        tagStyle: t.tagStyle || 'standard',
         recurrenceType: rep.rec.recurrenceType,
         recurrenceInterval: rep.rec.recurrenceInterval || 1,
         recurrenceDays: days,
@@ -456,7 +457,7 @@ export function SubjectEditorModal({ open, onClose, modeId: propModeId, subject,
                 <input
                   value={r.label}
                   onChange={(e) => patchClass(r.key, { label: e.target.value })}
-                  placeholder="Custom label (optional)"
+                  placeholder="Topic / Custom name (e.g. Calculus, Problem Set)"
                   className="min-w-0 flex-1 rounded-lg border border-line bg-surface-2/60 px-2 py-1.5 text-[11px] outline-none focus:border-accent"
                 />
               </div>

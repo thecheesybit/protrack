@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { Sun, Moon, Settings, LogOut, Heart, Minimize2 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useTheme } from '@/hooks/useTheme'
 import { useStore } from '@/store/useStore'
 import { Logo } from '@/components/common/Logo'
+import { ConfirmLogoutModal } from '@/components/auth/ConfirmLogoutModal'
 import { cn } from '@/utils/cn'
 
 function IconButton({ label, onClick, children, className }) {
@@ -23,15 +25,22 @@ function IconButton({ label, onClick, children, className }) {
 
 export function TopBar() {
   const { user, signOut } = useAuth()
-  const { theme, toggleTheme } = useTheme()
+  const { isDark, toggleTheme } = useTheme()
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
   const setSupportOpen = useStore((s) => s.setSupportOpen)
   const fullscreen = useStore((s) => s.fullscreen)
+  const [logoutModalOpen, setLogoutModalOpen] = useState(false)
 
   const firstName = (user?.displayName || 'Explorer').split(' ')[0]
 
   return (
     <header className="flex items-center justify-between gap-4">
+      <ConfirmLogoutModal
+        open={logoutModalOpen}
+        onClose={() => setLogoutModalOpen(false)}
+        onConfirm={signOut}
+        user={user}
+      />
       <div className="flex items-center gap-3">
         <Logo className="h-10 w-10 shrink-0 drop-shadow" />
         <div>
@@ -62,10 +71,10 @@ export function TopBar() {
         </IconButton>
 
         <IconButton
-          label={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+          label={isDark ? 'Light mode' : 'Dark mode'}
           onClick={toggleTheme}
         >
-          {theme === 'dark' ? (
+          {isDark ? (
             <Sun className="h-5 w-5" />
           ) : (
             <Moon className="h-5 w-5" />
@@ -91,10 +100,10 @@ export function TopBar() {
             </div>
           )}
           <button
-            onClick={signOut}
+            onClick={() => setLogoutModalOpen(true)}
             title="Sign out"
             aria-label="Sign out"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-ink cursor-pointer"
           >
             <LogOut className="h-4 w-4" />
           </button>

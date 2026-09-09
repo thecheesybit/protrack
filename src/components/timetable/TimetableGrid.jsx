@@ -1,9 +1,14 @@
 import { useState, useRef, useEffect, useMemo, memo } from 'react'
-import { Pencil, Sparkles, X, Check, ChevronLeft, ChevronRight, Plus, Minus } from 'lucide-react'
+import { Pencil, Sparkles, X, Check, ChevronLeft, ChevronRight, Plus, Minus, AlertTriangle, MoveVertical } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { classifyDeadline } from '@/lib/deadlines'
 import { NoteDeadlineChip } from './NoteDeadlineChip'
 import { ItemDetailPopover } from './ItemDetailPopover'
 import { getWeekDate, ymd } from '@/lib/dates'
+import { useStore } from '@/store/useStore'
+import { useAuth } from '@/hooks/useAuth'
+import { updateSlot } from '@/services/timetableService'
+import { playPop } from '@/lib/audioFX'
 import { DayGrove } from '@/components/focus/CalendarForest'
 import {
   DAYS,
@@ -73,17 +78,65 @@ function hexA(hex, a) {
 
 const SlotBlock = memo(function SlotBlock({
   slot,
+  subject = null,
+  isSubjectHighlighted = false,
   isDone = false,
+  hasConflict = false,
   onOpen,
   onEdit,
   onToggleDone,
+  onReschedule,
+  onHover,
   ppm = PX_PER_MIN,
 }) {
+  const [dragOffsetMin, setDragOffsetMin] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
+
   const startAxis = toAxisMin(slot.startMin)
   let endAxis = toAxisMin(slot.endMin)
   if (endAxis <= startAxis) endAxis += GRID_SPAN_MIN // slot runs past midnight
-  const top = (startAxis - DAY_START_MIN) * ppm
+
+  const activeStartAxis = startAxis + dragOffsetMin
+  const top = (activeStartAxis - DAY_START_MIN) * ppm
   const height = Math.max(26, (endAxis - startAxis) * ppm)
+
+  const duration = slot.endMin - slot.startMin
+  const currentDisplayStart = Math.max(0, Math.min(1440 - duration, slot.startMin + dragOffsetMin))
+  const currentDisplayEnd = currentDisplayStart + duration
+
+  const handleRescheduleDragStart = (e) => {
+    e.stopPropagation()
+    e.preventDefault()
+    setIsDragging(true)
+    const startY = e.clientY
+    const origStart = slot.startMin
+    let lastSnappedDelta = 0
+
+    const onPointerMove = (moveEv) => {
+      const deltaY = moveEv.clientY - startY
+      // Snap to 15-minute intervals
+      const snappedDelta = Math.round(deltaY / (ppm * 15)) * 15
+      if (snappedDelta !== lastSnappedDelta) {
+        lastSnappedDelta = snappedDelta
+        setDragOffsetMin(snappedDelta)
+      }
+    }
+
+    const onPointerUp = () => {
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
+      setIsDragging(false)
+      setDragOffsetMin(0)
+      if (lastSnappedDelta !== 0) {
+        const newStart = Math.max(0, Math.min(1440 - duration, origStart + lastSnappedDelta))
+        const newEnd = newStart + duration
+        onReschedule?.(slot, newStart, newEnd)
+      }
+    }
+
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
+  }
 
   const isStriped =
     slot.tagStyle === 'striped' ||
@@ -93,27 +146,73 @@ const SlotBlock = memo(function SlotBlock({
     (!slot.tagStyle && slot.tag?.toLowerCase().includes('revision'))
   const isDotted = slot.tagStyle === 'dotted'
 
-  const accent = slot.color || '#6366f1'
+  const accent = slot.color || subject?.color || '#6366f1'
 
   const bgStyle = isStriped
     ? `repeating-linear-gradient(45deg, ${hexA(accent, 0.7)}, ${hexA(accent, 0.7)} 10px, ${hexA(accent, 0.9)} 10px, ${hexA(accent, 0.9)} 20px)`
     : hexA(accent, isDone ? 0.45 : 0.82)
 
+  // Title & Custom Topic Resolution
+  const subj = subject
+  let primaryTitle = slot.label || 'Session'
+  let topicSubtitle = null
+
+  if (subj) {
+    const isGeneric = !slot.label || ['lecture', 'lab', 'tutorial', 'seminar', 'session', 'class'].includes(slot.label.trim().toLowerCase())
+    if (isGeneric || slot.label.trim().toLowerCase() === subj.name.trim().toLowerCase()) {
+      primaryTitle = subj.name
+      topicSubtitle = null
+    } else {
+      primaryTitle = subj.name
+      topicSubtitle = slot.label
+    }
+  } else if (slot.label) {
+    primaryTitle = slot.label
+  }
+
+  // Resolve class type badge ([L], [Lab], [T], [S], etc.)
+  const rawTag = (slot.tag || (slot.label && ['lecture', 'lab', 'tutorial', 'seminar'].includes(slot.label.toLowerCase()) ? slot.label : null) || '').trim()
+  const lowerTag = rawTag.toLowerCase()
+  let badgeText = null
+  let badgeTitle = rawTag || 'Class'
+
+  if (lowerTag.includes('lecture') || lowerTag === 'l') {
+    badgeText = 'L'
+    badgeTitle = 'Lecture'
+  } else if (lowerTag.includes('lab')) {
+    badgeText = 'Lab'
+    badgeTitle = 'Laboratory'
+  } else if (lowerTag.includes('tutorial') || lowerTag === 't') {
+    badgeText = 'T'
+    badgeTitle = 'Tutorial'
+  } else if (lowerTag.includes('seminar') || lowerTag === 's') {
+    badgeText = 'S'
+    badgeTitle = 'Seminar'
+  } else if (rawTag) {
+    badgeText = rawTag.length > 4 ? rawTag.slice(0, 3) : rawTag
+    badgeTitle = rawTag
+  }
+
   return (
     <div
       onPointerDown={(e) => e.stopPropagation()}
       onClick={onOpen}
+      onPointerEnter={() => onHover?.(slot)}
+      onPointerLeave={() => onHover?.(null)}
       className={cn(
         'group/slot absolute inset-x-1 cursor-pointer overflow-hidden rounded-xl px-2.5 py-1.5 text-white shadow-sm transition-all hover:z-30 hover:scale-[1.02] hover:shadow-glow-sm backdrop-blur-md select-none',
         isDashed && 'border-2 border-dashed',
         isDotted && 'border-2 border-dotted',
         isDone && 'opacity-75 filter grayscale-[20%]',
+        hasConflict && 'ring-2 ring-amber-400 border-amber-400 shadow-amber-500/20',
+        isDragging && 'z-50 shadow-xl opacity-90 ring-2 ring-white scale-[1.03]',
+        isSubjectHighlighted && 'ring-2 ring-white shadow-glow scale-[1.03] z-40',
       )}
       style={{
         top,
         height,
         background: bgStyle,
-        borderLeft: `4px solid ${isDone ? '#10b981' : accent}`,
+        borderLeft: `4px solid ${hasConflict ? '#f59e0b' : isDone ? '#10b981' : accent}`,
       }}
     >
       <div className="flex items-start justify-between gap-1">
@@ -138,32 +237,69 @@ const SlotBlock = memo(function SlotBlock({
               <Check className={cn('h-2.5 w-2.5', isDone ? 'opacity-100 stroke-[3]' : 'opacity-0 hover:opacity-100')} />
             </button>
           )}
-          <span className={cn('truncate', isDone && 'line-through opacity-75')}>
-            {slot.label || 'Session'}
+
+          {badgeText && (
+            <span
+              className="shrink-0 inline-flex items-center justify-center rounded bg-black/40 px-1 py-0.2 font-mono text-[9px] font-extrabold tracking-tight text-white/95 border border-white/20 shadow-xs"
+              title={badgeTitle}
+            >
+              [{badgeText}]
+            </span>
+          )}
+
+          <span className={cn('truncate font-bold', isDone && 'line-through opacity-75')} title={primaryTitle}>
+            {primaryTitle}
           </span>
-          {slot.tag && (
-            <span className="ml-1 inline-block rounded-md bg-black/35 px-1.5 py-0.2 text-[9px] font-medium tracking-wider text-white">
-              {slot.tag}
+
+          {hasConflict && (
+            <span
+              className="ml-1 inline-flex items-center gap-0.5 rounded bg-amber-400 text-black px-1.5 py-0.2 text-[9px] font-extrabold shadow-xs shrink-0"
+              title="Schedule Conflict: Overlaps with another session on this day!"
+            >
+              <AlertTriangle className="h-2.5 w-2.5 stroke-[2.5]" />
+              Conflict
             </span>
           )}
         </span>
         <div className="flex items-center gap-0.5 shrink-0">
+          <button
+            type="button"
+            onPointerDown={handleRescheduleDragStart}
+            className="shrink-0 opacity-0 transition-opacity group-hover/slot:opacity-100 text-white/80 hover:text-white p-0.5 rounded hover:bg-white/10 cursor-ns-resize"
+            title="Drag vertically to reschedule (snaps to 15m)"
+            aria-label="Drag vertically to reschedule"
+          >
+            <MoveVertical className="h-3 w-3" />
+          </button>
           <button
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation()
               onEdit()
             }}
-            className="shrink-0 opacity-0 transition-opacity group-hover/slot:opacity-100 text-white/80 hover:text-white p-0.5 rounded hover:bg-white/10"
+            className="shrink-0 opacity-0 transition-opacity group-hover/slot:opacity-100 text-white/80 hover:text-white p-0.5 rounded hover:bg-white/10 cursor-pointer"
             aria-label="Edit session"
           >
             <Pencil className="h-3 w-3" />
           </button>
         </div>
       </div>
+
+      {topicSubtitle && height > 34 && (
+        <span className={cn('text-[10px] font-medium text-white/90 truncate block leading-tight mt-0.5', isDone && 'line-through opacity-60')}>
+          {topicSubtitle}
+        </span>
+      )}
+
       {height > 30 && (
         <span className={cn('text-[10px] font-medium text-white/80 mt-0.5 block tabular-nums', isDone && 'line-through opacity-60')}>
-          {minutesToLabel(slot.startMin)} – {minutesToLabel(slot.endMin)}
+          {isDragging ? (
+            <span className="font-bold text-amber-300">
+              {minutesToLabel(currentDisplayStart)} – {minutesToLabel(currentDisplayEnd)}
+            </span>
+          ) : (
+            `${minutesToLabel(slot.startMin)} – ${minutesToLabel(slot.endMin)}`
+          )}
         </span>
       )}
     </div>
@@ -171,7 +307,7 @@ const SlotBlock = memo(function SlotBlock({
 })
 
 /** One-time event block (todo with type='event'). */
-const EventBlock = memo(function EventBlock({ event, onDelete, onOpen, ppm = PX_PER_MIN }) {
+const EventBlock = memo(function EventBlock({ event, onDelete, onOpen, onHover, ppm = PX_PER_MIN }) {
   const startMin =
     event.eventStartMin ??
     (event.dueAt ? (event.dueAt?.toDate ? event.dueAt.toDate() : new Date(event.dueAt)).getHours() * 60 : 0)
@@ -186,6 +322,8 @@ const EventBlock = memo(function EventBlock({ event, onDelete, onOpen, ppm = PX_
     <div
       onPointerDown={(e) => e.stopPropagation()}
       onClick={() => onOpen?.(event)}
+      onPointerEnter={() => onHover?.(event)}
+      onPointerLeave={() => onHover?.(null)}
       className="group/event absolute inset-x-1 z-25 flex flex-col justify-between overflow-hidden rounded-xl border border-violet-400/35 bg-violet-500/20 px-2.5 py-1.5 shadow-sm backdrop-blur-md transition-all hover:z-30 hover:scale-[1.02] hover:border-violet-400 hover:bg-violet-500/30 cursor-pointer select-none"
       style={{ top, height, borderLeft: '4px solid #a855f7' }}
       title={`${event.text} · ${minutesToLabel(startMin)} – ${minutesToLabel(endMin)} · click to focus`}
@@ -353,6 +491,7 @@ function toDateSafe(v) {
 export function TimetableGrid({
   slots,
   events = [],
+  subjects = [],
   defaultColor: _defaultColor,
   onSelect,
   onOpenSlot,
@@ -373,12 +512,40 @@ export function TimetableGrid({
   sessions = [],
   compact = false,
 }) {
+  const { user } = useAuth()
+  const activeModeId = useStore((s) => s.activeModeId)
+  const hoveredSubjectId = useStore((s) => s.hoveredSubjectId)
+  const setHoveredTimetableItem = useStore((s) => s.setHoveredTimetableItem)
+  const subjectsMap = useMemo(() => new Map((subjects || []).map((s) => [s.id, s])), [subjects])
+
   const [drag, setDrag] = useState(null)
   const [weekOffset, setWeekOffset] = useState(0)
+  const selectedDate = useStore((s) => s.selectedDate) || ymd(new Date())
+  const setSelectedDate = useStore((s) => s.setSelectedDate)
   const [popoverItem, setPopoverItem] = useState(null)
   const scrollRef = useRef(null)
   const today = todayDow()
   const nowMin = useNowMinutes()
+
+  const handleRescheduleSlot = async (slot, newStartMin, newEndMin) => {
+    if (!user) return
+    try {
+      const modeId = slot.modeId || activeModeId
+      if (!modeId || modeId === 'all') {
+        toast.error('Switch to a specific mode to reschedule slots')
+        return
+      }
+      await updateSlot(user.uid, modeId, slot.id, {
+        startMin: newStartMin,
+        endMin: newEndMin,
+      })
+      playPop()
+      toast.success(`Rescheduled to ${minutesToLabel(newStartMin)} – ${minutesToLabel(newEndMin)}`)
+    } catch (err) {
+      console.error('Failed to reschedule slot', err)
+      toast.error('Could not reschedule slot')
+    }
+  }
   // The grid covers a full 24h loop (06:00 → 06:00), so "now" always maps onto the
   // axis; 00:00–05:59 wraps to the bottom band and belongs to the PREVIOUS
   // calendar day's column (its night tail).
@@ -547,11 +714,14 @@ export function TimetableGrid({
           </span>
           <button
             type="button"
-            onClick={() => setWeekOffset(0)}
+            onClick={() => {
+              setWeekOffset(0)
+              setSelectedDate(ymd(new Date()))
+            }}
             className={cn(
               'rounded-lg border px-2 py-0.5 text-[10px] font-semibold transition-all',
-              weekOffset === 0
-                ? 'bg-accent/15 text-accent border-accent/30'
+              weekOffset === 0 && selectedDate === ymd(new Date())
+                ? 'bg-accent/15 text-accent border-accent/30 font-bold shadow-glow-xs'
                 : 'border-white/10 bg-surface-2/30 text-muted hover:text-ink',
             )}
           >
@@ -618,27 +788,39 @@ export function TimetableGrid({
           const dateNum = colDate.getDate()
           const colDateStr = ymd(colDate)
           const isToday = i === today && weekOffset === 0
+          const isSelected = colDateStr === selectedDate
           const isPastDay = colDateStr < todayDateStr && !isToday
           return (
             <div
               key={d}
-              onClick={() => onPickDay?.(colDate)}
-              title={`Open ${d} ${dateNum} in the day view${isPastDay ? ' (past day)' : ''}`}
+              onClick={() => {
+                setSelectedDate(colDateStr)
+              }}
+              onDoubleClick={() => {
+                setSelectedDate(colDateStr)
+                onPickDay?.(colDate)
+              }}
+              title={`${d} ${dateNum} · Click to view day to-dos, double-click for day agenda${isPastDay ? ' (past day)' : ''}`}
               className={cn(
-                'flex flex-1 flex-col items-center justify-center py-1.5 px-1 rounded-2xl border transition-all cursor-pointer select-none',
-                isToday
-                  ? 'bg-gradient-to-b from-emerald-400 to-emerald-500 text-slate-950 font-bold shadow-glow-sm border-emerald-300 ring-2 ring-emerald-400/30'
-                  : isPastDay
-                    ? 'border-white/[0.03] bg-surface-2/15 text-muted/50 opacity-55 hover:opacity-80 hover:bg-surface-2/25'
-                    : 'border-white/[0.06] bg-surface-2/25 text-muted hover:bg-surface-2/50 hover:text-ink hover:border-white/15',
+                'relative flex flex-1 flex-col items-center justify-center py-1.5 px-1 rounded-2xl border transition-all cursor-pointer select-none',
+                isSelected
+                  ? 'bg-gradient-to-b from-emerald-400 to-emerald-500 text-slate-950 font-bold shadow-glow-sm border-emerald-300 ring-2 ring-emerald-400/30 scale-[1.02] z-10'
+                  : isToday
+                    ? 'border-emerald-400/60 bg-emerald-500/15 text-emerald-400 font-semibold ring-1 ring-emerald-400/30 hover:bg-emerald-500/25'
+                    : isPastDay
+                      ? 'border-white/[0.03] bg-surface-2/15 text-muted/50 opacity-55 hover:opacity-80 hover:bg-surface-2/25'
+                      : 'border-white/[0.06] bg-surface-2/25 text-muted hover:bg-surface-2/50 hover:text-ink hover:border-white/15',
               )}
             >
-              <span className={cn('text-[10px] uppercase font-bold tracking-wider', isToday ? 'text-slate-950/80' : isPastDay ? 'text-muted/40' : 'text-muted')}>
+              <span className={cn('text-[10px] uppercase font-bold tracking-wider', isSelected ? 'text-slate-950/80' : isToday ? 'text-emerald-400' : isPastDay ? 'text-muted/40' : 'text-muted')}>
                 {d}
               </span>
-              <span className={cn('text-base font-black tracking-tight tabular-nums mt-0.5', isToday ? 'text-slate-950' : isPastDay ? 'text-muted/60' : 'text-ink')}>
+              <span className={cn('text-base font-black tracking-tight tabular-nums mt-0.5', isSelected ? 'text-slate-950' : isToday ? 'text-emerald-300' : isPastDay ? 'text-muted/60' : 'text-ink')}>
                 {dateNum}
               </span>
+              {isToday && !isSelected && (
+                <span className="absolute bottom-1 h-1 w-1 rounded-full bg-emerald-400 shadow-glow-sm" />
+              )}
             </div>
           )
         })}
@@ -777,7 +959,7 @@ export function TimetableGrid({
       )}
 
       {/* Scrollable grid body */}
-      <div ref={scrollRef} className="relative flex-1 overflow-y-auto pt-3">
+      <div ref={scrollRef} onMouseLeave={() => setHoveredTimetableItem(null)} className="relative flex-1 overflow-y-auto pt-3">
         <div className="relative flex" style={{ height: gridH }}>
 
           {/* Time axis */}
@@ -864,18 +1046,20 @@ export function TimetableGrid({
                   onContextMenu={onContextMenu(day)}
                   className={cn(
                     'relative flex-1 touch-none border-l border-line/30 flex flex-col justify-between overflow-visible transition-colors',
-                    isCurrentDayToday && 'bg-accent/5',
+                    colDateStr === selectedDate && 'bg-emerald-500/[0.04] ring-1 ring-inset ring-emerald-500/20',
+                    isCurrentDayToday && colDateStr !== selectedDate && 'bg-accent/5',
                     isPastDay && 'bg-black/25 opacity-65 backdrop-blur-[0.5px]',
                   )}
                 >
                   {/* Recurring slots — early-morning ones surface in the prior day's tail */}
-                  {slots
-                    .filter((s) =>
+                  {(() => {
+                    const colSlots = (slots || []).filter((s) =>
                       isTailMinute(s.startMin)
                         ? isSlotOnDay(s, tailDayIdx, tailDate)
                         : isSlotOnDay(s, day, colDate),
                     )
-                    .map((s) => {
+
+                    return colSlots.map((s) => {
                       const targetDate = isTailMinute(s.startMin) ? tailDate : colDate
                       const targetDateStr = ymd(targetDate)
                       const isDone =
@@ -890,18 +1074,45 @@ export function TimetableGrid({
                             }
                             return false
                           }))
+
+                      // Conflict detection: does `s` overlap with any other slot in this column?
+                      const sStart = toAxisMin(s.startMin)
+                      let sEnd = toAxisMin(s.endMin)
+                      if (sEnd <= sStart) sEnd += GRID_SPAN_MIN
+
+                      const hasConflict = colSlots.some((other) => {
+                        if (other.id === s.id) return false
+                        const oStart = toAxisMin(other.startMin)
+                        let oEnd = toAxisMin(other.endMin)
+                        if (oEnd <= oStart) oEnd += GRID_SPAN_MIN
+                        return Math.max(sStart, oStart) < Math.min(sEnd, oEnd)
+                      })
+
+                      const subj = s.subjectId ? subjectsMap.get(s.subjectId) : null
+                      const isSubjectHighlighted = Boolean(hoveredSubjectId && s.subjectId === hoveredSubjectId)
+
                       return (
                         <SlotBlock
                           key={s.id}
                           slot={s}
+                          subject={subj}
+                          isSubjectHighlighted={isSubjectHighlighted}
                           isDone={isDone}
+                          hasConflict={hasConflict}
                           ppm={ppm}
                           onOpen={() => onOpenSlot(s, targetDateStr)}
                           onEdit={() => onEditSlot(s)}
                           onToggleDone={() => onToggleSlot?.(s, targetDateStr)}
+                          onReschedule={handleRescheduleSlot}
+                          onHover={(hoveredSlot) =>
+                            setHoveredTimetableItem(
+                              hoveredSlot ? { type: 'slot', data: hoveredSlot, subject: subj } : null,
+                            )
+                          }
                         />
                       )
-                    })}
+                    })
+                  })()}
 
                   {/* One-time event blocks */}
                   {events
@@ -919,6 +1130,9 @@ export function TimetableGrid({
                         event={e}
                         ppm={ppm}
                         onDelete={onDeleteEvent}
+                        onHover={(hoveredEvt) =>
+                          setHoveredTimetableItem(hoveredEvt ? { type: 'event', data: hoveredEvt } : null)
+                        }
                         onOpen={(ev) =>
                           onOpenSlot?.({
                             label: ev.text,

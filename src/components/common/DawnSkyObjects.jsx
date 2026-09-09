@@ -1,5 +1,6 @@
 import { memo, useMemo, useState, useEffect } from 'react'
 import { ButterflyFlock } from './ButterflyFlock'
+import { SwallowSilhouette } from './SkySprites'
 
 const rnd = (min, max) => min + Math.random() * (max - min)
 const uid = () => Math.random().toString(36).slice(2)
@@ -161,15 +162,7 @@ export const DawnSkyObjects = memo(function DawnSkyObjects() {
                   transform: `translate(${b.dx}px, ${b.dy}px) scale(${b.scale})`,
                 }}
               >
-                <svg
-                  width="20"
-                  height="12"
-                  viewBox="0 0 20 12"
-                  className="fill-amber-200/50 animate-[bird-flap_1.2s_ease-in-out_infinite]"
-                  style={{ animationDelay: b.flapDelay }}
-                >
-                  <path d="M0,7 Q5,1 10,6 Q15,1 20,7 Q14,4 10,8 Q6,4 0,7 Z" />
-                </svg>
+                <SwallowSilhouette style={{ animationDelay: b.flapDelay }} />
               </div>
             ))}
           </div>

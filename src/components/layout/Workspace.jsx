@@ -3,6 +3,7 @@ import { AppLoader } from '@/components/common/AppLoader'
 import { OnboardingGate } from '@/components/onboarding/OnboardingGate'
 import { Dashboard } from '@/components/layout/Dashboard'
 import { FocusSceneVideo } from '@/components/focus/FocusSceneVideo'
+import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 
 /**
  * Authenticated workspace root (desktop / dev preview only). Decides between the
@@ -29,7 +30,9 @@ export function Workspace() {
           so its <iframe> survives focus-lock ↔ PiP transitions without reloading
           (which would restart the video + audio). */}
       <FocusSceneVideo />
-      <Dashboard />
+      <ErrorBoundary>
+        <Dashboard />
+      </ErrorBoundary>
     </>
   )
 }

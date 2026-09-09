@@ -1,15 +1,17 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Sparkles, AlertTriangle, CheckCircle2, XCircle, Mic, MicOff } from 'lucide-react'
+import { Send, Sparkles, AlertTriangle, CheckCircle2, XCircle, Mic, MicOff, Trash2 } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { useStore } from '@/store/useStore'
 import { useAuth } from '@/hooks/useAuth'
 import { useSubjects } from '@/hooks/useSubjects'
 import { useTimetable } from '@/hooks/useTimetable'
 import { useHabits, useTodos } from '@/hooks/useWellness'
-import { chatWithGemini, hasGeminiKey } from '@/services/geminiService'
+import { chatWithGeminiStream, hasGeminiKey } from '@/services/geminiService'
 import { executeTool } from '@/services/geminiTools'
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition'
 import { todayDow } from '@/lib/time'
 import { bulkParse } from '@/lib/bulkParse'
+import { MarkdownText } from '@/lib/markdown'
 import { CommandMatrix } from './CommandMatrix'
 
 const SLASH_PATTERNS = [
@@ -70,6 +72,27 @@ const SUGGESTIONS = [
   'Remind me to drink water',
 ]
 
+function getChatStorageKey(uid) {
+  return `protrack:ai_chat:${uid || 'guest'}`
+}
+
+function loadSavedMessages(uid) {
+  try {
+    const raw = localStorage.getItem(getChatStorageKey(uid))
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.slice(-50) : []
+  } catch {
+    return []
+  }
+}
+
+function saveMessages(uid, msgs) {
+  try {
+    localStorage.setItem(getChatStorageKey(uid), JSON.stringify(msgs.slice(-50)))
+  } catch {}
+}
+
 export function ChatTab({ onOpenSettings, onToggleVoiceNote }) {
   const { user } = useAuth()
   const modes = useStore((s) => s.modes)
@@ -80,10 +103,26 @@ export function ChatTab({ onOpenSettings, onToggleVoiceNote }) {
   const habits = useHabits()
   const todos = useTodos()
 
-  const [messages, setMessages] = useState([])
+  const [messages, setMessages] = useState(() => loadSavedMessages(user?.uid))
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const scrollRef = useRef(null)
+
+  useEffect(() => {
+    saveMessages(user?.uid, messages)
+  }, [messages, user?.uid])
+
+  useEffect(() => {
+    setMessages(loadSavedMessages(user?.uid))
+  }, [user?.uid])
+
+  const clearChat = () => {
+    setMessages([])
+    try {
+      localStorage.removeItem(getChatStorageKey(user?.uid))
+    } catch {}
+    toast.success('Chat history cleared')
+  }
 
   const { supported, listening, transcript, interim, error: speechError, transcribing, start, stop, reset: resetSpeech } = useSpeechRecognition()
 
@@ -156,15 +195,74 @@ export function ChatTab({ onOpenSettings, onToggleVoiceNote }) {
     }
 
     if (!hasGeminiKey()) return
-    const next = [...messages, { role: 'user', text: content }]
-    setMessages(next)
+    const userMsg = { role: 'user', text: content }
+    const assistantPlaceholder = { role: 'assistant', text: '', toolEvents: [] }
+    const nextWithUser = [...messages, userMsg]
+    const assistantIndex = nextWithUser.length
+
+    // Append both user message and initial assistant bubble ready to receive stream
+    setMessages([...nextWithUser, assistantPlaceholder])
     setInput('')
     setLoading(true)
+
     try {
-      const { text: reply, toolEvents } = await chatWithGemini(next, buildContext(), ctx)
-      setMessages((m) => [...m, { role: 'assistant', text: reply, toolEvents }])
+      const { text: reply, toolEvents } = await chatWithGeminiStream(
+        nextWithUser,
+        buildContext(),
+        ctx,
+        (accumulated) => {
+          setMessages((prev) => {
+            const copy = [...prev]
+            if (copy[assistantIndex]) {
+              copy[assistantIndex] = {
+                ...copy[assistantIndex],
+                text: accumulated,
+              }
+            }
+            return copy
+          })
+        },
+        (toolEvent) => {
+          setMessages((prev) => {
+            const copy = [...prev]
+            if (copy[assistantIndex]) {
+              const prevEvents = copy[assistantIndex].toolEvents || []
+              copy[assistantIndex] = {
+                ...copy[assistantIndex],
+                toolEvents: [...prevEvents, toolEvent],
+              }
+            }
+            return copy
+          })
+        }
+      )
+
+      // Ensure final state is saved with any final text/toolEvents
+      setMessages((prev) => {
+        const copy = [...prev]
+        if (copy[assistantIndex]) {
+          copy[assistantIndex] = {
+            role: 'assistant',
+            text: reply || copy[assistantIndex].text,
+            toolEvents: toolEvents?.length ? toolEvents : copy[assistantIndex].toolEvents,
+          }
+        }
+        return copy
+      })
     } catch (err) {
-      setMessages((m) => [...m, { role: 'assistant', text: `Error: ${err.message}` }])
+      setMessages((prev) => {
+        const copy = [...prev]
+        if (copy[assistantIndex]) {
+          copy[assistantIndex] = {
+            role: 'assistant',
+            text: `Error: ${err.message}`,
+            toolEvents: copy[assistantIndex].toolEvents || [],
+          }
+        } else {
+          copy.push({ role: 'assistant', text: `Error: ${err.message}` })
+        }
+        return copy
+      })
     } finally {
       setLoading(false)
     }
@@ -197,6 +295,20 @@ export function ChatTab({ onOpenSettings, onToggleVoiceNote }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {messages.length > 0 && (
+        <div className="flex items-center justify-between border-b border-line/40 px-4 py-2 text-[11px] text-muted shrink-0 bg-surface-2/20">
+          <span className="font-semibold uppercase tracking-wider text-[10px] text-muted/70">Conversation History</span>
+          <button
+            type="button"
+            onClick={clearChat}
+            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+            title="Clear all messages in this conversation"
+          >
+            <Trash2 className="h-3 w-3" />
+            <span className="font-medium">Clear history</span>
+          </button>
+        </div>
+      )}
       <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
         {messages.length === 0 && (
           <div className="flex flex-col items-center gap-3 py-4 text-center">
@@ -223,38 +335,59 @@ export function ChatTab({ onOpenSettings, onToggleVoiceNote }) {
           </div>
         )}
 
-        {messages.map((m, i) => (
-          <div key={i} className={m.role === 'user' ? 'flex justify-end' : 'flex flex-col items-start gap-1.5'}>
-            <div
-              className={
-                m.role === 'user'
-                  ? 'max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-accent px-3.5 py-2.5 text-sm text-white'
-                  : 'max-w-[90%] whitespace-pre-wrap rounded-2xl rounded-bl-sm border border-line/60 bg-surface-2/50 px-3.5 py-2.5 text-sm'
-              }
-            >
-              {m.text}
-            </div>
-            {m.role === 'assistant' && m.toolEvents?.length > 0 && (
-              <div className="ml-1 flex flex-wrap gap-1.5">
-                {m.toolEvents.map((ev, j) => (
-                  <span
-                    key={j}
-                    className={
-                      ev.ok
-                        ? 'inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-400'
-                        : 'inline-flex items-center gap-1 rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[11px] text-rose-400'
-                    }
-                  >
-                    {ev.ok ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-                    {ev.summary || ev.error || ev.name}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
+        {messages.map((m, i) => {
+          const isLatestAssistant = m.role === 'assistant' && i === messages.length - 1
+          const isStreamingThis = isLatestAssistant && loading
+          const isEmpty = !m.text && (!m.toolEvents || m.toolEvents.length === 0)
 
-        {loading && (
+          return (
+            <div key={i} className={m.role === 'user' ? 'flex justify-end' : 'flex flex-col items-start gap-1.5'}>
+              <div
+                className={
+                  m.role === 'user'
+                    ? 'max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-accent px-3.5 py-2.5 text-sm text-white'
+                    : 'max-w-[90%] rounded-2xl rounded-bl-sm border border-line/60 bg-surface-2/50 px-3.5 py-2.5 text-sm'
+                }
+              >
+                {m.role === 'user' ? (
+                  m.text
+                ) : isEmpty && isStreamingThis ? (
+                  <span className="inline-flex items-center gap-1 py-0.5">
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent [animation-delay:-0.3s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent [animation-delay:-0.15s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent" />
+                  </span>
+                ) : (
+                  <div>
+                    <MarkdownText content={m.text} className="text-sm text-ink space-y-1.5" />
+                    {isStreamingThis && (
+                      <span className="inline-block w-1.5 h-3.5 ml-1 bg-accent/70 animate-pulse align-middle rounded-xs" />
+                    )}
+                  </div>
+                )}
+              </div>
+              {m.role === 'assistant' && m.toolEvents?.length > 0 && (
+                <div className="ml-1 flex flex-wrap gap-1.5">
+                  {m.toolEvents.map((ev, j) => (
+                    <span
+                      key={j}
+                      className={
+                        ev.ok
+                          ? 'inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-400'
+                          : 'inline-flex items-center gap-1 rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[11px] text-rose-400'
+                      }
+                    >
+                      {ev.ok ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                      {ev.summary || ev.error || ev.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
+
+        {loading && messages[messages.length - 1]?.role !== 'assistant' && (
           <div className="flex justify-start">
             <div className="rounded-2xl rounded-bl-sm border border-line/60 bg-surface-2/50 px-3.5 py-2.5 text-sm text-muted">
               <span className="inline-flex gap-1">

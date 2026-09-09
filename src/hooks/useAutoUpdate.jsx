@@ -50,7 +50,26 @@ export function useAutoUpdate() {
     const offs = [
       u.onChecking?.(() => st().reportUpdateChecking()),
       u.onAvailable((p) => {
+        let isManual = false
+        try {
+          if (typeof localStorage !== 'undefined') {
+            isManual = localStorage.getItem('protrack:update_mode') === 'manual'
+          }
+        } catch {}
+
         st().reportUpdateAvailable(p?.version)
+
+        if (isManual) {
+          if (islandIdRef.current) st().dismissIsland(islandIdRef.current)
+          islandIdRef.current = st().pushIsland({
+            kind: 'info',
+            title: `Update v${p?.version || 'Available'}`,
+            detail: 'Manual mode active · Visit Settings → Updates to install when ready.',
+            duration: 8000,
+          })
+          return
+        }
+
         // Freeze background work — a running focus session is paused.
         if (st().status === 'running') st().pause()
 

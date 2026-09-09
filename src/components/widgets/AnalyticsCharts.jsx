@@ -11,11 +11,11 @@ import {
 import { HealthRings } from '@/components/analytics/HealthRings'
 import { cn } from '@/utils/cn'
 
-const ACCENT = '#818cf8'
+const ACCENT = 'rgb(var(--accent, 99 102 241))'
 
 const tooltipStyle = {
   background: 'rgb(var(--surface))',
-  border: '1px solid rgb(var(--border))',
+  border: '1px solid rgb(var(--line, 218 213 205 / 0.4))',
   borderRadius: 10,
   fontSize: 12,
   color: 'rgb(var(--text))',
@@ -46,7 +46,16 @@ function Chart({ title, data, headerExtra }) {
   )
 }
 
-export default function AnalyticsCharts({ perDay, perHour, today, stats, compact = false }) {
+export default function AnalyticsCharts({
+  perDay,
+  perHour,
+  today,
+  stats,
+  dateRange = 14,
+  focusGoalMin = 120,
+  sessionsGoal = 4,
+  compact = false,
+}) {
   const [activeTab, setActiveTab] = useState('daily')
 
   if (compact) {
@@ -60,7 +69,7 @@ export default function AnalyticsCharts({ perDay, perHour, today, stats, compact
             activeTab === 'daily' ? 'bg-accent/20 text-accent font-bold' : 'text-muted hover:text-ink'
           )}
         >
-          14 Days
+          {dateRange} Days
         </button>
         <button
           type="button"
@@ -82,12 +91,14 @@ export default function AnalyticsCharts({ perDay, perHour, today, stats, compact
             todayMins={today.mins}
             streak={stats?.currentStreak || 0}
             sessionsToday={today.count}
+            focusGoalMin={focusGoalMin}
+            sessionsGoal={sessionsGoal}
             size={135}
           />
         </div>
         <div className="flex min-h-0 flex-1 flex-col">
           <Chart
-            title={activeTab === 'daily' ? 'Focus minutes · last 14 days' : 'Peak focus hours'}
+            title={activeTab === 'daily' ? `Focus minutes · last ${dateRange} days` : 'Peak focus hours'}
             data={activeTab === 'daily' ? perDay : perHour}
             headerExtra={tabButtons}
           />
@@ -103,11 +114,13 @@ export default function AnalyticsCharts({ perDay, perHour, today, stats, compact
           todayMins={today.mins}
           streak={stats?.currentStreak || 0}
           sessionsToday={today.count}
+          focusGoalMin={focusGoalMin}
+          sessionsGoal={sessionsGoal}
           size={168}
         />
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-2">
-        <Chart title="Focus minutes · last 14 days" data={perDay} />
+        <Chart title={`Focus minutes · last ${dateRange} days`} data={perDay} />
         <Chart title="Peak focus hours" data={perHour} />
       </div>
     </div>

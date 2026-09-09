@@ -48,15 +48,60 @@ export function canonicalSectionName(raw) {
   return s
 }
 
+export function detectPortal(text) {
+  if (!text || typeof text !== 'string') return 'generic'
+  const t = text.toLowerCase()
+  if (t.includes('smartkeeda') || t.includes('testzone') || /your marks\s*:/i.test(text) || /cut[\s-]*off marks/i.test(text)) {
+    return 'smartkeeda'
+  }
+  if (t.includes('adda247') || t.includes('careerpower') || /adda\s*247/i.test(text) || /general intelligence & reasoning/i.test(text) || (/marks scored/i.test(text) && /maximum score/i.test(text))) {
+    return 'adda247'
+  }
+  if (t.includes('guidely') || t.includes('ibpsguide') || (/section details/i.test(text) && /\|\s*(?:score|marks|correct)/i.test(text))) {
+    return 'guidely'
+  }
+  if (t.includes('oliveboard') || t.includes('olive board') || (/all india rank/i.test(text) && /sectional summary/i.test(text))) {
+    return 'oliveboard'
+  }
+  if (SMARTKEEDA_ROW_RE.test(text)) {
+    SMARTKEEDA_ROW_RE.lastIndex = 0
+    return 'smartkeeda'
+  }
+  if (ADDA_ROW_RE.test(text)) {
+    ADDA_ROW_RE.lastIndex = 0
+    return 'adda247'
+  }
+  if (GUIDELY_ROW_RE.test(text)) {
+    GUIDELY_ROW_RE.lastIndex = 0
+    return 'guidely'
+  }
+  if (OLIVEBOARD_ROW_RE.test(text)) {
+    OLIVEBOARD_ROW_RE.lastIndex = 0
+    return 'oliveboard'
+  }
+  return 'generic'
+}
+
 const OVERALL_ROW_RE = /^(overall|total|grand total|aggregate|overall performance)$/i
 
-// One row of a tabular section breakdown (SmartKeeda "Test Analysis", Adda247
-// section table, etc.). Columns may be separated by any mix of spaces / tabs /
-// newlines. Order:
-//   Name | No. of Ques | Correct | Incorrect | Unattempted | Time Taken
-//        | Cut off | Score (x / total (pct%)) | Percentile
-const SECTION_ROW_RE =
+// ── SmartKeeda "Test Analysis" Row Format ─────────────────────────────────────
+const SMARTKEEDA_ROW_RE =
   /([A-Za-z][A-Za-z0-9 .&/'()-]*?)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+(?:\.\d+)?)\s*(?:mins?|minutes?|m)\b\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\/\s*(\d+)\s*\(?\s*(\d+(?:\.\d+)?)\s*%?\s*\)?\s+(-?\d+(?:\.\d+)?)/gi
+
+// ── Adda247 Section Table Format ──────────────────────────────────────────────
+// Section | Total Ques | Attempted | Correct | Incorrect | Marks | Time | Accuracy
+const ADDA_ROW_RE =
+  /([A-Za-z][A-Za-z0-9 .&/'()-]*?)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+([+-]?\d+(?:\.\d+)?)\s+(\d{1,2}:\d{2}(?::\d{2})?|\d+(?:\.\d+)?\s*(?:mins?|m)?)\s+(\d+(?:\.\d+)?)\s*%/gi
+
+// ── Guidely Pipe-Delimited Section Format ─────────────────────────────────────
+// Section: Correct: x | Wrong: y | Attempted: a | Score: s/total | Accuracy: acc% | Time: t
+const GUIDELY_ROW_RE =
+  /([A-Za-z][A-Za-z0-9 .&/'()-]*?)\s*:\s*(?:Correct\s*:\s*(\d+))?[^|\n]*\|\s*(?:Wrong|Incorrect)\s*:\s*(\d+)[^|\n]*(?:\|\s*(?:Attempted|Attempts)\s*:\s*(\d+))?[^|\n]*\|\s*(?:Score|Marks)\s*:\s*([+-]?\d+(?:\.\d+)?)(?:\s*\/\s*(\d+))?[^|\n]*(?:\|\s*Accuracy\s*:\s*(\d+(?:\.\d+)?)\s*%)?[^|\n]*(?:\|\s*Time\s*:\s*(\d{1,2}:\d{2}(?::\d{2})?|\d+(?:\.\d+)?\s*(?:mins?|m)?))?/gi
+
+// ── Oliveboard Section Row Format ─────────────────────────────────────────────
+// Section | Score/Total | Rank/Total | Percentile% | Accuracy% | Time
+const OLIVEBOARD_ROW_RE =
+  /([A-Za-z][A-Za-z0-9 .&/'()-]*?)\s+([+-]?\d+(?:\.\d+)?)\s*\/\s*(\d+)\s+(\d+)\s*\/\s*(\d+)\s+(\d+(?:\.\d+)?)\s*%\s+(\d+(?:\.\d+)?)\s*%\s+(\d{1,2}:\d{2}(?::\d{2})?|\d+(?:\.\d+)?\s*(?:mins?|m)?)/gi
 
 function roundTo(n, dp = 1) {
   const f = 10 ** dp
@@ -64,17 +109,19 @@ function roundTo(n, dp = 1) {
 }
 
 /**
- * Parse a tabular per-section breakdown, if the raw text contains one.
+ * Parse a tabular per-section breakdown across Smartkeeda, Adda247, Guidely, and Oliveboard.
  *
  * @param {string} text
  * @returns {{ sections: object[], overall: object|null } | null}
  */
 export function parseSectionTable(text) {
   if (!text) return null
-  const rows = []
-  SECTION_ROW_RE.lastIndex = 0
+  let rows = []
+
+  // 1. Try SmartKeeda pattern
+  SMARTKEEDA_ROW_RE.lastIndex = 0
   let m
-  while ((m = SECTION_ROW_RE.exec(text)) !== null) {
+  while ((m = SMARTKEEDA_ROW_RE.exec(text)) !== null) {
     const [, rawName, nQ, correct, wrong, unatt, timeVal, cutoff, score, scoreTotal, scorePct, percentile] = m
     const c = parseInt(correct, 10)
     const w = parseInt(wrong, 10)
@@ -96,6 +143,87 @@ export function parseSectionTable(text) {
       percentile: parseFloat(percentile),
     })
   }
+
+  // 2. Try Adda247 pattern if SmartKeeda returned no rows
+  if (rows.length === 0) {
+    ADDA_ROW_RE.lastIndex = 0
+    while ((m = ADDA_ROW_RE.exec(text)) !== null) {
+      const [, rawName, nQ, attempted, correct, wrong, marks, timeStr, accuracy] = m
+      const c = parseInt(correct, 10)
+      const w = parseInt(wrong, 10)
+      const totalQ = parseInt(nQ, 10)
+      const u = Math.max(0, totalQ - c - w)
+      const sNum = parseFloat(marks)
+      const totalMarks = sNum > totalQ ? totalQ * 2 : totalQ
+      rows.push({
+        name: rawName.trim(),
+        canonicalName: canonicalSectionName(rawName),
+        totalQuestions: totalQ,
+        correct: c,
+        wrong: w,
+        unattempted: u,
+        timeSpentMinutes: timeStringToMinutes(timeStr),
+        cutoff: null,
+        score: sNum,
+        totalMarks,
+        scorePct: totalMarks ? roundTo((sNum / totalMarks) * 100, 1) : null,
+        accuracy: parseFloat(accuracy),
+        percentile: null,
+      })
+    }
+  }
+
+  // 3. Try Guidely pipe pattern if still empty
+  if (rows.length === 0) {
+    GUIDELY_ROW_RE.lastIndex = 0
+    while ((m = GUIDELY_ROW_RE.exec(text)) !== null) {
+      const [, rawName, correct, wrong, attempted, score, totalMarks, accuracy, timeStr] = m
+      const c = correct ? parseInt(correct, 10) : 0
+      const w = wrong ? parseInt(wrong, 10) : 0
+      const att = attempted ? parseInt(attempted, 10) : c + w
+      const s = parseFloat(score)
+      const tm = totalMarks ? parseInt(totalMarks, 10) : null
+      rows.push({
+        name: rawName.trim(),
+        canonicalName: canonicalSectionName(rawName),
+        totalQuestions: tm || att,
+        correct: c,
+        wrong: w,
+        unattempted: tm ? Math.max(0, tm - att) : 0,
+        timeSpentMinutes: timeStringToMinutes(timeStr),
+        cutoff: null,
+        score: s,
+        totalMarks: tm || att,
+        scorePct: tm ? roundTo((s / tm) * 100, 1) : null,
+        accuracy: accuracy ? parseFloat(accuracy) : att ? roundTo((c / att) * 100, 1) : 0,
+        percentile: null,
+      })
+    }
+  }
+
+  // 4. Try Oliveboard pattern if still empty
+  if (rows.length === 0) {
+    OLIVEBOARD_ROW_RE.lastIndex = 0
+    while ((m = OLIVEBOARD_ROW_RE.exec(text)) !== null) {
+      const [, rawName, score, totalMarks, rank, totalCandidates, percentile, accuracy, timeStr] = m
+      rows.push({
+        name: rawName.trim(),
+        canonicalName: canonicalSectionName(rawName),
+        totalQuestions: parseInt(totalMarks, 10),
+        correct: null,
+        wrong: null,
+        unattempted: null,
+        timeSpentMinutes: timeStringToMinutes(timeStr),
+        cutoff: null,
+        score: parseFloat(score),
+        totalMarks: parseInt(totalMarks, 10),
+        scorePct: roundTo((parseFloat(score) / parseInt(totalMarks, 10)) * 100, 1),
+        accuracy: parseFloat(accuracy),
+        percentile: parseFloat(percentile),
+      })
+    }
+  }
+
   if (rows.length === 0) return null
 
   const overall = rows.find((r) => OVERALL_ROW_RE.test(r.name)) || null
@@ -104,9 +232,8 @@ export function parseSectionTable(text) {
 }
 
 /**
- * Parses raw text copied from mock exam portals (Oliveboard, Testbook, PracticeMock,
- * Adda247, SmartKeeda, etc.) using fast regex and heuristics. Works offline with
- * zero latency.
+ * Parses raw text copied from mock exam portals (SmartKeeda, Adda247, Guidely,
+ * Oliveboard, Testbook, PracticeMock, etc.) using fast regex and heuristics.
  *
  * @param {string} rawText
  * @returns {object} Extracted scorecard fields
@@ -117,6 +244,7 @@ export function parseRawExamSummary(rawText) {
   }
 
   const text = rawText.replace(/\r\n/g, '\n')
+  const detectedPortal = detectPortal(text)
   const result = {
     score: null,
     totalMarks: null,
@@ -136,6 +264,7 @@ export function parseRawExamSummary(rawText) {
     sections: [],
     examName: '',
     type: 'sectional', // default to sectional
+    detectedPortal,
   }
 
   // ── 1. Section Name & Exam Type ──────────────────────────────────
@@ -150,10 +279,10 @@ export function parseRawExamSummary(rawText) {
   )
 
   if (secColonMatch && secColonMatch[1].trim() && !/Summary|Overview|Performance/i.test(secColonMatch[1])) {
-    result.sectionName = secColonMatch[1].trim()
+    result.sectionName = canonicalSectionName(secColonMatch[1])
     result.type = 'sectional'
   } else if (secSummaryMatch && secSummaryMatch[1].trim() && !/Summary|Overview|Performance/i.test(secSummaryMatch[1])) {
-    result.sectionName = secSummaryMatch[1].trim()
+    result.sectionName = canonicalSectionName(secSummaryMatch[1])
     result.type = 'sectional'
   } else {
     // Check for common competitive exam section names in text
@@ -216,9 +345,9 @@ export function parseRawExamSummary(rawText) {
     if (scoreWordAboveMatch[2]) result.totalMarks = parseFloat(scoreWordAboveMatch[2])
   }
 
-  // Also check explicit "Total Marks: 40" or "Max Marks: 40"
+  // Also check explicit "Total Marks: 40" or "Max Marks: 40" or "Maximum Score: 35"
   if (result.totalMarks === null) {
-    const maxMarksMatch = text.match(/(?:Total Marks|Max Marks|Maximum Marks)\s*[:=-]?\s*(\d+(?:\.\d+)?)/i)
+    const maxMarksMatch = text.match(/(?:Total Marks|Max Marks|Maximum Marks|Maximum Score|Max Score|Total Score)\s*[:=-]?\s*(\d+(?:\.\d+)?)/i)
     if (maxMarksMatch) result.totalMarks = parseFloat(maxMarksMatch[1])
   }
 
@@ -233,9 +362,9 @@ export function parseRawExamSummary(rawText) {
   const rankPipeMatch = text.match(
     /(\d+)\s*(?:\n\s*)?\|\s*(\d+)\s*(?:\n\s*)?(?:Your Rank|Rank)/i
   )
-  // Pattern B: "Rank: 13320 / 17508" or "All India Rank: 13320"
+  // Pattern B: "Rank: 13320 / 17508" or "All India Rank: 13320" or "Rank 450 of 12400"
   const rankColonMatch = text.match(
-    /(?:Your Rank|All India Rank|AIR|Rank)[ \t]*[:=-]?[ \t]*(\d+)(?:[ \t]*(?:\/|out of|\|)[ \t]*(\d+))?/i
+    /(?:Your Rank|All India Rank|AIR|Rank)[ \t]*[:=-]?[ \t]*(\d+)(?:[ \t]*(?:\/|out of|of|\|)[ \t]*(\d+))?/i
   )
 
   if (rankPipeMatch) {
@@ -333,12 +462,12 @@ export function parseRawExamSummary(rawText) {
   else if (unattemptedNumBefore) result.unattempted = parseInt(unattemptedNumBefore[1], 10)
   else if (inlineListMatch) result.unattempted = parseInt(inlineListMatch[3], 10)
 
-  // Calculate total questions if components exist
-  if (result.correct !== null || result.wrong !== null || result.unattempted !== null) {
-    const c = result.correct || 0
-    const w = result.wrong || 0
-    const u = result.unattempted || 0
-    result.totalQuestions = c + w + u
+  // Parse explicit total questions if present
+  const totalQMatch = text.match(/(?:Total\s*Questions?|No\.?\s*of\s*Questions?|Total\s*Ques)\s*[:=-]?\s*(\d+)/i)
+  if (totalQMatch) {
+    result.totalQuestions = parseInt(totalQMatch[1], 10)
+  } else if (result.totalQuestions === null && result.correct !== null && result.wrong !== null && result.unattempted !== null) {
+    result.totalQuestions = result.correct + result.wrong + result.unattempted
   }
 
   // ── 9. Tabular per-section breakdown (SmartKeeda "Test Analysis", Adda247 …) ──
@@ -352,33 +481,45 @@ export function parseRawExamSummary(rawText) {
     result.sectionName = 'All Sections'
 
     const sum = (key) => table.sections.reduce((acc, s) => acc + (Number(s[key]) || 0), 0)
-    const ov = table.overall || {
-      score: sum('score'),
-      totalMarks: sum('totalMarks'),
-      correct: sum('correct'),
-      wrong: sum('wrong'),
-      unattempted: sum('unattempted'),
-      totalQuestions: sum('totalQuestions'),
-      timeSpentMinutes: sum('timeSpentMinutes'),
-      cutoff: null,
-      percentile: null,
+    if (table.overall) {
+      if (table.overall.score != null) result.score = table.overall.score
+      if (table.overall.totalMarks != null) result.totalMarks = table.overall.totalMarks
+      if (table.overall.correct != null) result.correct = table.overall.correct
+      if (table.overall.wrong != null) result.wrong = table.overall.wrong
+      if (table.overall.unattempted != null) result.unattempted = table.overall.unattempted
+      if (table.overall.totalQuestions != null) result.totalQuestions = table.overall.totalQuestions
+      if (table.overall.cutoff != null && !Number.isNaN(table.overall.cutoff)) result.cutoff = table.overall.cutoff
+      if (table.overall.percentile != null && !Number.isNaN(table.overall.percentile) && result.percentile == null) {
+        result.percentile = table.overall.percentile
+      }
+      if (table.overall.timeSpentMinutes && !result.timeSpentMinutes) {
+        result.timeSpentMinutes = table.overall.timeSpentMinutes
+      }
+      if (table.overall.accuracy != null && result.accuracy == null) {
+        result.accuracy = table.overall.accuracy
+      }
+    } else {
+      if (result.score == null) result.score = sum('score')
+      if (result.totalMarks == null) result.totalMarks = sum('totalMarks')
+      if (result.correct == null) {
+        const sCorrect = sum('correct')
+        if (sCorrect > 0) result.correct = sCorrect
+      }
+      if (result.wrong == null) {
+        const sWrong = sum('wrong')
+        if (sWrong > 0) result.wrong = sWrong
+      }
+      if (result.unattempted == null) {
+        const sUnatt = sum('unattempted')
+        if (sUnatt > 0) result.unattempted = sUnatt
+      }
+      if (result.totalQuestions == null) {
+        const sTotalQ = sum('totalQuestions')
+        if (sTotalQ > 0) result.totalQuestions = sTotalQ
+      }
+      if (!result.timeSpentMinutes) result.timeSpentMinutes = sum('timeSpentMinutes')
     }
 
-    if (ov.score != null) result.score = ov.score
-    if (ov.totalMarks) result.totalMarks = ov.totalMarks
-    if (ov.correct != null) result.correct = ov.correct
-    if (ov.wrong != null) result.wrong = ov.wrong
-    if (ov.unattempted != null) result.unattempted = ov.unattempted
-    result.totalQuestions =
-      ov.totalQuestions ||
-      (Number(result.correct || 0) + Number(result.wrong || 0) + Number(result.unattempted || 0))
-    if (ov.cutoff != null && !Number.isNaN(ov.cutoff)) result.cutoff = ov.cutoff
-    if (ov.percentile != null && !Number.isNaN(ov.percentile) && result.percentile == null) {
-      result.percentile = ov.percentile
-    }
-    if (ov.timeSpentMinutes && !result.timeSpentMinutes) {
-      result.timeSpentMinutes = ov.timeSpentMinutes
-    }
     // Derived overall accuracy when the portal didn't print one.
     if (result.accuracy == null) {
       const attempted = Number(result.correct || 0) + Number(result.wrong || 0)
@@ -414,6 +555,22 @@ export function parseRawExamSummary(rawText) {
   if (result.totalCandidates == null) {
     const takers = text.match(/(?:Out of|of)\s*([\d,]+)\s*(?:test[\s-]*takers|students|candidates|aspirants|users)/i)
     if (takers) result.totalCandidates = parseInt(takers[1].replace(/,/g, ''), 10)
+  }
+
+  // ── 11. Final Auto-Derivations ────────────────────────────────────
+  if (result.accuracy === null && result.correct !== null && result.wrong !== null) {
+    const attempted = result.correct + result.wrong
+    if (attempted > 0) {
+      result.accuracy = roundTo((result.correct / attempted) * 100, 1)
+    }
+  }
+
+  if (result.unattempted === null && result.totalQuestions !== null && result.correct !== null && result.wrong !== null) {
+    result.unattempted = Math.max(0, result.totalQuestions - result.correct - result.wrong)
+  }
+
+  if (result.totalQuestions === null && (result.correct !== null || result.wrong !== null || result.unattempted !== null)) {
+    result.totalQuestions = (result.correct || 0) + (result.wrong || 0) + (result.unattempted || 0)
   }
 
   return result

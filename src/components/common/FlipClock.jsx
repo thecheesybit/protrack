@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback, memo } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo, memo } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { GripHorizontal, Bell } from 'lucide-react'
@@ -372,10 +372,14 @@ export function FlipClock() {
 
   const hiddenByAuto = !clockCentered && mode === 'auto' && !focusLocked && (chromeHidden || fullscreen || focusRunning)
 
+  // Safe space is available in area (C) below the legend (which has 2cm extra bottom clearance),
+  // so the clock remains visible when legends expand.
+  const isHidden = hiddenByAuto
+
   return (
     <>
       <AnimatePresence>
-      {!hiddenByAuto && (
+      {!isHidden && (
         <motion.div
           ref={clockRef}
           key="flip-clock"
@@ -417,31 +421,33 @@ export function FlipClock() {
           }}
           aria-label={`Flip clock — ${clockCentered ? 'Centered' : mode} mode`}
         >
-          {/* Tactile Alarm Button below flip clock (as annotated in media_1788917943256.png) */}
-          <motion.button
-            type="button"
-            data-testid="flipclock-alarm-tab"
-            whileHover={{ scale: 1.03, y: -1 }}
-            whileTap={{
-              y: 4,
-              scale: 0.96,
-              transition: { type: 'spring', stiffness: 900, damping: 15 },
-            }}
-            onClick={(e) => {
-              e.stopPropagation()
-              try { playPop() } catch { /* noop */ }
-              setAlarmModalOpen(true)
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
-            onDoubleClick={(e) => e.stopPropagation()}
-            title="Set Alarm / Reminder (Alt + A)"
-            className="absolute -bottom-3.5 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 rounded-xl border border-line/80 border-b-[3px] border-b-black/50 bg-gradient-to-b from-surface/95 via-surface to-surface-2/90 px-3 py-1 text-[10px] font-bold text-ink/90 shadow-[0_4px_0_0_rgba(0,0,0,0.4),0_6px_12px_rgba(0,0,0,0.25)] backdrop-blur-xl cursor-pointer select-none group/alarmtab transition-colors active:border-b active:shadow-[0_1px_0_0_rgba(0,0,0,0.4),0_2px_4px_rgba(0,0,0,0.2)]"
-          >
-            <Bell className="h-3 w-3 text-accent transition-transform group-hover/alarmtab:rotate-12 group-hover/alarmtab:scale-110" />
-            <span className="text-[9px] uppercase tracking-wider font-extrabold text-ink group-hover/alarmtab:text-accent">
-              Alarm
-            </span>
-          </motion.button>
+          {/* Tactile Alarm Button below flip clock (hidden when expanded to large scene in Ctrl+T mode) */}
+          {!clockCentered && (
+            <motion.button
+              type="button"
+              data-testid="flipclock-alarm-tab"
+              whileHover={{ scale: 1.03, y: -1 }}
+              whileTap={{
+                y: 4,
+                scale: 0.96,
+                transition: { type: 'spring', stiffness: 900, damping: 15 },
+              }}
+              onClick={(e) => {
+                e.stopPropagation()
+                try { playPop() } catch { /* noop */ }
+                setAlarmModalOpen(true)
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              onDoubleClick={(e) => e.stopPropagation()}
+              title="Set Alarm / Reminder (Alt + A)"
+              className="absolute -bottom-3.5 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 rounded-xl border border-line/80 border-b-[3px] border-b-black/50 bg-gradient-to-b from-surface/95 via-surface to-surface-2/90 px-3 py-1 text-[10px] font-bold text-ink/90 shadow-[0_4px_0_0_rgba(0,0,0,0.4),0_6px_12px_rgba(0,0,0,0.25)] backdrop-blur-xl cursor-pointer select-none group/alarmtab transition-colors active:border-b active:shadow-[0_1px_0_0_rgba(0,0,0,0.4),0_2px_4px_rgba(0,0,0,0.2)]"
+            >
+              <Bell className="h-3 w-3 text-accent transition-transform group-hover/alarmtab:rotate-12 group-hover/alarmtab:scale-110" />
+              <span className="text-[9px] uppercase tracking-wider font-extrabold text-ink group-hover/alarmtab:text-accent">
+                Alarm
+              </span>
+            </motion.button>
+          )}
 
           <div className="flex items-center gap-1">
             <Digit value={t.h1} />

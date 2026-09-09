@@ -69,7 +69,7 @@ export function AppLoader({ error: customError }) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.4, ease: 'easeInOut' }}
-      className="fixed inset-0 z-40 flex flex-col items-center justify-between p-6 select-none overflow-hidden bg-[#07080c]"
+      className="fixed inset-0 z-40 flex flex-col items-center justify-between p-6 select-none overflow-hidden bg-bg dark:bg-[#07080c]"
     >
       {/* ── Ambient Cosmic Aurora & Starfield (Matches ProTrack Project Canvas from y=0 to y=100%) ── */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden select-none" aria-hidden="true">

@@ -14,6 +14,7 @@ import { AppLockOverlay } from '@/components/lock/AppLockOverlay'
 import { useAppLock } from '@/hooks/useAppLock'
 import { useStore } from '@/store/useStore'
 import { useChronoTheme } from '@/hooks/useChronoTheme'
+import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 
 const loadLandingPage = () => import('@/components/marketing/LandingPage').then((m) => ({ default: m.LandingPage }))
 const loadQrLoginScreen = () => import('@/components/auth/QrLoginScreen').then((m) => ({ default: m.QrLoginScreen }))
@@ -100,9 +101,11 @@ function Routes() {
           transition={{ duration: 0.35, ease: 'easeOut' }}
           className="h-full"
         >
-          <Suspense fallback={null}>
-            <Workspace />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={null}>
+              <Workspace />
+            </Suspense>
+          </ErrorBoundary>
         </motion.div>
       ) : (
         <motion.div
@@ -113,9 +116,11 @@ function Routes() {
           transition={{ duration: 0.35, ease: 'easeOut' }}
           className="h-full"
         >
-          <Suspense fallback={null}>
-            <QrLoginScreen />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={null}>
+              <QrLoginScreen />
+            </Suspense>
+          </ErrorBoundary>
         </motion.div>
       )}
     </AnimatePresence>
@@ -128,6 +133,8 @@ export default function App() {
   useFontScale() // mirrors uiSlice.fontScale → <html data-font-scale>
   useAppLock() // manages app lock triggers (cold start, minimize, close, storage sync)
   const isLocked = useStore((s) => s.isLocked)
+  const { user } = useAuth()
+  const realUser = user && !user.isAnonymous ? user : null
 
   return (
     <FirestoreSyncProvider>
@@ -147,13 +154,13 @@ export default function App() {
         {isDesktop && <TitleBar />}
         <div
           className={`min-h-0 flex-1 ${
-            isLocked ? 'pointer-events-none select-none invisible' : ''
+            isLocked && realUser ? 'pointer-events-none select-none invisible' : ''
           }`}
-          aria-hidden={isLocked}
+          aria-hidden={isLocked && Boolean(realUser)}
         >
           <Routes />
         </div>
-        <AppLockOverlay />
+        {realUser && <AppLockOverlay />}
       </div>
     </FirestoreSyncProvider>
   )

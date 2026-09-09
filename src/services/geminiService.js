@@ -279,15 +279,17 @@ After a successful tool call, give a short natural-language confirmation; do
 not echo the JSON.`
 
 /**
- * Context-aware chat with function-calling. The executor loop runs until the
- * model produces a plain-text response (no further calls). Capped at 4 hops
- * so a misbehaving model can never spin.
+ * Context-aware chat with function-calling and optional real-time streaming response.
+ * The executor loop runs until the model produces a plain-text response (no further calls).
+ * Capped at 4 hops so a misbehaving model can never spin.
  *
  * @param {Array<{role:'user'|'assistant', text:string}>} history
  * @param {string} contextText
  * @param {object} ctx executor context: { uid, modeId, subjects, habits, todos }
+ * @param {((accumulatedText: string, chunkText: string) => void)|null} onChunk optional streaming callback
+ * @param {((toolEvent: object) => void)|null} onToolEvent optional callback when a tool finishes executing
  */
-export async function chatWithGemini(history, contextText, ctx = {}) {
+export async function chatWithGemini(history, contextText, ctx = {}, onChunk = null, onToolEvent = null) {
   const preferred = localStorage.getItem('protrack:ai_preferred_provider') || 'auto'
   
   // Determine primary provider to try
@@ -326,28 +328,104 @@ export async function chatWithGemini(history, contextText, ctx = {}) {
           })
 
           const last = history[history.length - 1]
-          let result = await chat.sendMessage(last.text)
           const toolEvents = []
 
-          for (let hop = 0; hop < 4; hop++) {
-            const calls = result.response.functionCalls?.() || []
-            if (!calls.length) break
+          if (typeof onChunk === 'function') {
+            // Streaming mode
+            onChunk('', '')
+            let accumulatedText = ''
+            const streamResult = await chat.sendMessageStream(last.text)
 
-            const responseParts = []
-            for (const call of calls) {
-              const outcome = await executeTool(call.name, call.args || {}, ctx)
-              toolEvents.push({ name: call.name, ...outcome })
-              responseParts.push({
-                functionResponse: {
-                  name: call.name,
-                  response: outcome,
-                },
-              })
+            for await (const chunk of streamResult.stream) {
+              try {
+                const chunkText = chunk.text()
+                if (chunkText) {
+                  accumulatedText += chunkText
+                  onChunk(accumulatedText, chunkText)
+                }
+              } catch {
+                // If chunk only contains functionCall parts, chunk.text() throws; ignore safely
+              }
             }
-            result = await chat.sendMessage(responseParts)
-          }
 
-          return { text: result.response.text(), toolEvents }
+            const response = await streamResult.response
+            const calls = response.functionCalls?.() || []
+
+            if (calls.length > 0) {
+              // Reset text buffer since function calls will produce intermediate tool state
+              accumulatedText = ''
+              onChunk('', '')
+
+              let currentResponse = response
+              for (let hop = 0; hop < 4; hop++) {
+                const hopCalls = currentResponse.functionCalls?.() || []
+                if (!hopCalls.length) break
+
+                const responseParts = []
+                for (const call of hopCalls) {
+                  const outcome = await executeTool(call.name, call.args || {}, ctx)
+                  const ev = { name: call.name, ...outcome }
+                  toolEvents.push(ev)
+                  onToolEvent?.(ev)
+                  responseParts.push({
+                    functionResponse: {
+                      name: call.name,
+                      response: outcome,
+                    },
+                  })
+                }
+
+                const streamHop = await chat.sendMessageStream(responseParts)
+                for await (const chunk of streamHop.stream) {
+                  try {
+                    const chunkText = chunk.text()
+                    if (chunkText) {
+                      accumulatedText += chunkText
+                      onChunk(accumulatedText, chunkText)
+                    }
+                  } catch {
+                    // ignore
+                  }
+                }
+                currentResponse = await streamHop.response
+              }
+
+              return {
+                text: accumulatedText || (typeof currentResponse.text === 'function' ? currentResponse.text() : ''),
+                toolEvents,
+              }
+            }
+
+            return {
+              text: accumulatedText || (typeof response.text === 'function' ? response.text() : ''),
+              toolEvents,
+            }
+          } else {
+            // Non-streaming fallback mode
+            let result = await chat.sendMessage(last.text)
+
+            for (let hop = 0; hop < 4; hop++) {
+              const calls = result.response.functionCalls?.() || []
+              if (!calls.length) break
+
+              const responseParts = []
+              for (const call of calls) {
+                const outcome = await executeTool(call.name, call.args || {}, ctx)
+                const ev = { name: call.name, ...outcome }
+                toolEvents.push(ev)
+                onToolEvent?.(ev)
+                responseParts.push({
+                  functionResponse: {
+                    name: call.name,
+                    response: outcome,
+                  },
+                })
+              }
+              result = await chat.sendMessage(responseParts)
+            }
+
+            return { text: result.response.text(), toolEvents }
+          }
         })
       } else {
         // Fallback for OpenAI, Anthropic, DeepSeek (text-only response)
@@ -362,6 +440,10 @@ export async function chatWithGemini(history, contextText, ctx = {}) {
         } else if (p === 'deepseek') {
           textResponse = await callDeepSeek(last.text, systemInst)
         }
+
+        if (typeof onChunk === 'function') {
+          onChunk(textResponse, textResponse)
+        }
         
         return { text: textResponse, toolEvents: [] }
       }
@@ -372,6 +454,13 @@ export async function chatWithGemini(history, contextText, ctx = {}) {
   }
 
   throw lastError || new Error('No working AI provider configured')
+}
+
+/**
+ * Convenience wrapper for real-time streaming chat.
+ */
+export async function chatWithGeminiStream(history, contextText, ctx = {}, onChunk = null, onToolEvent = null) {
+  return chatWithGemini(history, contextText, ctx, onChunk, onToolEvent)
 }
 
 /**

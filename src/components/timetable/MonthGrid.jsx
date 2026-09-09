@@ -34,6 +34,7 @@ export function MonthGrid({
 }) {
   const gcalEvents = useStore((s) => s.gcalEvents)
   const setupError = useStore((s) => s.gcalSetupError)
+  const setSelectedDate = useStore((s) => s.setSelectedDate)
   const [offset, setOffset] = useState(0)
 
   const view = useMemo(() => {
@@ -131,7 +132,10 @@ export function MonthGrid({
           <button
             key={cell.dateStr}
             type="button"
-            onClick={() => onPickDay?.(cell.date)}
+            onClick={() => {
+              setSelectedDate(cell.dateStr)
+              onPickDay?.(cell.date)
+            }}
             className={cn(
               'flex min-h-[68px] flex-col items-stretch gap-0.5 rounded-lg border p-1 text-left transition-colors',
               cell.inMonth ? 'border-line/40 bg-surface/40 hover:border-accent/40 hover:bg-surface-2/40' : 'border-transparent bg-transparent opacity-40',

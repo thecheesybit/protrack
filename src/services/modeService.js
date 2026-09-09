@@ -73,3 +73,25 @@ export async function deleteMode(uid, modeId) {
   }
   return deleteDoc(doc(db, 'users', uid, 'modes', modeId))
 }
+
+/**
+ * Soft-delete / archive a mode.
+ * Hides it from the primary switcher without deleting its nested subjects, goals, or slots.
+ */
+export async function archiveMode(uid, modeId) {
+  return updateDoc(doc(db, 'users', uid, 'modes', modeId), {
+    archived: true,
+    archivedAt: serverTimestamp(),
+  })
+}
+
+/**
+ * Restore an archived mode back to active state.
+ */
+export async function unarchiveMode(uid, modeId) {
+  return updateDoc(doc(db, 'users', uid, 'modes', modeId), {
+    archived: false,
+    unarchivedAt: serverTimestamp(),
+  })
+}
+

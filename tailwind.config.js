@@ -66,9 +66,9 @@ export default {
           '100%': { transform: 'translateX(100%)' },
         },
         'aurora-shift': {
-          '0%, 100%': { transform: 'translate(0, 0) scale(1)' },
-          '33%': { transform: 'translate(4%, -6%) scale(1.08)' },
-          '66%': { transform: 'translate(-5%, 4%) scale(0.96)' },
+          '0%, 100%': { transform: 'translate3d(0, 0, 0) scale(1)' },
+          '33%': { transform: 'translate3d(4%, -6%, 0) scale(1.08)' },
+          '66%': { transform: 'translate3d(-5%, 4%, 0) scale(0.96)' },
         },
         twinkle: {
           '0%, 100%': { opacity: '0.1' },

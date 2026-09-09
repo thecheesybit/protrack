@@ -64,7 +64,7 @@ export function FocusSetup({
   return (
     <div className="flex w-full flex-col items-center gap-2.5" style={panelStyle}>
       {/* Tab switcher */}
-      <div className="flex w-full rounded-2xl border border-white/10 bg-black/40 p-1 backdrop-blur-md">
+      <div className="flex w-full rounded-2xl border border-white/10 bg-black/40 p-1 backdrop-blur-md" role="tablist" aria-label="Focus setup options">
         {[
           { id: 'timer', label: 'Time', Icon: Clock },
           { id: 'sounds', label: 'Audio', Icon: AudioLines },
@@ -72,9 +72,13 @@ export function FocusSetup({
         ].map(({ id, label, Icon }) => (
           <button
             key={id}
+            role="tab"
+            aria-selected={activeTab === id}
+            aria-controls={`focus-tab-${id}`}
+            id={`focus-tab-btn-${id}`}
             onClick={() => setActiveTab(id)}
             className={cn(
-              'flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-[11px] font-bold uppercase tracking-wider transition-all',
+              'flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer',
               activeTab === id
                 ? 'border border-white/10 bg-white/10 text-white shadow-glow-sm'
                 : 'border border-transparent text-white/50 hover:text-white',
@@ -91,6 +95,9 @@ export function FocusSetup({
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
+            role="tabpanel"
+            id={`focus-tab-${activeTab}`}
+            aria-labelledby={`focus-tab-btn-${activeTab}`}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}

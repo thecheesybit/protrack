@@ -1,5 +1,6 @@
 import { memo, useMemo, useState, useEffect } from 'react'
 import { FireflyField } from './FireflyField'
+import { RoostingBirdSilhouette, VenusSparkle } from './SkySprites'
 
 const rnd = (min, max) => min + Math.random() * (max - min)
 const uid = () => Math.random().toString(36).slice(2)
@@ -8,7 +9,7 @@ function makeDuskBirdPass() {
   const dir = Math.random() < 0.65 ? 'ltr' : 'rtl'
   const top = rnd(16, 42)
   const driftY = rnd(-14, 14)
-  const dur = rnd(36, 54)
+  const dur = rnd(24, 38)
   return {
     id: uid(),
     dir,
@@ -19,11 +20,11 @@ function makeDuskBirdPass() {
 }
 
 /**
- * Sunset / Dusk Sky Ambient Objects:
- * - Setting amber/crimson sun dipping into twilight
- * - Dynamic, non-repeating silhouetted bird flock passages (random headings & intervals)
- * - Twilight clouds rimmed with warm coral & violet highlights
- * - Bioluminescent fireflies beginning to glow as twilight deepens
+ * Dusk / Twilight Sky Ambient Objects:
+ * - Glowing Evening Star (Venus)
+ * - Deep coral/rose setting sun
+ * - Twilight bird flock heading to roost (dynamic passages)
+ * - Bioluminescent fireflies rising from the grass
  */
 export const DuskSkyObjects = memo(function DuskSkyObjects() {
   // Dynamic non-repeating bird flock passes
@@ -37,12 +38,12 @@ export const DuskSkyObjects = memo(function DuskSkyObjects() {
           if (list.length >= 1) return list
           return [...list, makeDuskBirdPass()]
         })
-        scheduleNext(rnd(130000, 260000))
+        scheduleNext(rnd(90000, 180000))
       }, delayMs)
     }
 
     // Gentle twilight bird formation returning home: occasional and soothing
-    scheduleNext(rnd(35000, 70000))
+    scheduleNext(rnd(15000, 45000))
     return () => clearTimeout(timer)
   }, [])
 
@@ -50,7 +51,7 @@ export const DuskSkyObjects = memo(function DuskSkyObjects() {
     setBirdPasses((list) => list.filter((p) => p.id !== id))
   }
 
-  // A small flock of silhouetted birds gliding in gentle formation
+  // Roosting bird flock formation
   const birdFlock = useMemo(() => [
     { id: 1, dx: 0, dy: 0, scale: 1, flapDelay: '0s' },
     { id: 2, dx: 24, dy: 14, scale: 0.85, flapDelay: '-0.3s' },
@@ -64,9 +65,7 @@ export const DuskSkyObjects = memo(function DuskSkyObjects() {
       {/* ── The Evening Star (Venus / Hesperus) ── */}
       <div className="absolute left-[22%] top-[14%] select-none pointer-events-none animate-[evening-star-glint_6s_ease-in-out_infinite]">
         <div className="absolute -inset-4 rounded-full bg-amber-200/20 blur-md" />
-        <svg width="18" height="18" viewBox="0 0 18 18" className="fill-amber-100/90 drop-shadow-[0_0_6px_rgba(254,240,138,0.8)]">
-          <path d="M9,0 Q9,9 0,9 Q9,9 9,18 Q9,9 18,9 Q9,9 9,0 Z" />
-        </svg>
+        <VenusSparkle className="fill-amber-100/90 drop-shadow-[0_0_6px_rgba(254,240,138,0.8)]" />
       </div>
 
       {/* ── Setting Coral Sun ── */}
@@ -125,19 +124,7 @@ export const DuskSkyObjects = memo(function DuskSkyObjects() {
                   transform: `translate(${b.dx}px, ${b.dy}px) scale(${b.scale})`,
                 }}
               >
-                <svg
-                  width="20"
-                  height="12"
-                  viewBox="0 0 20 12"
-                  className="animate-[bird-flap_1.6s_ease-in-out_infinite]"
-                  style={{ animationDelay: b.flapDelay }}
-                >
-                  <path
-                    d="M0 6 C4 1, 8 1, 10 5 C12 1, 16 1, 20 6 C16 4, 12 4, 10 7 C8 4, 4 4, 0 6 Z"
-                    fill="#1e1b4b"
-                    opacity="0.7"
-                  />
-                </svg>
+                <RoostingBirdSilhouette style={{ animationDelay: b.flapDelay }} />
               </div>
             ))}
           </div>

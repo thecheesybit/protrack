@@ -18,6 +18,7 @@ import {
   BellOff,
   X,
   Radio,
+  Hash,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
@@ -32,6 +33,8 @@ import {
 import { WidgetFrame } from './WidgetFrame'
 import { VoicePlayer } from '@/components/notes/VoicePlayer'
 import { playSuccess, playPop } from '@/lib/audioFX'
+import { MarkdownText } from '@/lib/markdown'
+import { parseHashtags, normalizeTag } from '@/lib/tags'
 import { cn } from '@/utils/cn'
 
 const TYPE_CONFIG = {
@@ -84,6 +87,7 @@ export function NotesWidget({ widget, variant }) {
   // Filter & search state
   const [filterType, setFilterType] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedTag, setSelectedTag] = useState(null)
 
   // Intake State
   const [dropType, setDropType] = useState('note') // 'note' | 'memory' | 'voice' | 'link'
@@ -234,6 +238,7 @@ export function NotesWidget({ widget, variant }) {
 
     setIsSaving(true)
     try {
+      const autoTags = parseHashtags(`${titleToSave} ${contentToSave}`)
       await addNote(user.uid, {
         title: titleToSave,
         content: contentToSave,
@@ -245,6 +250,7 @@ export function NotesWidget({ widget, variant }) {
         modeId: activeModeId === 'all' ? null : activeModeId,
         dueAt: dropDueAt ? new Date(dropDueAt).getTime() : null,
         reminderEnabled: Boolean(dropDueAt) && dropReminder,
+        tags: autoTags,
       })
 
       playSuccess()
@@ -276,6 +282,19 @@ export function NotesWidget({ widget, variant }) {
     }
   }
 
+  // Extract all unique normalized hashtags across saved notes
+  const allTags = useMemo(() => {
+    const set = new Set()
+    notes.forEach((n) => {
+      const text = `${n.title || ''} ${n.content || ''} ${n.transcript || ''}`
+      parseHashtags(text).forEach((t) => set.add(t))
+      if (Array.isArray(n.tags)) {
+        n.tags.forEach((t) => set.add(normalizeTag(t)))
+      }
+    })
+    return Array.from(set).filter(Boolean).sort()
+  }, [notes])
+
   // Filtered and sorted notes
   const filteredNotes = useMemo(() => {
     return notes
@@ -287,6 +306,15 @@ export function NotesWidget({ widget, variant }) {
         // Type filter
         if (filterType !== 'all' && (n.type || 'note') !== filterType) {
           return false
+        }
+        // Tag filter
+        if (selectedTag) {
+          const text = `${n.title || ''} ${n.content || ''} ${n.transcript || ''}`
+          const noteTags = new Set([
+            ...parseHashtags(text),
+            ...(Array.isArray(n.tags) ? n.tags.map(normalizeTag) : []),
+          ])
+          if (!noteTags.has(selectedTag)) return false
         }
         // Search query
         if (searchQuery.trim()) {
@@ -304,7 +332,7 @@ export function NotesWidget({ widget, variant }) {
         if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
         return (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0)
       })
-  }, [notes, activeModeId, filterType, searchQuery])
+  }, [notes, activeModeId, filterType, selectedTag, searchQuery])
 
   // Counts for pills
   const counts = useMemo(() => {
@@ -661,6 +689,34 @@ export function NotesWidget({ widget, variant }) {
           </div>
         </div>
 
+        {/* ── Hashtag Filter Pills ── */}
+        {allTags.length > 0 && (
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+            <span className="flex items-center gap-0.5 text-[10px] font-semibold text-muted tracking-wider uppercase shrink-0">
+              <Hash className="h-3 w-3" /> Tags:
+            </span>
+            {allTags.map((tag) => {
+              const active = selectedTag === tag
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => setSelectedTag(active ? null : tag)}
+                  className={cn(
+                    'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-all shrink-0 cursor-pointer border',
+                    active
+                      ? 'border-accent bg-accent text-white font-bold shadow-sm'
+                      : 'border-line/60 bg-surface/60 text-muted hover:border-line hover:text-ink',
+                  )}
+                >
+                  #{tag}
+                  {active && <X className="h-2.5 w-2.5 ml-0.5" />}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
         {/* ── Notes Feed / Dropbox Items ── */}
         {filteredNotes.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-line/60 py-6 text-center">
@@ -798,16 +854,19 @@ export function NotesWidget({ widget, variant }) {
 
                   {type === 'memory' && (
                     <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-2.5">
-                      <p className="text-xs text-ink/90 whitespace-pre-wrap leading-relaxed">
-                        {n.content}
-                      </p>
+                      <MarkdownText
+                        content={n.content}
+                        onTagClick={(tag) => setSelectedTag((prev) => (prev === tag ? null : tag))}
+                      />
                     </div>
                   )}
 
                   {type === 'note' && n.content && (
-                    <p className="text-xs text-ink/90 whitespace-pre-wrap leading-relaxed line-clamp-4">
-                      {n.content}
-                    </p>
+                    <MarkdownText
+                      content={n.content}
+                      onTagClick={(tag) => setSelectedTag((prev) => (prev === tag ? null : tag))}
+                      className="line-clamp-6 hover:line-clamp-none transition-all"
+                    />
                   )}
 
                   {/* ── Deadline & Reminder footer ── */}

@@ -41,18 +41,42 @@ const FIXED_TIMES_MIN = {
   evening: 19 * 60,
 }
 
-/** A cue may be snoozed once per habit per day. habitId → ymd() it was spent. */
-const _snoozeUsed = new Map()
-const HABIT_SNOOZE_MS = 5 * 60 * 1000
+/**
+ * Habit Snooze Tracking.
+ * Snooze is allowed ONCE per notification instance (not per habit per day).
+ * When a scheduled cue fires (e.g. 10:00), the user can snooze it once.
+ * The resulting re-fired notification (e.g. 10:05) cannot be snoozed again.
+ * When the next scheduled notification arrives (e.g. 12:00 or next interval),
+ * it is a new notification and can be snoozed once.
+ */
+const _snoozedHabitIds = new Set()
+const _pendingSnoozeTimers = new Map() // habitId -> timerId
+export const HABIT_SNOOZE_MS = 5 * 60 * 1000
 
-/** True once this habit's single daily snooze has been spent today. */
-export function habitSnoozeUsed(habitId) {
-  return _snoozeUsed.get(habitId) === ymd()
+/** True once this habit's current notification instance has already been snoozed. */
+export function habitSnoozeUsed(habitOrId) {
+  if (!habitOrId) return false
+  if (typeof habitOrId === 'object') {
+    if (habitOrId.snoozeUsed || habitOrId.isSnoozed) return true
+    return _snoozedHabitIds.has(habitOrId.id)
+  }
+  return _snoozedHabitIds.has(habitOrId)
 }
 
-/** Test-only — forget the snooze ledger. */
+/** Clear pending snooze timer for a habit (e.g. when completed or rescheduled). */
+export function clearPendingHabitSnooze(habitId) {
+  if (!habitId) return
+  if (_pendingSnoozeTimers.has(habitId)) {
+    clearTimeout(_pendingSnoozeTimers.get(habitId))
+    _pendingSnoozeTimers.delete(habitId)
+  }
+}
+
+/** Test-only — forget the snooze ledger and cancel any pending timers. */
 export function __resetHabitSnooze() {
-  _snoozeUsed.clear()
+  _snoozedHabitIds.clear()
+  _pendingSnoozeTimers.forEach((tid) => clearTimeout(tid))
+  _pendingSnoozeTimers.clear()
 }
 
 /**
@@ -108,9 +132,22 @@ function completionsToday(habit) {
  * Fires the center prompt, audio chime, and Dynamic Island notification for a
  * habit reminder. The prompt is the thing that "needs an answer"; the Island
  * banner + OS notification stay informational.
+ *
+ * @param {string} uid
+ * @param {object} habit
+ * @param {{ isSnoozed?: boolean }} [options]
  */
-export function triggerHabitCue(uid, habit) {
+export function triggerHabitCue(uid, habit, options = {}) {
   if (!uid || !habit) return
+
+  const isSnoozed = Boolean(options.isSnoozed || habit.isSnoozed)
+
+  // When a fresh scheduled cue fires, clear previous snooze state for this habit
+  // so this new notification can be snoozed once.
+  if (!isSnoozed) {
+    _snoozedHabitIds.delete(habit.id)
+    clearPendingHabitSnooze(habit.id)
+  }
 
   // 1. Auditory Chime (if sound not disabled)
   if (habit.reminderSound !== false) {
@@ -130,7 +167,12 @@ export function triggerHabitCue(uid, habit) {
       const expiresAt = habitCueExpiry(habit)
       const id = st.pushPrompt({
         type: 'routine',
-        payload: { ...habit, expiresAt, snoozeUsed: habitSnoozeUsed(habit.id) },
+        payload: {
+          ...habit,
+          expiresAt,
+          snoozeUsed: isSnoozed || habitSnoozeUsed(habit.id),
+          isSnoozed,
+        },
         snoozeMs: HABIT_SNOOZE_MS,
         coalesceKey: `habit:${habit.id}`,
       })
@@ -150,31 +192,41 @@ export function triggerHabitCue(uid, habit) {
   // 3. Dynamic Island Banner
   useStore.getState().pushIsland({
     kind: habit.icon === 'Droplets' ? 'water' : 'info',
-    title: `Time to ${habit.name}`,
+    title: isSnoozed ? `Reminder: Time to ${habit.name}` : `Time to ${habit.name}`,
     detail: habit.scienceRationale
       ? `${habit.scienceRationale.slice(0, 75)}…`
-      : 'Open the reminder to mark it done.',
+      : isSnoozed
+        ? 'Snoozed reminder. Open to mark it done.'
+        : 'Open the reminder to mark it done.',
     duration: 6500,
   })
 
   // 4. Background OS Native Notification
   notify(
-    `Habit Reminder · ${habit.name}`,
+    isSnoozed ? `Habit Reminder (Snoozed) · ${habit.name}` : `Habit Reminder · ${habit.name}`,
     habit.scienceRationale || `Time to ${habit.name.toLowerCase()}. Open PRO TRACK to track response.`,
   )
 }
 
 /**
  * Re-fire a habit cue once, after `ms` (default 5 min). The center prompt's
- * Snooze / dismiss path calls this. Capped at ONE snooze per habit per day —
- * a second call is a no-op, so an ignored cue lapses to "missed" instead of
- * nagging forever.
+ * Snooze / dismiss path calls this. Capped at ONE snooze per notification
+ * instance — a second call is a no-op, and a re-fired snoozed reminder cannot
+ * be snoozed again.
  */
 export function snoozeHabitCue(uid, habit, ms = HABIT_SNOOZE_MS) {
   if (!uid || !habit) return
-  if (habitSnoozeUsed(habit.id)) return
-  _snoozeUsed.set(habit.id, ymd())
-  setTimeout(() => triggerHabitCue(uid, habit), ms)
+  if (habit.snoozeUsed || habit.isSnoozed || habitSnoozeUsed(habit.id)) return
+
+  _snoozedHabitIds.add(habit.id)
+  clearPendingHabitSnooze(habit.id)
+
+  const timerId = setTimeout(() => {
+    _pendingSnoozeTimers.delete(habit.id)
+    triggerHabitCue(uid, habit, { isSnoozed: true })
+  }, ms)
+
+  _pendingSnoozeTimers.set(habit.id, timerId)
 }
 
 export function useHabitReminders() {
@@ -245,5 +297,7 @@ export function missedToday(habit, now = new Date()) {
 /** Toggle a habit from a notification or backlog chip. */
 export function quickCompleteHabit(uid, habit) {
   if (!uid || !habit) return Promise.resolve()
+  clearPendingHabitSnooze(habit.id)
+  _snoozedHabitIds.delete(habit.id)
   return toggleHabitToday(uid, habit)
 }

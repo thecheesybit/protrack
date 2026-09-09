@@ -1,5 +1,7 @@
 import { memo, useMemo, useState, useEffect } from 'react'
 import { ButterflyFlock } from './ButterflyFlock'
+import { SoaringBirdSilhouette } from './SkySprites'
+import { getActiveIndianSeason, CLIMATE_OVERRIDE_EVENT } from '@/lib/indianClimate'
 
 const rnd = (min, max) => min + Math.random() * (max - min)
 const uid = () => Math.random().toString(36).slice(2)
@@ -42,14 +44,22 @@ const CLOUD_PATHS = [
 
 /**
  * Day Sky Ambient Objects:
- * - Radiant Sun with pulsing corona and rotating sunbeams
+ * - Season-adapted Daylight Sun (blazing in Summer, mellow in Winter, golden in Spring)
  * - Layered fluffy cumulus clouds drifting at parallax speeds
- * - Gentle ambient raindrops falling softly
- * - Dynamic, non-repeating soaring thermal hawks (randomized headings, altitudes & timing)
- * - Dynamic, non-repeating Azure Morpho butterflies (50/50 randomized directions & paths)
- * - Dynamic floating dandelion seeds drifting across the breeze
+ * - Dynamic soaring thermal raptors (occasional passages)
+ * - Dynamic Azure Morpho butterflies
+ * - Dynamic floating dandelion seeds
+ * Note: Rain is no longer hardcoded 24/7; it is driven dynamically by the Indian Climate Engine!
  */
 export const DaySkyObjects = memo(function DaySkyObjects() {
+  const [season, setSeason] = useState(() => getActiveIndianSeason())
+
+  useEffect(() => {
+    const onClimateChange = () => setSeason(getActiveIndianSeason())
+    window.addEventListener(CLIMATE_OVERRIDE_EVENT, onClimateChange)
+    return () => window.removeEventListener(CLIMATE_OVERRIDE_EVENT, onClimateChange)
+  }, [])
+
   // Dynamic non-repeating soaring hawk passes
   const [hawkPasses, setHawkPasses] = useState(() => [])
 
@@ -65,7 +75,6 @@ export const DaySkyObjects = memo(function DaySkyObjects() {
       }, delayMs)
     }
 
-    // Majestic high-altitude raptor: occasional, majestic appearance
     scheduleNext(rnd(45000, 90000))
     return () => clearTimeout(timer)
   }, [])
@@ -89,7 +98,6 @@ export const DaySkyObjects = memo(function DaySkyObjects() {
       }, delayMs)
     }
 
-    // Rare, gentle dandelion seed drifting on the afternoon breeze
     scheduleNext(rnd(35000, 70000))
     return () => clearTimeout(timer)
   }, [])
@@ -98,38 +106,44 @@ export const DaySkyObjects = memo(function DaySkyObjects() {
     setDandelionSeeds((list) => list.filter((d) => d.id !== id))
   }
 
-  const clouds = useMemo(() => [
-    { id: 1, top: '8%', pathIdx: 0, scale: 1.25, dur: '85s', delay: '0s', opacity: 0.35, anim: 'cloud-drift-slow' },
-    { id: 2, top: '22%', pathIdx: 1, scale: 0.95, dur: '65s', delay: '-25s', opacity: 0.28, anim: 'cloud-drift-mid' },
-    { id: 3, top: '14%', pathIdx: 2, scale: 1.4, dur: '110s', delay: '-50s', opacity: 0.3, anim: 'cloud-drift-slow' },
-    { id: 4, top: '32%', pathIdx: 0, scale: 0.85, dur: '75s', delay: '-15s', opacity: 0.22, anim: 'cloud-drift-mid' },
-  ], [])
+  // Cloud density adapts to the season: denser in Monsoon, clearer in Summer/Spring
+  const clouds = useMemo(() => {
+    const isMonsoon = season.id === 'varsha'
+    const isSummer = season.id === 'grishma'
+    const opMultiplier = isMonsoon ? 1.4 : isSummer ? 0.7 : 1.0
 
-  const rainDrops = useMemo(() => {
-    return Array.from({ length: 32 }, (_, i) => ({
-      id: i,
-      left: `${(i * 3.1 + (i % 5) * 2) % 100}%`,
-      top: `${(i * 7) % 30}%`,
-      len: 20 + (i % 4) * 8,
-      dur: 1.2 + (i % 5) * 0.2,
-      delay: (i * 0.18) % 2.5,
-      opacity: 0.18 + (i % 3) * 0.08,
-    }))
-  }, [])
+    return [
+      { id: 1, top: '8%', pathIdx: 0, scale: 1.25, dur: '85s', delay: '0s', opacity: 0.35 * opMultiplier, anim: 'cloud-drift-slow' },
+      { id: 2, top: '22%', pathIdx: 1, scale: 0.95, dur: '65s', delay: '-25s', opacity: 0.28 * opMultiplier, anim: 'cloud-drift-mid' },
+      { id: 3, top: '14%', pathIdx: 2, scale: 1.4, dur: '110s', delay: '-50s', opacity: 0.3 * opMultiplier, anim: 'cloud-drift-slow' },
+      { id: 4, top: '32%', pathIdx: 0, scale: 0.85, dur: '75s', delay: '-15s', opacity: 0.22 * opMultiplier, anim: 'cloud-drift-mid' },
+    ]
+  }, [season.id])
+
+  const isSummer = season.id === 'grishma'
+  const isWinter = season.id === 'shishir' || season.id === 'hemant'
 
   return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
-      {/* ── Soft Ambient Daylight Sun ── */}
-      <div className="absolute right-[12%] top-[7%] select-none pointer-events-none">
-        <div className="absolute -inset-24 rounded-full bg-amber-400/10 blur-3xl animate-[sun-pulse_7s_ease-in-out_infinite]" />
-        <div className="absolute -inset-12 rounded-full bg-yellow-300/12 blur-2xl animate-[sun-pulse_5s_ease-in-out_infinite]" />
+    <div className="pointer-events-none absolute inset-0 overflow-hidden max-w-full" aria-hidden="true">
+      {/* ── Season-Adapted Ambient Daylight Sun ── */}
+      <div className="gpu-layer absolute right-[12%] top-[7%] select-none pointer-events-none">
+        <div
+          className={`absolute -inset-24 rounded-full blur-3xl animate-[sun-pulse_7s_ease-in-out_infinite] ${
+            isSummer ? 'bg-orange-500/20' : isWinter ? 'bg-amber-300/10' : 'bg-amber-400/12'
+          }`}
+        />
+        <div
+          className={`absolute -inset-12 rounded-full blur-2xl animate-[sun-pulse_5s_ease-in-out_infinite] ${
+            isSummer ? 'bg-yellow-400/20' : 'bg-yellow-300/12'
+          }`}
+        />
         <div className="absolute -inset-20 rounded-full border border-yellow-200/20 animate-[solar-halo-pulse_12s_ease-in-out_infinite]" />
 
         <svg
           width="160"
           height="160"
           viewBox="0 0 160 160"
-          className="absolute -inset-10 animate-[sun-ray-spin_140s_linear_infinite] opacity-20"
+          className="absolute -inset-10 animate-[sun-ray-spin_140s_linear_infinite] opacity-25"
         >
           <g transform="translate(80, 80)">
             {Array.from({ length: 12 }).map((_, i) => (
@@ -148,7 +162,7 @@ export const DaySkyObjects = memo(function DaySkyObjects() {
           </g>
           <defs>
             <linearGradient id="sun-ray-grad" x1="0" y1="1" x2="0" y2="0">
-              <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.5" />
+              <stop offset="0%" stopColor={isSummer ? '#f97316' : '#f59e0b'} stopOpacity="0.5" />
               <stop offset="100%" stopColor="#fef08a" stopOpacity="0" />
             </linearGradient>
           </defs>
@@ -157,22 +171,30 @@ export const DaySkyObjects = memo(function DaySkyObjects() {
         <div
           className="relative h-22 w-22 rounded-full blur-md opacity-75 animate-[sun-pulse_9s_ease-in-out_infinite]"
           style={{
-            background: 'radial-gradient(circle, rgba(254, 240, 138, 0.75) 0%, rgba(251, 191, 36, 0.35) 50%, rgba(245, 158, 11, 0.1) 75%, transparent 100%)',
+            background: isSummer
+              ? 'radial-gradient(circle, rgba(254, 240, 138, 0.9) 0%, rgba(251, 146, 60, 0.5) 50%, rgba(239, 68, 68, 0.2) 75%, transparent 100%)'
+              : 'radial-gradient(circle, rgba(254, 240, 138, 0.75) 0%, rgba(251, 191, 36, 0.35) 50%, rgba(245, 158, 11, 0.1) 75%, transparent 100%)',
           }}
         />
         <div
           className="absolute inset-3 rounded-full blur-lg opacity-60"
           style={{
-            background: 'radial-gradient(circle, rgba(255, 255, 255, 0.8) 0%, rgba(254, 240, 138, 0.3) 60%, transparent 100%)',
+            background: 'radial-gradient(circle, #fef08a 0%, #fbbf24 60%, transparent 100%)',
+          }}
+        />
+        <div
+          className="absolute inset-5 rounded-full shadow-[0_0_24px_rgba(253,224,71,0.9)]"
+          style={{
+            background: 'radial-gradient(circle, #ffffff 10%, #fef08a 45%, #f59e0b 95%)',
           }}
         />
       </div>
 
-      {/* ── Layered Drifting Clouds ── */}
+      {/* ── Season-Adapted Cloud Formations ── */}
       {clouds.map((c) => (
         <div
           key={c.id}
-          className={`absolute ${c.anim}`}
+          className={`gpu-layer absolute ${c.anim}`}
           style={{
             top: c.top,
             opacity: c.opacity,
@@ -187,33 +209,11 @@ export const DaySkyObjects = memo(function DaySkyObjects() {
         </div>
       ))}
 
-      {/* ── Soft Ambient Rain Droplets ── */}
-      <div className="absolute inset-0">
-        {rainDrops.map((r) => (
-          <div
-            key={r.id}
-            className="absolute"
-            style={{
-              left: r.left,
-              top: r.top,
-              animation: `rain-streak ${r.dur}s linear infinite`,
-              animationDelay: `${r.delay}s`,
-              opacity: r.opacity,
-            }}
-          >
-            <div
-              className="w-[1.5px] rounded-full bg-gradient-to-b from-transparent via-sky-300/70 to-sky-400"
-              style={{ height: r.len, transform: 'rotate(18deg)' }}
-            />
-          </div>
-        ))}
-      </div>
-
-      {/* ── High-Altitude Soaring Thermal Hawks (Dynamic Non-Repeating Passages) ── */}
+      {/* ── High-Altitude Soaring Thermal Raptors ── */}
       {hawkPasses.map((hp) => (
         <div
           key={hp.id}
-          className={`absolute ${hp.dir === 'rtl' ? 'animate-[hawk-soar-rtl_linear_forwards]' : 'animate-[hawk-soar-ltr_linear_forwards]'}`}
+          className={`gpu-layer absolute ${hp.dir === 'rtl' ? 'animate-[hawk-soar-rtl_linear_forwards]' : 'animate-[hawk-soar-ltr_linear_forwards]'}`}
           style={{
             top: hp.top,
             '--drift-y': hp.driftY,
@@ -221,17 +221,15 @@ export const DaySkyObjects = memo(function DaySkyObjects() {
           }}
           onAnimationEnd={() => removeHawkPass(hp.id)}
         >
-          <svg width="26" height="12" viewBox="0 0 26 12" className="fill-slate-800/40 drop-shadow-sm">
-            <path d="M0,4 Q7,-1 13,3 Q19,-1 26,4 Q21,7 13,8 Q5,7 0,4 Z M13,8 L10,12 L16,12 Z" />
-          </svg>
+          <SoaringBirdSilhouette className="fill-slate-800/40 drop-shadow-sm" />
         </div>
       ))}
 
-      {/* ── Floating Dandelion Fluff Drifting on the Breeze (Dynamic Spawns) ── */}
+      {/* ── Floating Dandelion Fluff Drifting on the Breeze ── */}
       {dandelionSeeds.map((d) => (
         <div
           key={d.id}
-          className={`absolute ${d.dir === 'rtl' ? 'animate-[dandelion-drift-rtl_linear_forwards]' : 'animate-[dandelion-drift-ltr_linear_forwards]'}`}
+          className={`gpu-layer absolute ${d.dir === 'rtl' ? 'animate-[dandelion-drift-rtl_linear_forwards]' : 'animate-[dandelion-drift-ltr_linear_forwards]'}`}
           style={{
             top: d.top,
             '--drift-y': d.driftY,

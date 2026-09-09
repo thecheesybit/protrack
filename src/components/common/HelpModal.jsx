@@ -22,9 +22,15 @@ const NAVIGATION = [
 
 /** In-app keys handled by the Dashboard keydown listener + window controls. */
 const IN_APP = [
+  ['Ctrl / Cmd + ,', 'Open or close Settings panel'],
+  ['Alt + T', 'Quick cycle Indian seasonal theme'],
+  ['Alt + W', 'Open Weather Sandbox & Playground'],
+  ['Ctrl / Cmd + M', 'Mute / unmute ambient audio'],
+  ['Ctrl / Cmd + B', 'Toggle Workspaces bottom dock'],
   ['Ctrl / Cmd + K', 'Open the AI companion'],
   ['Ctrl / Cmd + T', 'Center the clock (Zen)'],
   ['Alt + A', 'Set Alarm / Reminder (Flip Clock)'],
+  ['L', 'Toggle Timetable Legends & Details (on / off)'],
   ['F', 'Toggle fullscreen (when idle or already fullscreen)'],
   ['Esc', 'Close the top overlay — panel, modal, maximized widget, then fullscreen'],
   ['Double-click empty space', 'Quick-add (subject, to-do, timetable cell)'],

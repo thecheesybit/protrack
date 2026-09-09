@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, Suspense } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '@/store/useStore'
 import { useFocusEngine } from '@/hooks/useFocusEngine'
-import { useModeAccent } from '@/hooks/useModeAccent'
 import { useConnectivity } from '@/hooks/useConnectivity'
 import { useChronoTheme } from '@/hooks/useChronoTheme'
 import { useDesktopIntegration } from '@/hooks/useDesktopIntegration'
@@ -40,6 +39,13 @@ import { useHourlyChime } from '@/hooks/useHourlyChime'
 import { useAlarmWatcher } from '@/hooks/useAlarmWatcher'
 import { AlarmModal } from '@/components/alarm/AlarmModal'
 import { AlarmRingingBanner } from '@/components/alarm/AlarmRingingBanner'
+import { WeatherPlaygroundModal } from '@/components/common/weather/WeatherPlaygroundModal'
+import {
+  INDIAN_SEASONS,
+  getSeasonOverride,
+  setSeasonOverride,
+  getCurrentSeason,
+} from '@/lib/indianClimate'
 import { HelpCircle } from 'lucide-react'
 
 const SettingsPanel = React.lazy(() =>
@@ -80,7 +86,9 @@ export function Dashboard() {
   const clockCentered = useStore((s) => s.clockCentered)
   const alarmModalOpen = useStore((s) => s.alarmModalOpen)
   const setAlarmModalOpen = useStore((s) => s.setAlarmModalOpen)
+  const scopeDropdownOpen = useStore((s) => s.scopeDropdownOpen)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [weatherPlaygroundOpen, setWeatherPlaygroundOpen] = useState(false)
   const helpOpenRef = useRef(helpOpen)
   useEffect(() => {
     helpOpenRef.current = helpOpen
@@ -113,7 +121,6 @@ export function Dashboard() {
   }
 
   useFocusEngine() // drives the Pomodoro tick, sound, notifications, and stats
-  useModeAccent() // re-tints the whole UI to the active mode's accent color
   useConnectivity() // sync status surfaced via the Dynamic Island; writes replay on reconnect
   useChronoTheme() // time-of-day palette/shadow modulation (data-chrono band)
   useDesktopIntegration() // desktop-only: hardware-fingerprint binding + global hotkeys
@@ -162,7 +169,8 @@ export function Dashboard() {
           setHelpOpen(false)
           return
         }
-        if (st.alarmModalOpen) st.setAlarmModalOpen(false)
+        if (weatherPlaygroundOpen) setWeatherPlaygroundOpen(false)
+        else if (st.alarmModalOpen) st.setAlarmModalOpen(false)
         else if (st.clockCentered) st.setClockCentered(false)
         else if (st.focusContext) st.closeFocus()
         else if (st.whatsNewOpen) st.setWhatsNewOpen(false)
@@ -171,6 +179,47 @@ export function Dashboard() {
         else if (st.supportOpen) st.setSupportOpen(false)
         else if (st.maximizedWidgetId) st.restoreWidgets()
         else if (st.fullscreen) window.protrack?.window?.toggleFullScreen?.()
+        return
+      }
+
+      // ── Ctrl / Cmd + , : Open or close Settings ──
+      if ((e.metaKey || e.ctrlKey) && (e.key === ',' || e.key === '<')) {
+        e.preventDefault()
+        st.setSettingsOpen((prev) => !prev)
+        return
+      }
+
+      // ── Ctrl / Cmd + M : Toggle Audio Mute ──
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'm') {
+        e.preventDefault()
+        st.toggleMute?.()
+        return
+      }
+
+      // ── Ctrl / Cmd + B : Toggle Workspaces Bottom Dock ──
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault()
+        window.dispatchEvent(new CustomEvent('protrack:toggle-bottom-dock'))
+        return
+      }
+
+      // ── Alt + T : Cycle Seasonal Theme ──
+      if (e.altKey && e.key.toLowerCase() === 't') {
+        e.preventDefault()
+        const seasons = ['vasant', 'grishma', 'varsha', 'sharad', 'hemant', 'shishir']
+        const current = getSeasonOverride() || getCurrentSeason()?.id || 'vasant'
+        const nextIdx = (seasons.indexOf(current) + 1) % seasons.length
+        const nextSeason = seasons[nextIdx]
+        setSeasonOverride(nextSeason)
+        const sObj = INDIAN_SEASONS.find((s) => s.id === nextSeason)
+        toast.success(`Theme cycled to ${sObj?.sanskritName} (${sObj?.hindiName})`, { icon: '🌸' })
+        return
+      }
+
+      // ── Alt + W : Weather Sandbox & Atmospheric Playground ──
+      if (e.altKey && e.key.toLowerCase() === 'w') {
+        e.preventDefault()
+        setWeatherPlaygroundOpen((prev) => !prev)
         return
       }
 
@@ -284,6 +333,22 @@ export function Dashboard() {
         }
         return
       }
+
+      // ── L : Toggle Timetable Legends & Details (on / off) ──
+      if (k === 'l') {
+        e.preventDefault()
+        const wasEnabled = st.timetableLegendsEnabled
+        const wasExpanded = st.timetableLegendsExpanded
+        st.toggleTimetableLegends?.()
+        if (!wasEnabled) {
+          toast.success('Legends turned ON · Press L to turn off', { id: 'legends-toggle', icon: '📖' })
+        } else if (wasExpanded) {
+          toast('Legends turned OFF · Press L to turn on', { id: 'legends-toggle', icon: '🔒' })
+        } else {
+          toast.success('Legends expanded · Press L to turn off', { id: 'legends-toggle', icon: '📖' })
+        }
+        return
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -336,8 +401,9 @@ export function Dashboard() {
 
             {/* Floating scope switcher — fixed on the far left, vertically centered */}
             <div className={cn(
-              "fixed left-3 top-1/2 z-20 -translate-y-1/2 transition-opacity duration-300",
-              clockCentered && "opacity-20 pointer-events-none"
+              "fixed left-3 top-1/2 z-20 -translate-y-1/2 transition-all duration-300",
+              clockCentered && "opacity-20 pointer-events-none",
+              scopeDropdownOpen && "opacity-0 pointer-events-none -translate-x-12 scale-95"
             )}>
               <ModeSwitcher vertical />
             </div>
@@ -461,6 +527,7 @@ export function Dashboard() {
       <WhatsNewModal />
       <AlarmModal open={alarmModalOpen} onClose={() => setAlarmModalOpen(false)} />
       <AlarmRingingBanner />
+      <WeatherPlaygroundModal open={weatherPlaygroundOpen} onClose={() => setWeatherPlaygroundOpen(false)} />
 
       <Suspense fallback={null}>
         <AIAssistant />
@@ -557,7 +624,8 @@ function SelectedScopeIndicator() {
   const activeModeId = useStore((s) => s.activeModeId)
   const setActiveModeId = useStore((s) => s.setActiveModeId)
   const { user } = useAuth()
-  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const dropdownOpen = useStore((s) => s.scopeDropdownOpen)
+  const setDropdownOpen = useStore((s) => s.setScopeDropdownOpen)
   const dropdownRef = useRef(null)
 
   const activeMode = modes.find((m) => m.id === activeModeId) || 
@@ -577,7 +645,7 @@ function SelectedScopeIndicator() {
       document.addEventListener('mousedown', handleClickOutside)
       return () => document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [dropdownOpen])
+  }, [dropdownOpen, setDropdownOpen])
 
   const handleSelectScope = async (mode) => {
     setDropdownOpen(false)

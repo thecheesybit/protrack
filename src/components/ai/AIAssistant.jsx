@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Sparkles, Mic, X } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -16,6 +16,18 @@ export function AIAssistant() {
     setSettingsOpen(true)
   }
 
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setAiOpen(false)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [open, setAiOpen])
+
   return (
     <AnimatePresence>
       {open && (
@@ -26,10 +38,13 @@ export function AIAssistant() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-4 md:p-8"
         >
           {/* Backdrop click to close */}
-          <div className="absolute inset-0" onClick={() => setAiOpen(false)} />
+          <div className="absolute inset-0" onClick={() => setAiOpen(false)} aria-hidden="true" />
 
           {/* Main Card */}
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ai-companion-title"
             initial={{ scale: 0.95, opacity: 0, y: 15 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.95, opacity: 0, y: 15 }}
@@ -41,7 +56,7 @@ export function AIAssistant() {
               <div className="flex flex-col items-start leading-tight">
                 <div className="flex items-center gap-3">
                   <Sparkles className="h-5 w-5 text-accent animate-pulse" />
-                  <h3 className="text-base font-bold tracking-tight text-ink">AI Companion</h3>
+                  <h3 id="ai-companion-title" className="text-base font-bold tracking-tight text-ink">AI Companion</h3>
                 </div>
                 <span className="text-[10px] text-muted font-semibold mt-1">
                   Double-click the bottom-right AI button to enable background Hands-Free Mode

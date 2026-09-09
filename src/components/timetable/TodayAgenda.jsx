@@ -80,19 +80,36 @@ export function TodayAgenda({
   const [selectedDay, setSelectedDay] = useState(today)
   const [weekOffset, setWeekOffset] = useState(0)
 
-  // Jump to a date handed in from the Week view's day-header click.
+  const storeSelectedDate = useStore((s) => s.selectedDate)
+  const setSelectedDate = useStore((s) => s.setSelectedDate)
+
+  // Jump to a date handed in from the Week view or store.
   useEffect(() => {
-    if (!initialDate) return
+    const target = initialDate || storeSelectedDate
+    if (!target) return
     const mondayOf = (x) => {
       const m = new Date(x)
       m.setHours(0, 0, 0, 0)
       m.setDate(m.getDate() - ((m.getDay() + 6) % 7))
       return m
     }
-    const d = new Date(initialDate)
+    let d
+    if (target instanceof Date) {
+      d = target
+    } else if (typeof target === 'string') {
+      if (target.length === 10 && target.includes('-')) {
+        const parts = target.split('-').map(Number)
+        d = new Date(parts[0], parts[1] - 1, parts[2])
+      } else {
+        d = new Date(target)
+      }
+    } else {
+      d = new Date(target)
+    }
+    if (!d || isNaN(d.getTime())) return
     setSelectedDay((d.getDay() + 6) % 7)
     setWeekOffset(Math.round((mondayOf(d) - mondayOf(new Date())) / (7 * 86400000)))
-  }, [initialDate])
+  }, [initialDate, storeSelectedDate])
   const nowMinRaw = useNowMinutes()
   const nowMin = Math.round(nowMinRaw)
   const scrollRef = useRef(null)
@@ -200,21 +217,46 @@ export function TodayAgenda({
     return null
   }, [selectedDate, slots, events, allTodos, tasks, sessions, noteDeadlines, gcalEvents])
 
+  const handleSelectDay = (idx) => {
+    setSelectedDay(idx)
+    const d = getWeekDate(idx, activeRefDate)
+    setSelectedDate(ymd(d))
+  }
+
   const goPrevDay = () => {
+    let nextDay = selectedDay - 1
+    let nextOffset = weekOffset
     if (selectedDay === 0) {
-      setWeekOffset((w) => w - 1)
-      setSelectedDay(6)
-    } else setSelectedDay((d) => d - 1)
+      nextOffset = weekOffset - 1
+      nextDay = 6
+      setWeekOffset(nextOffset)
+      setSelectedDay(nextDay)
+    } else {
+      setSelectedDay(nextDay)
+    }
+    const d = new Date()
+    if (nextOffset !== 0) d.setDate(d.getDate() + nextOffset * 7)
+    setSelectedDate(ymd(getWeekDate(nextDay, d)))
   }
   const goNextDay = () => {
+    let nextDay = selectedDay + 1
+    let nextOffset = weekOffset
     if (selectedDay === 6) {
-      setWeekOffset((w) => w + 1)
-      setSelectedDay(0)
-    } else setSelectedDay((d) => d + 1)
+      nextOffset = weekOffset + 1
+      nextDay = 0
+      setWeekOffset(nextOffset)
+      setSelectedDay(nextDay)
+    } else {
+      setSelectedDay(nextDay)
+    }
+    const d = new Date()
+    if (nextOffset !== 0) d.setDate(d.getDate() + nextOffset * 7)
+    setSelectedDate(ymd(getWeekDate(nextDay, d)))
   }
   const jumpToday = () => {
     setWeekOffset(0)
     setSelectedDay(today)
+    setSelectedDate(ymd(new Date()))
   }
 
   // Route creation through the existing NlQuickCapture / SlotEditor path the
@@ -324,7 +366,7 @@ export function TodayAgenda({
           return (
             <button
               key={name}
-              onClick={() => setSelectedDay(idx)}
+              onClick={() => handleSelectDay(idx)}
               className={cn(
                 'relative flex select-none flex-col items-center justify-center rounded-lg px-0.5 py-1 transition-all',
                 isSel

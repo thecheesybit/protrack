@@ -6,6 +6,8 @@ import {
   setApiKey,
   isRetryableGeminiError,
   executeGeminiWithModelFallback,
+  chatWithGemini,
+  chatWithGeminiStream,
   GEMINI_MODELS,
 } from '../geminiService'
 
@@ -84,5 +86,17 @@ describe('geminiService Key Persistence & Resilience', () => {
     expect(GEMINI_MODELS).not.toContain('gemini-flash-latest')
     expect(GEMINI_MODELS.some((m) => m.includes('1.5'))).toBe(false)
     expect(GEMINI_MODELS[0]).toBe('gemini-2.5-flash')
+  })
+
+  it('exports chatWithGeminiStream and chatWithGemini functions', () => {
+    expect(typeof chatWithGeminiStream).toBe('function')
+    expect(typeof chatWithGemini).toBe('function')
+  })
+
+  it('throws helpful error if API key is missing when starting chatWithGeminiStream', async () => {
+    setGeminiKey('')
+    await expect(chatWithGeminiStream([{ role: 'user', text: 'hello' }], '')).rejects.toThrow(
+      /Gemini key missing|Add your Gemini API key|No working AI provider/
+    )
   })
 })

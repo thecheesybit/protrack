@@ -38,6 +38,7 @@ export function ScorecardEditorModal({
   const [selectedModeId, setSelectedModeId] = useState('')
   const [selectedExamId, setSelectedExamId] = useState('')
   const [rawText, setRawText] = useState('')
+  const [detectedPortal, setDetectedPortal] = useState('')
   const [aiParsing, setAiParsing] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -125,6 +126,7 @@ export function ScorecardEditorModal({
 
       setMistakes(Array.isArray(scorecard.mistakes) ? scorecard.mistakes : [])
       setRawText(scorecard.rawText || '')
+      setDetectedPortal(scorecard.detectedPortal || '')
     } else {
       // New scorecard defaults
       setTitle('')
@@ -152,6 +154,7 @@ export function ScorecardEditorModal({
 
       setMistakes([])
       setRawText('')
+      setDetectedPortal('')
     }
     setShowMistakeForm(false)
   }, [open, scorecard, propModeId, modes, nextSerial, exams, defaultExamId])
@@ -176,6 +179,10 @@ export function ScorecardEditorModal({
     if (parsed.correct != null) setCorrect(String(parsed.correct))
     if (parsed.wrong != null) setWrong(String(parsed.wrong))
     if (parsed.unattempted != null) setUnattempted(String(parsed.unattempted))
+
+    if (parsed.detectedPortal) {
+      setDetectedPortal(parsed.detectedPortal)
+    }
 
     // Section Name preservation:
     if (parsed.sectionName && parsed.sectionName !== 'All Sections') {
@@ -248,6 +255,7 @@ export function ScorecardEditorModal({
     setTopicName('')
     setTitle('')
     setRawText('')
+    setDetectedPortal('')
     setMistakes([])
     toast.success('Form cleared')
   }
@@ -331,6 +339,7 @@ export function ScorecardEditorModal({
         unattempted: unattempted !== '' ? Number(unattempted) : 0,
         mistakes,
         rawText,
+        detectedPortal: detectedPortal || 'generic',
       }
 
       if (isEdit) {
@@ -396,10 +405,26 @@ export function ScorecardEditorModal({
       <div className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto pr-1">
         {/* ── Raw Text Ingestion Box ─────────────────────────────── */}
         <div className="rounded-2xl border border-line/60 bg-surface-2/30 p-3.5">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-semibold text-ink flex items-center gap-1.5">
-              <Zap className="h-3.5 w-3.5 text-accent" /> Paste Raw Portal Copy
-            </span>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-ink flex items-center gap-1.5">
+                <Zap className="h-3.5 w-3.5 text-accent" /> Paste Raw Portal Copy
+              </span>
+              {detectedPortal && detectedPortal !== 'generic' && (
+                <span className="rounded-md bg-accent/15 border border-accent/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent">
+                  {detectedPortal === 'smartkeeda'
+                    ? 'Smartkeeda'
+                    : detectedPortal === 'adda247'
+                    ? 'Adda247'
+                    : detectedPortal === 'guidely'
+                    ? 'Guidely'
+                    : detectedPortal === 'oliveboard'
+                    ? 'Oliveboard'
+                    : detectedPortal}
+                </span>
+              )}
+            </div>
+
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
@@ -434,9 +459,19 @@ export function ScorecardEditorModal({
             value={rawText}
             onChange={(e) => setRawText(e.target.value)}
             onPaste={handlePaste}
-            placeholder="Paste raw text copied from Oliveboard, Testbook, PracticeMock, etc. (Auto-parses instantly on paste!)..."
+            placeholder="Paste raw text copied from Smartkeeda, Adda247, Guidely, Oliveboard, etc. (Auto-parses instantly on paste!)..."
             className="w-full rounded-xl border border-line bg-surface/70 p-2.5 text-xs text-ink placeholder:text-muted/60 outline-none focus:border-accent focus:ring-1 focus:ring-accent"
           />
+          <div className="mt-2 flex items-center justify-between text-[10px] text-muted">
+            <span className="flex items-center gap-1">
+              <span>Ready for:</span>
+              <span className="font-semibold text-accent">Smartkeeda</span> ·
+              <span className="font-semibold text-accent">Adda247</span> ·
+              <span className="font-semibold text-accent">Guidely</span> ·
+              <span className="font-semibold text-accent">Oliveboard</span>
+            </span>
+            <span>Sectionals & Full Length Tests (FLT)</span>
+          </div>
         </div>
 
         {/* ── Exam Context Banner when exam exists (No Scope/Mode or Target Exam questions needed) ── */}

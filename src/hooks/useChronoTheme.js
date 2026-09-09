@@ -14,6 +14,7 @@ export {
   CHRONO_OVERRIDE_KEY,
   CHRONO_OVERRIDE_EVENT,
   CHRONO_ACCENT,
+  CHRONO_ACCENT_LIGHT,
   DARK_SLOTS,
   TIMED_THEMES,
   slotForHour,
@@ -25,6 +26,7 @@ export {
 
 import {
   CHRONO_ACCENT,
+  CHRONO_ACCENT_LIGHT,
   DARK_SLOTS,
   CHRONO_OVERRIDE_EVENT,
   slotForHour,
@@ -55,17 +57,22 @@ export function useChronoTheme() {
         root.dataset.chrono = slot
       }
 
-      const ac = CHRONO_ACCENT[slot]
-      if (ac) {
-        root.style.setProperty('--accent', ac.accent)
-        root.style.setProperty('--accent-2', ac.accent2)
-        root.style.setProperty('--accent-hex', ac.hex)
-      }
-
-      // Auto theme follows the sky.
+      // Auto theme follows the sky — toggle dark class BEFORE accent selection
+      // so the palette picker reads the correct final light/dark state.
       const savedTheme = localStorage.getItem('protrack:theme')
       if (savedTheme === 'auto') {
         root.classList.toggle('dark', DARK_SLOTS.has(slot))
+      }
+
+      const ac = CHRONO_ACCENT[slot]
+      // Use WCAG-safe darker shades in light mode so text-accent and
+      // bg-accent buttons maintain ≥4.5:1 contrast on white/parchment.
+      const isDark = root.classList.contains('dark')
+      const palette = isDark ? ac : (CHRONO_ACCENT_LIGHT[slot] || ac)
+      if (palette) {
+        root.style.setProperty('--accent', palette.accent)
+        root.style.setProperty('--accent-2', palette.accent2)
+        root.style.setProperty('--accent-hex', palette.hex)
       }
 
       setChronoSlot(slot)

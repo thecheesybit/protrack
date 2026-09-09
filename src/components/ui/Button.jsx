@@ -18,12 +18,13 @@ const SIZES = {
 }
 
 export const Button = forwardRef(function Button(
-  { variant = 'primary', size = 'md', className, children, ...props },
+  { variant = 'primary', size = 'md', type = 'button', className, children, ...props },
   ref,
 ) {
   return (
     <button
       ref={ref}
+      type={type}
       className={cn(
         'inline-flex select-none items-center justify-center rounded-xl font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:cursor-not-allowed disabled:opacity-50',
         VARIANTS[variant],

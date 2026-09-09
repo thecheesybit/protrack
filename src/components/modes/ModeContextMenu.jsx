@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Pencil, Trash2 } from 'lucide-react'
+import { Pencil, Trash2, Archive, ArchiveRestore } from 'lucide-react'
 import { getIcon } from '@/lib/icons'
 import { cn } from '@/utils/cn'
 
@@ -16,6 +16,8 @@ export function ModeContextMenu({
   onClose,
   onEdit,
   onDelete,
+  onArchive,
+  onUnarchive,
   canDelete = true,
 }) {
   const menuRef = useRef(null)
@@ -56,7 +58,7 @@ export function ModeContextMenu({
 
   // Approximate menu dimensions for boundary clamping
   const MENU_WIDTH = 210
-  const MENU_HEIGHT = 140
+  const MENU_HEIGHT = 180
   const posX = position ? Math.max(8, Math.min(position.x, window.innerWidth - MENU_WIDTH - 8)) : 0
   const posY = position ? Math.max(8, Math.min(position.y, window.innerHeight - MENU_HEIGHT - 8)) : 0
 
@@ -105,7 +107,32 @@ export function ModeContextMenu({
               <span>Rename & Edit Mode</span>
             </button>
 
-            {/* Action 2: Delete */}
+            {/* Action 2: Archive / Restore */}
+            {mode.archived ? (
+              <button
+                onClick={() => {
+                  onClose()
+                  onUnarchive?.(mode)
+                }}
+                className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs font-medium text-emerald-500 hover:bg-emerald-500/10 hover:text-emerald-600 transition-colors cursor-pointer"
+              >
+                <ArchiveRestore className="h-3.5 w-3.5" />
+                <span>Restore Mode</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  onClose()
+                  onArchive?.(mode)
+                }}
+                className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs font-medium text-amber-500 hover:bg-amber-500/10 hover:text-amber-600 transition-colors cursor-pointer"
+              >
+                <Archive className="h-3.5 w-3.5" />
+                <span>Archive Mode</span>
+              </button>
+            )}
+
+            {/* Action 3: Delete */}
             <button
               onClick={() => {
                 if (!canDelete) return

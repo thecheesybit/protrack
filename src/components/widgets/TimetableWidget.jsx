@@ -234,9 +234,12 @@ export function TimetableWidget({ widget, variant }) {
   }
 
   // Clicking a weekday header in Week view → open that date in the Day view.
+  const setSelectedDate = useStore((s) => s.setSelectedDate)
   const [pickedDate, setPickedDate] = useState(null)
   const pickDay = (date) => {
-    setPickedDate(date instanceof Date ? new Date(date) : new Date())
+    const d = date instanceof Date ? new Date(date) : new Date()
+    setPickedDate(d)
+    setSelectedDate(ymd(d))
     handleSetViewMode('day')
   }
 
@@ -409,6 +412,7 @@ export function TimetableWidget({ widget, variant }) {
                 <TimetableGrid
                   slots={slots}
                   events={eventTodos}
+                  subjects={subjects}
                   defaultColor={defaultColor}
                   onSelect={handleSelect}
                   onOpenSlot={openSlotFocus}
@@ -481,6 +485,7 @@ export function TimetableWidget({ widget, variant }) {
                 <TimetableGrid
                   slots={slots}
                   events={eventTodos}
+                  subjects={subjects}
                   defaultColor={defaultColor}
                   onSelect={handleSelect}
                   onOpenSlot={openSlotFocus}

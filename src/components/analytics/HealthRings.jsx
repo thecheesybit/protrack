@@ -8,7 +8,15 @@ const clamp01 = (x) => Math.max(0, Math.min(1, Number.isFinite(x) ? x : 0))
  * current streak, and sessions completed today. Pure SVG + Framer; data is all
  * derived client-side, so it adds zero Firestore cost.
  */
-export function HealthRings({ todayMins = 0, streak = 0, sessionsToday = 0, focusGoalMin = 120, size = 168 }) {
+export function HealthRings({
+  todayMins = 0,
+  streak = 0,
+  sessionsToday = 0,
+  focusGoalMin = 120,
+  sessionsGoal = 4,
+  size = 168,
+}) {
+  const safeSessionsGoal = Math.max(1, sessionsGoal || 4)
   const rings = [
     {
       key: 'focus',
@@ -30,9 +38,9 @@ export function HealthRings({ todayMins = 0, streak = 0, sessionsToday = 0, focu
       key: 'sessions',
       label: 'Sessions',
       color: '#10b981',
-      value: clamp01(sessionsToday / 4),
+      value: clamp01(sessionsToday / safeSessionsGoal),
       display: `${sessionsToday}`,
-      goal: '4 / day',
+      goal: `${safeSessionsGoal} / day`,
     },
   ]
 

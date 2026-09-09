@@ -258,18 +258,49 @@ export function SlotEditorModal({ open, onClose, modeId: propModeId, slot, allMo
         ))}
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3">
+      <div className="mt-4">
+        <label className="mb-1.5 block text-xs font-medium text-muted">Class / Session Type</label>
+        <div className="flex flex-wrap gap-1.5 mb-2.5">
+          {[
+            { tag: 'Lecture', badge: '[L]', style: 'standard' },
+            { tag: 'Lab', badge: '[Lab]', style: 'striped' },
+            { tag: 'Tutorial', badge: '[T]', style: 'dashed' },
+            { tag: 'Seminar', badge: '[S]', style: 'dotted' },
+            { tag: 'Revision', badge: '[Rev]', style: 'dashed' },
+          ].map((t) => {
+            const isSelected = draft.tag === t.tag
+            return (
+              <button
+                key={t.tag}
+                type="button"
+                onClick={() => patch({ tag: t.tag, tagStyle: t.style })}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer',
+                  isSelected
+                    ? 'border-accent bg-accent/15 text-accent font-bold'
+                    : 'border-line/60 bg-surface-2/40 text-muted hover:border-accent/40 hover:text-ink',
+                )}
+              >
+                <span className="font-mono text-[10px] font-bold opacity-80">{t.badge}</span>
+                <span>{t.tag}</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="mt-2 grid grid-cols-2 gap-3">
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-muted">Tag / Type</label>
+          <label className="mb-1.5 block text-xs font-medium text-muted">Custom Tag / Badge</label>
           <input
             value={draft.tag || ''}
             onChange={(e) => patch({ tag: e.target.value })}
-            placeholder="e.g. Theory, Lab"
+            placeholder="e.g. Lecture, Lab, Seminar"
             className="w-full rounded-xl border border-line bg-surface-2/60 px-3.5 py-2.5 text-sm outline-none focus:border-accent"
           />
         </div>
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-muted">Tag Style</label>
+          <label className="mb-1.5 block text-xs font-medium text-muted">Border / Visual Style</label>
           <select
             value={draft.tagStyle || 'standard'}
             onChange={(e) => patch({ tagStyle: e.target.value })}
@@ -277,8 +308,8 @@ export function SlotEditorModal({ open, onClose, modeId: propModeId, slot, allMo
           >
             <option value="standard">Solid / Standard</option>
             <option value="striped">Striped (Lab style)</option>
-            <option value="dashed">Dashed Border (Revision style)</option>
-            <option value="dotted">Dotted Border</option>
+            <option value="dashed">Dashed Border (Tutorial/Revision)</option>
+            <option value="dotted">Dotted Border (Seminar)</option>
           </select>
         </div>
       </div>

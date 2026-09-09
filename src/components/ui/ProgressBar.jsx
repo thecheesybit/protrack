@@ -15,7 +15,7 @@ const GRADIENTS = {
  * amber-sage) switches to the premium pill style and animates the fill from
  * 0 to the target on mount; plain `color` keeps the classic flat bar.
  */
-export function ProgressBar({ value = 0, color, gradient, className, height = 'h-2' }) {
+export function ProgressBar({ value = 0, color, gradient, className, height = 'h-2', label }) {
   const pct = Math.max(0, Math.min(100, value))
 
   // Mount at 0 and let the width transition carry the fill to its value —
@@ -28,7 +28,14 @@ export function ProgressBar({ value = 0, color, gradient, className, height = 'h
   const width = gradient && !mounted ? 0 : pct
 
   return (
-    <div className={cn('w-full overflow-hidden rounded-full bg-surface-2', height, className)}>
+    <div
+      className={cn('w-full overflow-hidden rounded-full bg-surface-2', height, className)}
+      role="progressbar"
+      aria-valuenow={Math.round(pct)}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label={label}
+    >
       <div
         className={cn(
           'h-full rounded-full transition-[width] ease-out',

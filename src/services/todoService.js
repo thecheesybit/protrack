@@ -79,3 +79,37 @@ export async function reorderTodos(uid, orderedIds) {
   })
   return batch.commit()
 }
+
+/**
+ * Add a subtask to an existing todo.
+ */
+export async function addSubtask(uid, todoId, currentSubtasks = [], text) {
+  const cleanText = text?.trim()
+  if (!cleanText) return
+  const newSubtask = {
+    id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    text: cleanText,
+    done: false,
+  }
+  const nextSubtasks = [...currentSubtasks, newSubtask]
+  return updateTodo(uid, todoId, { subtasks: nextSubtasks })
+}
+
+/**
+ * Toggle completion of a subtask within a todo.
+ */
+export async function toggleSubtask(uid, todoId, currentSubtasks = [], subtaskId) {
+  const nextSubtasks = currentSubtasks.map((s) =>
+    s.id === subtaskId ? { ...s, done: !s.done } : s
+  )
+  return updateTodo(uid, todoId, { subtasks: nextSubtasks })
+}
+
+/**
+ * Remove a subtask from a todo.
+ */
+export async function deleteSubtask(uid, todoId, currentSubtasks = [], subtaskId) {
+  const nextSubtasks = currentSubtasks.filter((s) => s.id !== subtaskId)
+  return updateTodo(uid, todoId, { subtasks: nextSubtasks })
+}
+

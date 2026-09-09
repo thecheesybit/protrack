@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, memo } from 'react'
 import toast from 'react-hot-toast'
 import { motion } from 'framer-motion'
 import { Play, Pause, RotateCcw, Flame, Clock, TreePine, Sprout, PictureInPicture2 } from 'lucide-react'
@@ -121,14 +121,140 @@ function FocusBackground({ bgImage, className }) {
   )
 }
 
+// ── FocusTimerLeaf ───────────────────────────────────────────────────────────
+// Isolated leaf component subscribing to 1s tick (secondsLeft).
+// Prevents the rest of the 600+ line FocusWidget from re-rendering every second.
+const FocusTimerLeaf = memo(function FocusTimerLeaf({
+  isHero = false,
+  size = 220,
+  color,
+  isRunning,
+  isIdle,
+  phase,
+  sessionLabel,
+}) {
+  const secondsLeft = useStore((s) => s.secondsLeft)
+  const phaseTotalSec = useStore((s) => s.phaseTotalSec)
+  const customTimerSetting = useStore((s) => s.customTimerSetting)
+
+  const phaseTotal =
+    phaseTotalSec ||
+    (phase === 'focus' ? customTimerSetting?.work : customTimerSetting?.break) ||
+    secondsLeft ||
+    1
+  const progress = 1 - (secondsLeft || 0) / phaseTotal
+
+  return (
+    <Ring progress={progress} color={color} size={size} isRunning={isRunning}>
+      {isHero ? (
+        <>
+          <span className="text-[11px] uppercase tracking-[0.25em] text-muted">
+            {phase === 'break' ? 'Break' : isIdle ? 'Ready' : 'Focus'}
+          </span>
+          <span className="text-5xl font-light tracking-[0.1em] tabular-nums text-white drop-shadow-lg">
+            {mmss(secondsLeft || 0)}
+          </span>
+          {sessionLabel && (
+            <span className="mt-1 max-w-[160px] truncate text-xs text-white/60">
+              {sessionLabel}
+            </span>
+          )}
+        </>
+      ) : (
+        <>
+          <span className="text-2xl font-light tracking-[0.1em] tabular-nums text-white drop-shadow-lg">
+            {mmss(secondsLeft || 0)}
+          </span>
+          <span className="text-[9px] uppercase tracking-[0.2em] text-white/50">
+            {phase === 'break' ? 'Break' : isIdle ? 'Ready' : 'Focus'}
+          </span>
+        </>
+      )}
+    </Ring>
+  )
+})
+
+// ── ExitConfirmDialog ─────────────────────────────────────────────────────────
+const ExitConfirmDialog = memo(function ExitConfirmDialog({
+  exitAttempts,
+  onCancel,
+  onReset,
+  onComplete,
+}) {
+  const secondsLeft = useStore((s) => s.secondsLeft)
+  const phaseTotalSec = useStore((s) => s.phaseTotalSec)
+  const elapsedSec = Math.max(0, (phaseTotalSec || 0) - (secondsLeft || 0))
+  const elapsedMin = Math.max(0, Math.floor(elapsedSec / 60))
+  const earlyPlantType = elapsedMin < 10 ? 'flower' : elapsedMin <= 15 ? 'shrub' : 'tree'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md">
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="edge-light max-w-sm rounded-3xl border border-red-500/30 bg-surface p-6 text-center shadow-glass-lg"
+        style={{ animation: 'pulse 2s ease-in-out infinite', borderColor: 'rgba(239,68,68,0.3)' }}
+      >
+        <motion.span
+          animate={{ rotate: [-5, 5, -5, 0] }}
+          transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 1 }}
+          className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500"
+        >
+          <SpriteFoliage
+            type={earlyPlantType}
+            height={earlyPlantType === 'flower' ? 38 : earlyPlantType === 'shrub' ? 44 : 50}
+          />
+        </motion.span>
+        <h3 className="mb-2 text-lg font-bold text-ink">
+          {elapsedMin >= 1
+            ? `A ${earlyPlantType} is growing!`
+            : 'A plant takes root!'}
+        </h3>
+        <p className="mb-5 text-sm text-muted">
+          {elapsedMin >= 1
+            ? `You've focused for ${elapsedMin} min! You can finish now to plant a ${earlyPlantType} on today's calendar, or keep going.`
+            : 'Urging you to stay! If you abandon this deep focus session, your plant will die.'}
+        </p>
+        {elapsedMin < 1 && (
+          <div className="mb-4 text-xs font-semibold text-amber-500">
+            Attempt {exitAttempts} of 2 warning pushes.
+          </div>
+        )}
+        <div className="flex flex-col gap-2.5">
+          {elapsedMin >= 1 && (
+            <button
+              onClick={() => onComplete(elapsedSec)}
+              className="w-full rounded-2xl py-2.5 font-semibold text-white transition-transform hover:scale-[1.02] active:scale-95 shadow-md bg-emerald-600 hover:bg-emerald-500"
+            >
+              Finish &amp; Plant ({elapsedMin}m {earlyPlantType})
+            </button>
+          )}
+          <div className="flex gap-3">
+            <button
+              onClick={onCancel}
+              className="flex-1 rounded-2xl bg-accent py-2.5 font-semibold text-white transition-transform hover:scale-[1.02] active:scale-95"
+            >
+              Keep Focus
+            </button>
+            <button
+              onClick={onReset}
+              className="rounded-2xl border border-line px-4 py-2.5 text-sm font-semibold text-muted hover:text-rose-400"
+            >
+              Abandon
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  )
+})
+
 // ── FocusWidget ──────────────────────────────────────────────────────────────
 
 export function FocusWidget({ widget, variant }) {
   const status = useStore((s) => s.status)
   const phase = useStore((s) => s.phase)
   const session = useStore((s) => s.session)
-  const secondsLeft = useStore((s) => s.secondsLeft)
-  const phaseTotalSec = useStore((s) => s.phaseTotalSec)
   const customTimerSetting = useStore((s) => s.customTimerSetting)
   const audioTracks = useStore((s) => s.audioTracks)
   const setCustomTimer = useStore((s) => s.setCustomTimer)
@@ -158,10 +284,6 @@ export function FocusWidget({ widget, variant }) {
   const [motivation] = useState(
     () => MOTIVATION_LINES[Math.floor(Math.random() * MOTIVATION_LINES.length)],
   )
-
-  const elapsedSec = Math.max(0, (phaseTotalSec || 0) - (secondsLeft || 0))
-  const elapsedMin = Math.max(0, Math.floor(elapsedSec / 60))
-  const earlyPlantType = elapsedMin < 10 ? 'flower' : elapsedMin <= 15 ? 'shrub' : 'tree'
 
   const floraSummary = useMemo(() => {
     return formatFloraBreakdown(sessions)
@@ -296,12 +418,6 @@ export function FocusWidget({ widget, variant }) {
   }
 
   const isHero = variant === 'hero'
-  const phaseTotal =
-    phaseTotalSec ||
-    (phase === 'focus' ? customTimerSetting.work : customTimerSetting.break) ||
-    secondsLeft ||
-    1
-  const progress = 1 - secondsLeft / phaseTotal
   const color = phase === 'break' ? '#10b981' : session?.color || 'rgb(var(--accent))'
   const isRunning = status === 'running'
   const isIdle = status === 'idle'
@@ -350,19 +466,15 @@ export function FocusWidget({ widget, variant }) {
                 animate={isIdle ? { scale: [1, 1.02, 1] } : { scale: 1 }}
                 transition={isIdle ? { duration: 3, repeat: Infinity, ease: 'easeInOut' } : {}}
               >
-                <Ring progress={progress} color={color} size={220} isRunning={isRunning}>
-                  <span className="text-[11px] uppercase tracking-[0.25em] text-muted">
-                    {phase === 'break' ? 'Break' : isIdle ? 'Ready' : 'Focus'}
-                  </span>
-                  <span className="text-5xl font-light tracking-[0.1em] tabular-nums text-white drop-shadow-lg">
-                    {mmss(secondsLeft)}
-                  </span>
-                  {session?.label && (
-                    <span className="mt-1 max-w-[160px] truncate text-xs text-white/60">
-                      {session.label}
-                    </span>
-                  )}
-                </Ring>
+                <FocusTimerLeaf
+                  isHero
+                  size={220}
+                  color={color}
+                  isRunning={isRunning}
+                  isIdle={isIdle}
+                  phase={phase}
+                  sessionLabel={session?.label}
+                />
               </motion.div>
 
               {/* Action buttons */}
@@ -465,14 +577,14 @@ export function FocusWidget({ widget, variant }) {
             animate={isIdle ? { scale: [1, 1.03, 1] } : { scale: 1 }}
             transition={isIdle ? { duration: 3.5, repeat: Infinity, ease: 'easeInOut' } : {}}
           >
-            <Ring progress={progress} color={color} size={120} isRunning={isRunning}>
-              <span className="text-2xl font-light tracking-[0.1em] tabular-nums text-white drop-shadow-lg">
-                {mmss(secondsLeft)}
-              </span>
-              <span className="text-[9px] uppercase tracking-[0.2em] text-white/50">
-                {phase === 'break' ? 'Break' : isIdle ? 'Ready' : 'Focus'}
-              </span>
-            </Ring>
+            <FocusTimerLeaf
+              isHero={false}
+              size={120}
+              color={color}
+              isRunning={isRunning}
+              isIdle={isIdle}
+              phase={phase}
+            />
           </motion.div>
 
           {/* Controls */}
@@ -563,68 +675,16 @@ export function FocusWidget({ widget, variant }) {
 
       {/* Exit confirm dialog */}
       {showExitConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md">
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="edge-light max-w-sm rounded-3xl border border-red-500/30 bg-surface p-6 text-center shadow-glass-lg"
-            style={{ animation: 'pulse 2s ease-in-out infinite', borderColor: 'rgba(239,68,68,0.3)' }}
-          >
-            <motion.span
-              animate={{ rotate: [-5, 5, -5, 0] }}
-              transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 1 }}
-              className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500"
-            >
-              <SpriteFoliage
-                type={earlyPlantType}
-                height={earlyPlantType === 'flower' ? 38 : earlyPlantType === 'shrub' ? 44 : 50}
-              />
-            </motion.span>
-            <h3 className="mb-2 text-lg font-bold text-ink">
-              {elapsedMin >= 1
-                ? `A ${earlyPlantType} is growing!`
-                : 'A plant takes root!'}
-            </h3>
-            <p className="mb-5 text-sm text-muted">
-              {elapsedMin >= 1
-                ? `You've focused for ${elapsedMin} min! You can finish now to plant a ${earlyPlantType} on today's calendar, or keep going.`
-                : 'Urging you to stay! If you abandon this deep focus session, your plant will die.'}
-            </p>
-            {elapsedMin < 1 && (
-              <div className="mb-4 text-xs font-semibold text-amber-500">
-                Attempt {exitAttempts} of 2 warning pushes.
-              </div>
-            )}
-            <div className="flex flex-col gap-2.5">
-              {elapsedMin >= 1 && (
-                <button
-                  onClick={() => {
-                    setShowExitConfirm(false)
-                    setExitAttempts(0)
-                    completeFocus?.(elapsedSec)
-                  }}
-                  className="w-full rounded-2xl py-2.5 font-semibold text-white transition-transform hover:scale-[1.02] active:scale-95 shadow-md bg-emerald-600 hover:bg-emerald-500"
-                >
-                  Finish &amp; Plant ({elapsedMin}m {earlyPlantType})
-                </button>
-              )}
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowExitConfirm(false)}
-                  className="flex-1 rounded-2xl bg-accent py-2.5 font-semibold text-white transition-transform hover:scale-[1.02] active:scale-95"
-                >
-                  Keep Focus
-                </button>
-                <button
-                  onClick={handleReset}
-                  className="rounded-2xl border border-line px-4 py-2.5 text-sm font-semibold text-muted hover:text-rose-400"
-                >
-                  {elapsedMin >= 1 ? 'Abandon (wither)' : 'Quit anyway'}
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        </div>
+        <ExitConfirmDialog
+          exitAttempts={exitAttempts}
+          onCancel={() => setShowExitConfirm(false)}
+          onReset={handleReset}
+          onComplete={(elapsed) => {
+            setShowExitConfirm(false)
+            setExitAttempts(0)
+            completeFocus?.(elapsed)
+          }}
+        />
       )}
     </WidgetFrame>
   )

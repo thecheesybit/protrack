@@ -19,6 +19,7 @@ const PresetLibrary = memo(function PresetLibrary({ missingPresets, onAddPreset 
         const Icon = getIcon(p.icon)
         return (
           <button
+            type="button"
             key={p.name}
             onClick={() => onAddPreset(p)}
             className="flex items-center gap-1.5 rounded-xl border border-line/70 bg-surface-2/40 px-2.5 py-1 text-xs font-medium transition-all hover:border-accent/60 hover:bg-surface-2"
@@ -46,6 +47,9 @@ const HabitToggle = memo(function HabitToggle({ habit, uid, today }) {
 
   return (
     <button
+      type="button"
+      role="checkbox"
+      aria-checked={isAllDone}
       onClick={() => {
         if (!isAllDone) playHabitChime()
         toggleHabitToday(uid, habit)
@@ -60,7 +64,11 @@ const HabitToggle = memo(function HabitToggle({ habit, uid, today }) {
       )}
       style={isAllDone ? { backgroundColor: habit.color } : undefined}
       title={target > 1 ? `${current}/${target} completed today (click to log)` : 'Toggle today'}
-      aria-label="Toggle habit"
+      aria-label={
+        target > 1
+          ? `${habit.name}: ${current} of ${target} completed today`
+          : `${habit.name}: ${isAllDone ? 'completed' : 'not completed'} today`
+      }
     >
       {isAllDone ? (
         <Check className="h-4 w-4" />

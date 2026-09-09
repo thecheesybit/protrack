@@ -9,6 +9,7 @@ import { ensureUserDocument } from '@/services/userService'
 import { signInWithGooglePopup, completePendingRedirect, friendlyAuthError } from '@/lib/authPopup'
 import { isDesktop } from '@/desktop/isDesktop'
 import { clearSessionCrypto } from '@/services/cryptoService'
+import { useStore } from '@/store/useStore'
 
 function withTimeout(promise, ms, errorMessage) {
   return new Promise((resolve, reject) => {
@@ -145,8 +146,19 @@ export function AuthProvider({ children }) {
 
   const signOut = useCallback(async () => {
     clearSessionCrypto()
+    setUser(null)
+    useStore.getState().unlockApp?.()
+    useStore.getState().setSettingsOpen?.(false)
+    useStore.getState().setSupportOpen?.(false)
+    if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+      window.history.replaceState(null, '', '/')
+    }
     if (!isFirebaseConfigured) return
-    await firebaseSignOut(auth)
+    try {
+      await firebaseSignOut(auth)
+    } catch (e) {
+      console.warn('[auth] sign-out error:', e)
+    }
   }, [])
 
   const deleteAccount = useCallback(async () => {

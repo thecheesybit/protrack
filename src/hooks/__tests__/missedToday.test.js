@@ -20,13 +20,18 @@ vi.mock('@/lib/notify', () => ({
 vi.mock('@/services/habitService', () => ({
   toggleHabitToday: vi.fn(() => Promise.resolve()),
 }))
+vi.mock('@/lib/audioFX', () => ({
+  playHabitChime: vi.fn(),
+}))
 
 import {
   missedToday,
   habitCueExpiry,
   snoozeHabitCue,
+  triggerHabitCue,
   habitSnoozeUsed,
   __resetHabitSnooze,
+  HABIT_SNOOZE_MS,
 } from '../useHabitReminders.js'
 import { ymd } from '../../lib/dates.js'
 
@@ -214,7 +219,7 @@ describe('habitCueExpiry', () => {
   })
 })
 
-describe('snoozeHabitCue — one snooze per habit per day', () => {
+describe('snoozeHabitCue — one snooze per notification instance', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(june15(12))
@@ -225,7 +230,7 @@ describe('snoozeHabitCue — one snooze per habit per day', () => {
     __resetHabitSnooze()
   })
 
-  it('arms exactly one re-fire, then no-ops', () => {
+  it('arms exactly one re-fire, then no-ops for the same notification', () => {
     const habit = { id: 'h1', name: 'Water', interval: 'every-1h' }
     expect(habitSnoozeUsed('h1')).toBe(false)
 
@@ -248,6 +253,48 @@ describe('snoozeHabitCue — one snooze per habit per day', () => {
     snoozeHabitCue('u1', { id: 'a', interval: 'every-1h' })
     expect(habitSnoozeUsed('a')).toBe(true)
     expect(habitSnoozeUsed('b')).toBe(false)
+  })
+
+  it('prohibits snoozing a snoozed notification instance (scheduled at 10, snoozed at 10, cannot snooze at 10:05)', () => {
+    const habit = { id: 'water-1', name: 'Drink Water', interval: 'every-2h' }
+
+    // 1. Initial scheduled cue fires at 10:00 -> not snoozed
+    expect(habitSnoozeUsed(habit.id)).toBe(false)
+
+    // 2. User snoozes at 10:00
+    snoozeHabitCue('u1', habit)
+    expect(habitSnoozeUsed(habit.id)).toBe(true)
+
+    // 3. Fast forward 5 minutes to 10:05
+    vi.advanceTimersByTime(HABIT_SNOOZE_MS)
+
+    // 4. Now at 10:05, the snoozed reminder notification is active
+    const snoozedInstance = { ...habit, snoozeUsed: true, isSnoozed: true }
+    expect(habitSnoozeUsed(snoozedInstance)).toBe(true)
+
+    // 5. Attempting to snooze the 10:05 snoozed reminder must NO-OP
+    const timersBefore = vi.getTimerCount()
+    snoozeHabitCue('u1', snoozedInstance)
+    expect(vi.getTimerCount()).toBe(timersBefore) // No new timer armed
+  })
+
+  it('allows snoozing a new scheduled notification even after an earlier notification was snoozed', () => {
+    const habit = { id: 'water-1', name: 'Drink Water', interval: 'every-2h' }
+
+    // First notification snoozed at 10:00
+    snoozeHabitCue('u1', habit)
+    expect(habitSnoozeUsed(habit.id)).toBe(true)
+    vi.advanceTimersByTime(HABIT_SNOOZE_MS)
+
+    // Later at 12:00, the next scheduled notification arrives
+    triggerHabitCue('u1', habit)
+    expect(habitSnoozeUsed(habit.id)).toBe(false)
+
+    // The user CAN snooze this new 12:00 notification
+    const timersBefore = vi.getTimerCount()
+    snoozeHabitCue('u1', habit)
+    expect(habitSnoozeUsed(habit.id)).toBe(true)
+    expect(vi.getTimerCount()).toBe(timersBefore + 1)
   })
 })
 

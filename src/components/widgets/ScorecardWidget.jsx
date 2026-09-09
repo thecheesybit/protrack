@@ -12,6 +12,7 @@ import {
   Trash2,
   Trophy,
   ClipboardList,
+  Zap,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useStore } from '@/store/useStore'
@@ -25,6 +26,7 @@ import { ScorecardDetailModal } from '@/components/scorecard/ScorecardDetailModa
 import { ScorecardCharts } from '@/components/scorecard/ScorecardCharts'
 import { ScorecardMistakesTab } from '@/components/scorecard/ScorecardMistakesTab'
 import { ScorecardAiCoach } from '@/components/scorecard/ScorecardAiCoach'
+import { detectPortal, canonicalSectionName } from '@/services/scorecardParser'
 import { cn } from '@/utils/cn'
 
 export function ScorecardWidget({ widget, variant }) {
@@ -104,6 +106,7 @@ export function ScorecardWidget({ widget, variant }) {
 
   // Filter in Hero attempts list
   const [listTypeFilter, setListTypeFilter] = useState('all') // 'all' | 'sectional' | 'flt'
+  const [subjectFilter, setSubjectFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
 
   const isHero = variant === 'hero'
@@ -111,9 +114,23 @@ export function ScorecardWidget({ widget, variant }) {
   const activeModeObj = modes.find((m) => m.id === activeModeId)
   const activeScopeName = activeModeId === 'all' ? 'All Exams' : activeModeObj?.name || 'Current Scope'
 
+  const availableSubjects = useMemo(() => {
+    const set = new Set()
+    for (const s of scorecards) {
+      if (s.type === 'sectional' && s.sectionName) {
+        set.add(canonicalSectionName(s.sectionName))
+      }
+    }
+    return Array.from(set)
+  }, [scorecards])
+
   const filteredAttempts = useMemo(() => {
     return scorecards.filter((s) => {
       if (listTypeFilter !== 'all' && s.type !== listTypeFilter) return false
+      if (listTypeFilter === 'sectional' && subjectFilter !== 'all') {
+        const canonical = canonicalSectionName(s.sectionName)
+        if (canonical !== subjectFilter) return false
+      }
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase()
         const matchTitle = (s.title || '').toLowerCase().includes(q)
@@ -123,7 +140,7 @@ export function ScorecardWidget({ widget, variant }) {
       }
       return true
     })
-  }, [scorecards, listTypeFilter, searchQuery])
+  }, [scorecards, listTypeFilter, subjectFilter, searchQuery])
 
   const openCreateScorecard = () => {
     if (exams.length === 0) {
@@ -244,12 +261,21 @@ export function ScorecardWidget({ widget, variant }) {
                   <Plus className="h-3 w-3" /> Add Exam
                 </button>
               ) : (
-                <button
-                  onClick={openCreateScorecard}
-                  className="flex items-center gap-1 rounded-lg border border-line bg-surface-2/50 px-2 py-1 text-xs text-muted hover:text-ink"
-                >
-                  <Plus className="h-3 w-3" /> Record
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={openCreateScorecard}
+                    className="flex items-center gap-1 rounded-lg border border-accent/40 bg-accent/10 px-2 py-1 text-[11px] font-medium text-accent hover:bg-accent/20 transition-colors"
+                    title="Quick Paste Mock Result (Smartkeeda, Adda247, Guidely, Oliveboard)"
+                  >
+                    <Zap className="h-3 w-3" /> Paste
+                  </button>
+                  <button
+                    onClick={openCreateScorecard}
+                    className="flex items-center gap-1 rounded-lg border border-line bg-surface-2/50 px-2 py-1 text-[11px] text-muted hover:text-ink"
+                  >
+                    <Plus className="h-3 w-3" /> Record
+                  </button>
+                </div>
               )}
             </div>
           )
@@ -510,6 +536,32 @@ export function ScorecardWidget({ widget, variant }) {
                 <>
                   {activeTab === 'attempts' && (
                     <div className="flex flex-col gap-3">
+                      {/* Quick Paste Mock Banner */}
+                      <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-2xl border border-dashed border-accent/40 bg-accent/5 p-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent shadow-xs">
+                            <Zap className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-bold text-ink">Multi-Portal Mock Parser</span>
+                              <span className="rounded bg-surface-2 px-1.5 py-0.2 text-[9px] font-mono text-accent">
+                                Instant Auto-Detect
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-muted truncate">
+                              Paste raw results from Smartkeeda, Adda247, Guidely or Oliveboard — auto-extracts marks, accuracy, time & mistakes.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={openCreateScorecard}
+                          className="flex items-center gap-1.5 rounded-xl bg-accent px-3.5 py-1.5 text-xs font-semibold text-white shadow-glow-sm hover:opacity-95 transition-all active:scale-95 shrink-0"
+                        >
+                          <Plus className="h-3.5 w-3.5" /> Paste / Record Mock
+                        </button>
+                      </div>
+
                       {/* Search & Sub-filters */}
                       <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-line/60 bg-surface-2/30 p-2.5">
                         <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
@@ -525,7 +577,10 @@ export function ScorecardWidget({ widget, variant }) {
 
                         <div className="flex items-center gap-1 rounded-xl border border-line/50 bg-surface p-0.5">
                           <button
-                            onClick={() => setListTypeFilter('all')}
+                            onClick={() => {
+                              setListTypeFilter('all')
+                              setSubjectFilter('all')
+                            }}
                             className={cn(
                               'rounded-lg px-2.5 py-1 text-xs font-medium transition-colors',
                               listTypeFilter === 'all' ? 'bg-accent text-white shadow-sm' : 'text-muted hover:text-ink'
@@ -543,7 +598,10 @@ export function ScorecardWidget({ widget, variant }) {
                             Sectional ({scorecards.filter((s) => s.type === 'sectional').length})
                           </button>
                           <button
-                            onClick={() => setListTypeFilter('flt')}
+                            onClick={() => {
+                              setListTypeFilter('flt')
+                              setSubjectFilter('all')
+                            }}
                             className={cn(
                               'rounded-lg px-2.5 py-1 text-xs font-medium transition-colors',
                               listTypeFilter === 'flt' ? 'bg-accent text-white shadow-sm' : 'text-muted hover:text-ink'
@@ -553,6 +611,40 @@ export function ScorecardWidget({ widget, variant }) {
                           </button>
                         </div>
                       </div>
+
+                      {/* Subject Chips (Only visible in Sectional filter) */}
+                      {listTypeFilter === 'sectional' && availableSubjects.length > 0 && (
+                        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 px-0.5">
+                          <span className="text-[10px] font-bold text-muted uppercase tracking-wider shrink-0 mr-1">
+                            Subject:
+                          </span>
+                          <button
+                            onClick={() => setSubjectFilter('all')}
+                            className={cn(
+                              'shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors',
+                              subjectFilter === 'all'
+                                ? 'bg-accent text-white shadow-xs'
+                                : 'bg-surface-2/50 text-muted hover:text-ink'
+                            )}
+                          >
+                            All Subjects
+                          </button>
+                          {availableSubjects.map((subj) => (
+                            <button
+                              key={subj}
+                              onClick={() => setSubjectFilter(subj)}
+                              className={cn(
+                                'shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors',
+                                subjectFilter === subj
+                                  ? 'bg-accent text-white shadow-xs'
+                                  : 'bg-surface-2/50 text-muted hover:text-ink'
+                              )}
+                            >
+                              {subj}
+                            </button>
+                          ))}
+                        </div>
+                      )}
 
                       {/* Attempts Grid / Cards */}
                       {filteredAttempts.length === 0 ? (
@@ -572,11 +664,13 @@ export function ScorecardWidget({ widget, variant }) {
                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                           {filteredAttempts.map((sc) => {
                             const scorePct = sc.totalMarks ? Math.round(((sc.score || 0) / sc.totalMarks) * 100) : 0
+                            const portal = sc.detectedPortal || (sc.rawText ? detectPortal(sc.rawText) : null)
+
                             return (
                               <div
                                 key={sc.id}
                                 onClick={() => openDetail(sc)}
-                                className="group relative cursor-pointer rounded-2xl border border-line/60 bg-surface/75 p-3.5 transition-all hover:border-accent/40 hover:bg-surface hover:shadow-glow-sm"
+                                className="group relative cursor-pointer rounded-2xl border border-line/60 bg-surface/75 p-3.5 transition-all hover:border-accent/50 hover:bg-surface hover:shadow-glow-sm"
                               >
                                 {/* Header */}
                                 <div className="flex items-start justify-between gap-2 mb-2">
@@ -590,6 +684,24 @@ export function ScorecardWidget({ widget, variant }) {
                                       >
                                         {sc.type === 'flt' ? 'FLT' : 'Sectional'}
                                       </span>
+                                      {portal && portal !== 'generic' && (
+                                        <span
+                                          className={cn(
+                                            'rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider',
+                                            portal === 'smartkeeda'
+                                              ? 'bg-sky-500/15 text-sky-400 border border-sky-500/30'
+                                              : portal === 'adda247'
+                                              ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                                              : portal === 'guidely'
+                                              ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
+                                              : portal === 'oliveboard'
+                                              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                              : 'bg-surface-2 text-muted'
+                                          )}
+                                        >
+                                          {portal}
+                                        </span>
+                                      )}
                                       {sc.examName && (
                                         <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[9px] font-semibold text-accent">
                                           {sc.examName}
@@ -612,7 +724,7 @@ export function ScorecardWidget({ widget, variant }) {
 
                                   <div className="text-right shrink-0">
                                     <div className="flex items-baseline gap-1 justify-end">
-                                      <span className="text-xl font-extrabold text-ink">{sc.score}</span>
+                                      <span className="font-display text-2xl font-extrabold text-ink">{sc.score}</span>
                                       <span className="text-[11px] text-muted">/{sc.totalMarks || 0}</span>
                                     </div>
                                     <span className="text-[10px] text-muted/80">{scorePct}%</span>
@@ -657,6 +769,32 @@ export function ScorecardWidget({ widget, variant }) {
                                     </span>
                                   </div>
                                 </div>
+
+                                {/* FLT Section Breakdown Preview */}
+                                {sc.type === 'flt' && Array.isArray(sc.sections) && sc.sections.length > 0 && (
+                                  <div className="mt-2.5 rounded-xl border border-line/40 bg-surface-2/30 p-2 text-left">
+                                    <div className="flex items-center justify-between text-[10px] text-muted mb-1.5 font-semibold">
+                                      <span>Section Breakdown</span>
+                                      <span className="font-mono text-accent">{sc.sections.length} sections</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1">
+                                      {sc.sections.map((sec, idx) => (
+                                        <div
+                                          key={idx}
+                                          className="flex items-center gap-1 rounded-lg bg-surface/80 border border-line/30 px-1.5 py-0.5 text-[10px]"
+                                        >
+                                          <span className="text-ink font-medium truncate max-w-[80px]" title={sec.name}>
+                                            {sec.name || sec.canonicalName}
+                                          </span>
+                                          <span className="font-bold text-accent font-mono">{sec.score}</span>
+                                          {sec.totalMarks ? (
+                                            <span className="text-[9px] text-muted/70 font-mono">/{sec.totalMarks}</span>
+                                          ) : null}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
 
                                 {/* Footer: Mistakes & Questions */}
                                 <div className="mt-2.5 flex items-center justify-between text-[11px] text-muted pt-2 border-t border-line/30">
@@ -772,43 +910,51 @@ export function ScorecardWidget({ widget, variant }) {
               </div>
             ) : (
               <div className="flex flex-col gap-1.5">
-                {scorecards.slice(0, 4).map((sc) => (
-                  <button
-                    key={sc.id}
-                    onClick={() => openDetail(sc)}
-                    className="flex items-center justify-between gap-2 rounded-xl border border-line/50 bg-surface-2/30 px-3 py-2 text-left transition-colors hover:border-accent/40 hover:bg-surface-2/50"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <span
-                          className={cn(
-                            'h-2 w-2 rounded-full shrink-0',
-                            sc.type === 'flt' ? 'bg-amber-400' : 'bg-accent'
+                {scorecards.slice(0, 4).map((sc) => {
+                  const portal = sc.detectedPortal || (sc.rawText ? detectPortal(sc.rawText) : null)
+                  return (
+                    <button
+                      key={sc.id}
+                      onClick={() => openDetail(sc)}
+                      className="flex items-center justify-between gap-2 rounded-xl border border-line/50 bg-surface-2/30 px-3 py-2 text-left transition-colors hover:border-accent/40 hover:bg-surface-2/50"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={cn(
+                              'h-2 w-2 rounded-full shrink-0',
+                              sc.type === 'flt' ? 'bg-amber-400' : 'bg-accent'
+                            )}
+                          />
+                          <span className="min-w-0 truncate text-xs font-semibold text-ink">
+                            {sc.title}
+                          </span>
+                          {portal && portal !== 'generic' && (
+                            <span className="rounded bg-accent/10 px-1 py-0.2 text-[8px] font-bold uppercase tracking-wider text-accent shrink-0">
+                              {portal}
+                            </span>
                           )}
-                        />
-                        <span className="min-w-0 truncate text-xs font-semibold text-ink">
-                          {sc.title}
+                        </div>
+                        <span className="text-[10px] text-muted truncate block">
+                          {sc.examName ? `${sc.examName} • ` : ''}
+                          {sc.sectionName}
+                          {sc.accuracy != null ? ` • ${sc.accuracy}% acc` : ''}
                         </span>
                       </div>
-                      <span className="text-[10px] text-muted truncate block">
-                        {sc.examName ? `${sc.examName} • ` : ''}
-                        {sc.sectionName}
-                        {sc.accuracy != null ? ` • ${sc.accuracy}% acc` : ''}
-                      </span>
-                    </div>
 
-                    <div className="text-right shrink-0">
-                      <span className="block text-xs font-bold text-ink">
-                        {sc.score}/{sc.totalMarks || 0}
-                      </span>
-                      {(sc.mistakes?.length || 0) > 0 && (
-                        <span className="text-[10px] text-rose-400 font-medium">
-                          {sc.mistakes.length} errors
+                      <div className="text-right shrink-0">
+                        <span className="block text-xs font-bold text-ink">
+                          {sc.score}/{sc.totalMarks || 0}
                         </span>
-                      )}
-                    </div>
-                  </button>
-                ))}
+                        {(sc.mistakes?.length || 0) > 0 && (
+                          <span className="text-[10px] text-rose-400 font-medium">
+                            {sc.mistakes.length} errors
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
             )}
 

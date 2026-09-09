@@ -57,8 +57,11 @@ describe("What's New Tour & Video Pop-up", () => {
   })
 
   it('SettingsPanel includes the What\'s New video showcase card and launch trigger', () => {
+    const updatesTabPath = path.resolve(__dirname, '../../settings/tabs/UpdatesTab.jsx')
     const settingsPath = path.resolve(__dirname, '../../settings/SettingsPanel.jsx')
-    const content = fs.readFileSync(settingsPath, 'utf8')
+    const content = fs.existsSync(updatesTabPath)
+      ? fs.readFileSync(updatesTabPath, 'utf8')
+      : fs.readFileSync(settingsPath, 'utf8')
 
     expect(content).toContain("whatsNewVideo from '@/assets/video-pack/whats-new.mp4'")
     expect(content).toContain("What's New Video")

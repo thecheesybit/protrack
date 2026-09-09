@@ -1,15 +1,19 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
-import { Plus, Settings2, Sun, Moon, Settings, LogOut, Heart, Minimize2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Settings2, Sun, Moon, Settings, LogOut, Heart, Minimize2, ChevronDown, ChevronUp, Archive } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
 import { useTheme } from '@/hooks/useTheme'
 import { useStore } from '@/store/useStore'
 import { getIcon } from '@/lib/icons'
 import { updateActiveMode } from '@/services/userService'
+import { archiveMode, unarchiveMode } from '@/services/modeService'
 import { ModeEditorModal } from '@/components/modes/ModeEditorModal'
 import { DeleteModeModal } from '@/components/modes/DeleteModeModal'
 import { ModeContextMenu } from '@/components/modes/ModeContextMenu'
+import { ArchivedModesModal } from '@/components/modes/ArchivedModesModal'
+import { ConfirmLogoutModal } from '@/components/auth/ConfirmLogoutModal'
 import { cn } from '@/utils/cn'
 
 /**
@@ -151,7 +155,7 @@ function ModePill({ mode, active, onSelect, onEdit, onContextMenu }) {
 
 export function ModeSwitcher({ vertical = false }) {
   const { user, signOut } = useAuth()
-  const { theme, toggleTheme } = useTheme()
+  const { isDark, toggleTheme } = useTheme()
   const modes = useStore((s) => s.modes)
   const activeModeId = useStore((s) => s.activeModeId)
   const setActiveModeId = useStore((s) => s.setActiveModeId)
@@ -165,9 +169,14 @@ export function ModeSwitcher({ vertical = false }) {
   const [contextMenu, setContextMenu] = useState({ open: false, position: null, mode: null })
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [deletingMode, setDeletingMode] = useState(null)
+  const [archivedModalOpen, setArchivedModalOpen] = useState(false)
+  const [logoutModalOpen, setLogoutModalOpen] = useState(false)
 
-  // 5s inactivity auto-hide logic for vertical rail
-  const [isRetracted, setIsRetracted] = useState(false)
+  // 5s inactivity auto-hide logic for vertical rail ("The Pill")
+  const modeRailOpen = useStore((s) => s.modeRailOpen)
+  const setModeRailOpen = useStore((s) => s.setModeRailOpen)
+  const scopeDropdownOpen = useStore((s) => s.scopeDropdownOpen)
+  const isRetracted = !modeRailOpen
   const hideTimerRef = useRef(null)
 
   const clearHideTimer = () => {
@@ -179,25 +188,23 @@ export function ModeSwitcher({ vertical = false }) {
 
   const startHideTimer = () => {
     clearHideTimer()
-    if (!editorOpen && !deleteModalOpen && !contextMenu.open) {
+    if (!editorOpen && !deleteModalOpen && !contextMenu.open && !archivedModalOpen) {
       hideTimerRef.current = setTimeout(() => {
-        setIsRetracted(true)
+        setModeRailOpen(false)
       }, 5000)
     }
   }
 
   useEffect(() => {
-    if (!editorOpen && !deleteModalOpen && !contextMenu.open) {
+    if (!editorOpen && !deleteModalOpen && !contextMenu.open && !archivedModalOpen) {
       startHideTimer()
     } else {
       clearHideTimer()
-      setIsRetracted(false)
+      setModeRailOpen(true)
     }
     return () => clearHideTimer()
-    // start/clearHideTimer are recreated each render but carry no external deps
-    // beyond the modal flags already listed — only re-run on those.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editorOpen, deleteModalOpen, contextMenu.open])
+  }, [editorOpen, deleteModalOpen, contextMenu.open, archivedModalOpen])
 
   const modesScrollRef = useRef(null)
   const [canScrollUp, setCanScrollUp] = useState(false)
@@ -239,8 +246,9 @@ export function ModeSwitcher({ vertical = false }) {
   }
 
   const handleRailMouseEnter = () => {
+    if (scopeDropdownOpen) return
     clearHideTimer()
-    setIsRetracted(false)
+    setModeRailOpen(true)
   }
 
   const handleRailMouseLeave = () => {
@@ -249,9 +257,10 @@ export function ModeSwitcher({ vertical = false }) {
     setHoveredPill(null)
   }
 
-
   // Modes are rendered in their persisted order (mode.order ascending)
   const sortedModes = [...modes].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+  const activeModes = sortedModes.filter((m) => !m.archived)
+  const archivedModes = sortedModes.filter((m) => m.archived)
 
   // Inject a pseudo-mode "All" at the front
   const allMode = { id: 'all', name: 'All Scopes', icon: 'Globe', accentColor: '#94a3b8' }
@@ -288,6 +297,31 @@ export function ModeSwitcher({ vertical = false }) {
     })
   }
 
+  const handleArchive = async (mode) => {
+    if (!user || mode.id === 'all') return
+    try {
+      await archiveMode(user.uid, mode.id)
+      if (activeModeId === mode.id) {
+        selectMode('all')
+      }
+      toast.success(`"${mode.name}" archived`)
+    } catch (err) {
+      console.error('[mode] archive failed', err)
+      toast.error('Could not archive mode')
+    }
+  }
+
+  const handleUnarchive = async (mode) => {
+    if (!user || mode.id === 'all') return
+    try {
+      await unarchiveMode(user.uid, mode.id)
+      toast.success(`"${mode.name}" restored`)
+    } catch (err) {
+      console.error('[mode] restore failed', err)
+      toast.error('Could not restore mode')
+    }
+  }
+
   const handleRequestDelete = (mode) => {
     setContextMenu({ open: false, position: null, mode: null })
     setDeletingMode(mode)
@@ -312,6 +346,12 @@ export function ModeSwitcher({ vertical = false }) {
         mode={deletingMode}
       />
 
+      <ArchivedModesModal
+        open={archivedModalOpen}
+        onClose={() => setArchivedModalOpen(false)}
+        archivedModes={archivedModes}
+      />
+
       <ModeContextMenu
         open={contextMenu.open}
         position={contextMenu.position}
@@ -319,7 +359,16 @@ export function ModeSwitcher({ vertical = false }) {
         onClose={() => setContextMenu({ open: false, position: null, mode: null })}
         onEdit={(m) => openEdit(m)}
         onDelete={(m) => handleRequestDelete(m)}
-        canDelete={modes.length > 1}
+        onArchive={handleArchive}
+        onUnarchive={handleUnarchive}
+        canDelete={activeModes.length > 1}
+      />
+
+      <ConfirmLogoutModal
+        open={logoutModalOpen}
+        onClose={() => setLogoutModalOpen(false)}
+        onConfirm={signOut}
+        user={user}
       />
     </>
   )
@@ -331,7 +380,7 @@ export function ModeSwitcher({ vertical = false }) {
     const railAction =
       'flex h-12 w-12 items-center justify-center rounded-2xl text-muted transition-all duration-200 hover:scale-105 hover:bg-ink/5 hover:text-ink cursor-pointer'
 
-    const allModes = [allMode, ...sortedModes]
+    const allModes = [allMode, ...activeModes]
     const hasMoreThan4 = allModes.length > 4
 
     const handleRailWheel = (e) => {
@@ -343,8 +392,8 @@ export function ModeSwitcher({ vertical = false }) {
 
     return (
       <>
-        {/* Invisible edge trigger: hovering near the left screen edge immediately reveals the rail */}
-        {isRetracted && (
+        {/* Invisible edge trigger: hovering near the left screen edge reveals rail unless scope dropdown is open */}
+        {isRetracted && !scopeDropdownOpen && (
           <div
             onMouseEnter={handleRailMouseEnter}
             className="fixed left-0 top-1/4 bottom-1/4 z-30 w-5 flex items-center cursor-pointer group"
@@ -362,9 +411,9 @@ export function ModeSwitcher({ vertical = false }) {
         >
           <motion.div
             animate={{
-              x: isRetracted ? -90 : 0,
-              opacity: isRetracted ? 0 : 1,
-              pointerEvents: isRetracted ? 'none' : 'auto',
+              x: isRetracted || scopeDropdownOpen ? -120 : 0,
+              opacity: isRetracted || scopeDropdownOpen ? 0 : 1,
+              pointerEvents: isRetracted || scopeDropdownOpen ? 'none' : 'auto',
             }}
             transition={{ type: 'spring', stiffness: 320, damping: 28 }}
             className="relative flex shrink-0 flex-col items-center gap-2 rounded-[1.75rem] border border-line/60 bg-surface/80 px-2 py-3 shadow-premium-md backdrop-blur-xl transition-shadow duration-300"
@@ -421,6 +470,20 @@ export function ModeSwitcher({ vertical = false }) {
                 <Plus className="h-6 w-6" />
               </button>
 
+              {archivedModes.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setArchivedModalOpen(true)}
+                  title={`Archived modes (${archivedModes.length})`}
+                  className={cn(railAction, 'relative text-amber-500 hover:text-amber-600')}
+                >
+                  <Archive className="h-6 w-6" />
+                  <span className="absolute top-1 right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold text-white shadow-sm">
+                    {archivedModes.length}
+                  </span>
+                </button>
+              )}
+
               {fullscreen && (
                 <button
                   onClick={() => window.protrack?.window?.toggleFullScreen?.()}
@@ -433,10 +496,10 @@ export function ModeSwitcher({ vertical = false }) {
 
               <button
                 onClick={toggleTheme}
-                title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+                title={isDark ? 'Light mode' : 'Dark mode'}
                 className={railAction}
               >
-                {theme === 'dark' ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
+                {isDark ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
               </button>
 
               <button onClick={() => setSettingsOpen(true)} title="Settings" className={railAction}>
@@ -452,7 +515,7 @@ export function ModeSwitcher({ vertical = false }) {
               </button>
 
               <button
-                onClick={signOut}
+                onClick={() => setLogoutModalOpen(true)}
                 title="Sign out"
                 className="flex h-12 w-12 items-center justify-center rounded-2xl text-muted transition-all duration-200 hover:scale-105 hover:bg-red-500/10 hover:text-red-500 cursor-pointer"
               >
@@ -516,7 +579,7 @@ export function ModeSwitcher({ vertical = false }) {
           onSelect={() => selectMode('all')}
           onEdit={() => openEdit(allMode)}
         />
-        {sortedModes.map((mode) => (
+        {activeModes.map((mode) => (
           <ModePill
             key={mode.id}
             mode={mode}
@@ -530,10 +593,24 @@ export function ModeSwitcher({ vertical = false }) {
         <button
           onClick={openCreate}
           title="New mode"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted transition-colors hover:bg-surface-2 hover:text-ink cursor-pointer"
         >
           <Plus className="h-4 w-4" />
         </button>
+
+        {archivedModes.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setArchivedModalOpen(true)}
+            title={`Archived modes (${archivedModes.length})`}
+            className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-amber-500 transition-colors hover:bg-surface-2 hover:text-amber-600 cursor-pointer"
+          >
+            <Archive className="h-4 w-4" />
+            <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold text-white shadow-sm">
+              {archivedModes.length}
+            </span>
+          </button>
+        )}
       </div>
 
       {sharedDialogs}

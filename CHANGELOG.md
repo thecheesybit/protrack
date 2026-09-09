@@ -1,5 +1,65 @@
 # Changelog
 
+## v2.8.0 — 2026-09-09
+
+### 🎛️ Timetable Legends — Interactive Hover Rail, Subject Inspector & Class Type Legend
+- **Dynamic Context Rail**: A glassmorphic hover rail anchored to the timetable card that expands on slot hover or click, showing a full live inspector, subject roster, and class type reference.
+- **3-Tab Segmented Switcher**:
+  - **Inspect**: Live slot inspector with subject name, type badge (`[L]` Lecture, `[Lab]` Lab, `[T]` Tutorial, `[S]` Seminar, `[Rev]` Revision), time & duration, room/venue, custom topic, and a 1-click "Focus on this Class" action button.
+  - **Subjects**: Color-swatched subject roster with weekly session counts, total hours, and study-load progress bars. Hovering any subject highlights all its timetable sessions with a pulsing accent ring.
+  - **Types**: Tactile cheat-sheet cards for all class type badges.
+- **5-Second Linger Grace Period**: When the cursor leaves a slot, a visible countdown runs; hovering the panel within 5s cancels the close. Complete idle inactivity (no mouse movement) also triggers auto-close.
+- **Pin/Unpin Toggle**: Persistent pin button to keep legends locked open (`localStorage` backed).
+- **Push Pill to Close**: Tactile `✕ Close` button and `Escape` key for instant collapse.
+
+### 🔒 Legend Lock Toggle (`L` Key)
+- **Locked by Default**: Legends start disabled on first launch — no accidental expansion from slot hovers.
+- **`L` Key Global Shortcut**: Press `L` anywhere to toggle legends on/off. Registered in the `?` shortcuts sheet.
+- **Locked Hover Hint**: When locked, hovering the legend pill shows a high-visibility badge: `Legends locked · Press [L] to turn on`.
+- **Click-to-Unlock**: Clicking the legend pill while locked instantly unlocks and expands it.
+
+### 🎯 Pill & Legend Mutual Exclusivity Engine
+- **Pill (A) ↔ Legend (B)**: Opening one always closes the other; both can be closed, but never both open simultaneously.
+- **Scope Dropdown Integration**: Opening the scope selector closes legends and blocks them from opening. Both pills (Mode Switcher + Legend) and the bottom dock notch bar disappear while the scope list is down.
+- **Store-Level Enforcement**: All mutual exclusion rules enforced in `uiSlice.js` with comprehensive unit tests.
+
+### 📐 Legend Height & Clock Clearance
+- **2 cm Bottom Clearance Increase**: Legend pill raised by ~76px (`bottom-[120px]` → `bottom-[196px]`, `bottom-[12px]` → `bottom-[88px]`), reserving ample space for area (C) and the desk clock.
+- **Clock Always Visible**: With the increased clearance, the FlipClock no longer hides when legends expand — the `blocksLegend` intersection logic is removed entirely.
+
+### ⏰ Reimagined Alarm Pop-Up & Audio Testing Station
+- **Theme-Aligned Chrono Design**: Dynamic `var(--accent)` styling matching the time-of-day palette. Two tabs: **Set Alarm** and **Saved Alarms**.
+- **Tactile Digital Steppers**: Retro flip-card hour/minute steppers with AM/PM toggle pill replacing raw browser selects.
+- **Quick Presets**: One-tap offset buttons (`+5m`, `+15m`, `+30m`, `+1h`, `Next :00`) and productivity purpose chips (`Deep Focus`, `Drink Water`, `Review Notes`, etc.).
+- **Play & Test Audio**: Interactive audio testing with 5 sound profiles (*Vibrant Alarm*, *Temple Bell*, *Crystal Chime*, *Singing Bowl*, *Marimba Alert*), live equalizer animation, and automatic mute detection with 1-click unmute.
+- **Ctrl+T Zen Mode**: Alarm button cleanly hidden in full-screen centered desk clock mode.
+
+### 🔔 Per-Notification Habit Snooze Policy
+- **Instance-Level Snooze**: Snooze tracks per scheduled notification instance (`routine_snooze_slot_${today}_${habitId}_${cue.time}`), not per day.
+- **1 Snooze per Notification**: Each cue can be snoozed exactly once; the snoozed reminder shows "Already snoozed once". Subsequent cues for the same habit later that day remain snoozeable.
+
+### ⚡ Performance & Architecture
+- **Consolidated 1-Second Heartbeat (`useGlobalTick`)**: Single reference-counted singleton timer aligned to wall-clock seconds, replacing independent `setInterval` timers.
+- **Aurora Low Power Mode**: Settings toggle to replace heavy 140px blur layers with a lightweight CSS radial glow on integrated GPUs.
+- **Focus Timer Leaf Isolation**: Extracted `<FocusTimerLeaf />` so only the countdown subscribes to `secondsLeft`, eliminating 60 full-widget re-renders per minute.
+- **BoardCanvas rAF Throttling**: Split divider drag cached via `getBoundingClientRect` on pointerdown + `requestAnimationFrame` throttling.
+- **Long List Virtualization**: `useVirtualList` hook windowing completed tasks and ledger entries past 20 items.
+
+### 🏛️ Mode Archiving, Analytics Goals & Notes Markdown
+- **Mode Archiving**: Soft-delete modes with 1-click restore or permanent purge from a dedicated modal.
+- **Custom Analytics Goals**: Configurable daily focus and session targets with dynamic health rings.
+- **Notes Markdown Rendering**: Zero-dependency markdown engine with headings, lists, bold/italic, code, links, and interactive hashtag chips.
+- **Subtask Checklists**: Inline subtask creation, toggle, and deletion within Kanban cards with progress badges.
+
+### 🛠️ Fixes
+- **Dashboard Not Rendering**: Resolved missing `useAlarmWatcher` import causing `ReferenceError` on dashboard mount.
+- **`useMemo is not defined`**: Added missing React hook import in FlipClock.jsx with automated import verification test.
+- **Settings Tabs**: Fixed Account Tab blank screen (IIFE wrapper bug), Privacy Tab crash (missing `APP_VERSION` import), and Security Tab missing PIN modal.
+
+### 📊 Test & Build
+- **542 tests** passing across **46 test suites** (100% pass rate).
+- Production build in **~11.5s** with zero errors.
+
 ## v2.6.0 — 2026-09-09
 
 ### ⏰ Phone Alarm Clock & Resonant Hourly Chime

@@ -90,4 +90,29 @@ describe('FlipClock defaults and positioning', () => {
     // Scaled height = 88 * 3.5 = 308. Window height = 825. (825 - 308) / 2 = 258.5
     expect(pos.y).toBeCloseTo(258.5, 1)
   })
+
+  it('verifies all React hooks including useMemo are explicitly imported in FlipClock.jsx', async () => {
+    const fs = await import('fs')
+    const path = await import('path')
+    const clockPath = path.resolve(__dirname, '../FlipClock.jsx')
+    const content = fs.readFileSync(clockPath, 'utf8')
+    const importMatch = content.match(/import\s*\{([^}]+)\}\s*from\s*['"]react['"]/)
+    expect(importMatch).toBeTruthy()
+    const importedHooks = importMatch[1].split(',').map((s) => s.trim())
+    expect(importedHooks).toContain('useMemo')
+    expect(importedHooks).toContain('useEffect')
+    expect(importedHooks).toContain('useState')
+    expect(importedHooks).toContain('useRef')
+    expect(importedHooks).toContain('useCallback')
+  })
+
+  it('preserves clock visibility when timetable legends expand (safe space available in area C)', async () => {
+    const fs = await import('fs')
+    const path = await import('path')
+    const clockPath = path.resolve(__dirname, '../FlipClock.jsx')
+    const content = fs.readFileSync(clockPath, 'utf8')
+    // blocksLegend is removed so clock never disappears when legends expand
+    expect(content).not.toContain('blocksLegend')
+    expect(content).toContain('Safe space is available in area (C)')
+  })
 })

@@ -35,6 +35,9 @@ import {
   Undo2,
   ChevronLeft,
   ChevronRight,
+  ListChecks,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
@@ -44,8 +47,10 @@ import { addTodo, updateTodo, deleteTodo, reorderTodos } from '@/services/todoSe
 import { getPriority, nextPriority, PRIORITIES, PRIORITY_ORDER } from '@/lib/priority'
 import { classifyDeadline } from '@/lib/deadlines'
 import { parseCapture } from '@/lib/nlParse'
+import { ymd } from '@/lib/dates'
 import toast from 'react-hot-toast'
 import { playPop, playSuccess, playTodoChime } from '@/lib/audioFX'
+import { useVirtualList } from '@/hooks/useVirtualList'
 import { cn } from '@/utils/cn'
 
 // ── Column configuration ──────────────────────────────────────────────────────
@@ -99,6 +104,46 @@ function sameDay(a, b) {
   return a.getFullYear() === b.getFullYear() &&
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate()
+}
+
+function toDateSafe(val) {
+  if (!val) return null
+  if (typeof val.toDate === 'function') return val.toDate()
+  if (val instanceof Date) return isNaN(val.getTime()) ? null : val
+  if (typeof val === 'number' || typeof val === 'string') {
+    const d = new Date(val)
+    return isNaN(d.getTime()) ? null : d
+  }
+  return null
+}
+
+function getTodoDueDay(t) {
+  if (!t || !t.dueAt) return null
+  const d = toDateSafe(t.dueAt)
+  return d ? ymd(d) : null
+}
+
+function getTodoCreatedDay(t) {
+  if (!t || !t.createdAt) return null
+  const d = toDateSafe(t.createdAt)
+  return d ? ymd(d) : null
+}
+
+function getTodoCompletedDay(t) {
+  if (!t) return null
+  if (t.completedAt) {
+    const d = toDateSafe(t.completedAt)
+    if (d) return ymd(d)
+  }
+  if (t.updatedAt) {
+    const d = toDateSafe(t.updatedAt)
+    if (d) return ymd(d)
+  }
+  if (t.createdAt) {
+    const d = toDateSafe(t.createdAt)
+    if (d) return ymd(d)
+  }
+  return null
 }
 
 // ── PriorityDot ───────────────────────────────────────────────────────────────
@@ -479,6 +524,36 @@ const KanbanCard = memo(function KanbanCard({
 
   const [editing, setEditing] = useState(false)
   const [textDraft, setTextDraft] = useState(todo.text)
+  const [showSubtasks, setShowSubtasks] = useState(false)
+  const [newSubtaskDraft, setNewSubtaskDraft] = useState('')
+
+  const subtasks = todo.subtasks || []
+  const doneSubtasksCount = subtasks.filter((s) => s.done).length
+  const totalSubtasks = subtasks.length
+
+  const handleToggleSubtask = (subtaskId) => {
+    const next = subtasks.map((s) =>
+      s.id === subtaskId ? { ...s, done: !s.done } : s
+    )
+    onUpdate({ subtasks: next })
+  }
+
+  const handleDeleteSubtask = (subtaskId) => {
+    const next = subtasks.filter((s) => s.id !== subtaskId)
+    onUpdate({ subtasks: next })
+  }
+
+  const handleAddSubtask = () => {
+    const text = newSubtaskDraft.trim()
+    if (!text) return
+    const newSub = {
+      id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      text,
+      done: false,
+    }
+    onUpdate({ subtasks: [...subtasks, newSub] })
+    setNewSubtaskDraft('')
+  }
 
   const style = {
     transform: CSS.Translate.toString(transform),
@@ -600,14 +675,14 @@ const KanbanCard = memo(function KanbanCard({
         )}
       </div>
 
-      {/* Deadline row */}
-      <div className="flex items-center gap-1.5 px-2.5 pb-2.5 pl-[28px]">
+      {/* Deadline & Subtask status row */}
+      <div className="flex flex-wrap items-center gap-1.5 px-2.5 pb-2.5 pl-[28px]">
         {todo.dueAt ? (
           <button
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); onDeadlineClick(e) }}
             className={cn(
-              'flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium backdrop-blur-sm transition-all',
+              'flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium backdrop-blur-sm transition-all cursor-pointer',
               urgency === 'overdue'
                 ? 'border-rose-500/30 bg-rose-500/15 text-rose-300 hover:bg-rose-500/25'
                 : 'border-white/10 bg-white/[0.06] text-muted hover:border-white/20 hover:text-ink',
@@ -620,13 +695,131 @@ const KanbanCard = memo(function KanbanCard({
           <button
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); onDeadlineClick(e) }}
-            className="hidden items-center gap-1 rounded-full border border-white/5 bg-white/[0.04] px-2 py-0.5 text-[10px] text-muted hover:border-white/15 hover:text-ink group-hover:flex transition-all"
+            className="hidden items-center gap-1 rounded-full border border-white/5 bg-white/[0.04] px-2 py-0.5 text-[10px] text-muted hover:border-white/15 hover:text-ink group-hover:flex transition-all cursor-pointer"
           >
             <Calendar className="h-2.5 w-2.5" />
             Deadline
           </button>
         )}
+
+        {/* Subtask pill counter */}
+        {totalSubtasks > 0 ? (
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowSubtasks((v) => !v)
+            }}
+            className={cn(
+              'flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-all cursor-pointer',
+              doneSubtasksCount === totalSubtasks
+                ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-400'
+                : 'border-accent/30 bg-accent/10 text-accent hover:bg-accent/20',
+            )}
+            title="Toggle subtasks checklist"
+          >
+            <ListChecks className="h-2.5 w-2.5" />
+            <span>
+              {doneSubtasksCount}/{totalSubtasks}
+            </span>
+            {showSubtasks ? (
+              <ChevronUp className="h-2.5 w-2.5 opacity-60" />
+            ) : (
+              <ChevronDown className="h-2.5 w-2.5 opacity-60" />
+            )}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowSubtasks(true)
+            }}
+            className="hidden items-center gap-1 rounded-full border border-white/5 bg-white/[0.04] px-2 py-0.5 text-[10px] text-muted hover:border-white/15 hover:text-ink group-hover:flex transition-all cursor-pointer"
+            title="Add subtask"
+          >
+            <Plus className="h-2.5 w-2.5" />
+            <span>Subtask</span>
+          </button>
+        )}
       </div>
+
+      {/* Expandable Subtask Checklist */}
+      <AnimatePresence>
+        {showSubtasks && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.15 }}
+            className="overflow-hidden border-t border-line/30 bg-surface/30 px-3 py-2 pl-[28px] space-y-1.5 rounded-b-2xl"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            {subtasks.map((st) => (
+              <div
+                key={st.id}
+                className="group/sub flex items-center justify-between gap-1.5 text-xs text-ink/90"
+              >
+                <label className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(st.done)}
+                    onChange={() => handleToggleSubtask(st.id)}
+                    className="h-3 w-3 rounded accent-accent cursor-pointer"
+                  />
+                  <span
+                    className={cn(
+                      'truncate text-[11px] transition-all',
+                      st.done && 'line-through text-muted opacity-60',
+                    )}
+                  >
+                    {st.text}
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteSubtask(st.id)}
+                  className="opacity-0 group-hover/sub:opacity-100 p-0.5 text-muted hover:text-rose-400 transition-opacity cursor-pointer"
+                  title="Remove subtask"
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </div>
+            ))}
+
+            {/* Quick Add Subtask Input */}
+            <div className="flex items-center gap-1 pt-1">
+              <input
+                type="text"
+                value={newSubtaskDraft}
+                onChange={(e) => setNewSubtaskDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleAddSubtask()
+                  }
+                  if (e.key === 'Escape') {
+                    setShowSubtasks(false)
+                  }
+                }}
+                placeholder="Add subtask (Press Enter)..."
+                className="flex-1 rounded-lg border border-line/40 bg-surface/80 px-2 py-0.5 text-[11px] text-ink outline-none focus:border-accent"
+              />
+              <button
+                type="button"
+                onClick={handleAddSubtask}
+                disabled={!newSubtaskDraft.trim()}
+                className="flex h-5 w-5 items-center justify-center rounded-md bg-accent text-white disabled:opacity-40 transition-opacity cursor-pointer"
+                title="Add"
+              >
+                <Plus className="h-3 w-3" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Focus-ready banner */}
       <AnimatePresence>
@@ -671,7 +864,7 @@ const KanbanCard = memo(function KanbanCard({
 
 function KanbanColumn({
   colId,
-  todos,
+  todos = [],
   focusReadyId,
   onDoubleClick,
   onToggle,
@@ -687,6 +880,7 @@ function KanbanColumn({
 }) {
   const col = COLS[colId]
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: colId })
+  const safeTodos = useMemo(() => (todos || []).filter((t) => t && t.id), [todos])
 
   return (
     <div
@@ -712,11 +906,11 @@ function KanbanColumn({
           <Plus className="h-2.5 w-2.5" /> Add
         </button>
         <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-mono text-muted">
-          {todos.length}
+          {safeTodos.length}
         </span>
       </div>
 
-      <SortableContext items={todos.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+      <SortableContext items={safeTodos.map((t) => t.id)} strategy={verticalListSortingStrategy}>
         <div
           ref={setDropRef}
           onDoubleClick={(e) => {
@@ -726,7 +920,7 @@ function KanbanColumn({
           }}
           className="flex min-h-[56px] flex-1 flex-col gap-2 overflow-y-auto no-scrollbar scrollbar-none px-2.5 pb-2.5"
         >
-          {todos.map((t) => (
+          {safeTodos.map((t) => (
             <KanbanCard
               key={t.id}
               todo={t}
@@ -740,7 +934,7 @@ function KanbanColumn({
               onPushBack={() => onPushBack?.(t)}
             />
           ))}
-          {todos.length === 0 && (
+          {safeTodos.length === 0 && (
             <div
               className={cn(
                 'empty-column-trigger flex flex-1 items-center justify-center rounded-2xl border-2 border-dashed border-white/5 py-6 text-center text-xs font-medium text-muted/50 transition-colors m-0.5 cursor-pointer hover:border-accent/30',
@@ -757,6 +951,76 @@ function KanbanColumn({
   )
 }
 
+// ── Completed Todos Virtual List ─────────────────────────────────────────────
+
+const DoneTodoItem = memo(function DoneTodoItem({ todo, onToggle, onDelete, style }) {
+  return (
+    <div
+      style={style}
+      className="group flex items-center gap-2 rounded-xl px-2 py-1 transition-colors hover:bg-white/5"
+    >
+      <button
+        type="button"
+        onClick={() => onToggle(todo)}
+        className="flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 border-transparent bg-emerald-500/80 text-white transition-colors hover:bg-emerald-500 cursor-pointer"
+        aria-label="Mark not done"
+        title="Mark not done"
+      >
+        <Check className="h-2.5 w-2.5" />
+      </button>
+      <span className="min-w-0 flex-1 truncate text-xs text-muted/60 line-through">
+        {todo.text}
+      </span>
+      <button
+        type="button"
+        onClick={() => onDelete(todo.id)}
+        className="hidden text-muted/40 hover:text-rose-400 group-hover:block cursor-pointer"
+        aria-label="Delete"
+        title="Delete completed task"
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </div>
+  )
+})
+
+const VirtualDoneList = memo(function VirtualDoneList({ doneTodos, onToggle, onDelete }) {
+  const containerRef = useRef(null)
+  const { isVirtualized, virtualItems, totalHeight } = useVirtualList({
+    items: doneTodos,
+    itemHeight: 28,
+    overscan: 5,
+    containerRef,
+    threshold: 25,
+  })
+
+  if (isVirtualized) {
+    return (
+      <div ref={containerRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto no-scrollbar scrollbar-none pr-0.5 relative">
+        <div style={{ height: totalHeight, position: 'relative', width: '100%' }}>
+          {virtualItems.map(({ item, offsetTop }) => (
+            <DoneTodoItem
+              key={item.id}
+              todo={item}
+              onToggle={onToggle}
+              onDelete={onDelete}
+              style={{ position: 'absolute', top: offsetTop, left: 0, right: 0, height: 28 }}
+            />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div ref={containerRef} className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto no-scrollbar scrollbar-none pr-0.5">
+      {doneTodos.map((t) => (
+        <DoneTodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} />
+      ))}
+    </div>
+  )
+})
+
 // ── TodosWidget ───────────────────────────────────────────────────────────────
 
 export function TodosWidget({ widget, variant }) {
@@ -771,7 +1035,44 @@ export function TodosWidget({ widget, variant }) {
   const [activeId, setActiveId] = useState(null)
   const [deadlinePicker, setDeadlinePicker] = useState(null)
   const [targetColumn, setTargetColumn] = useState('backlog')
+  const [filterMode, setFilterMode] = useState('day') // 'day' | 'all'
   const inputRef = useRef(null)
+
+  const rawSelectedDate = useStore((s) => s.selectedDate)
+  const resetSelectedDate = useStore((s) => s.resetSelectedDate)
+  const todayDateStr = useMemo(() => ymd(new Date()), [])
+  const selectedDate =
+    typeof rawSelectedDate === 'string' && rawSelectedDate.length === 10
+      ? rawSelectedDate
+      : todayDateStr
+  const isSelectedToday = selectedDate === todayDateStr
+
+  const selectedDateObj = useMemo(() => {
+    try {
+      const parts = selectedDate.split('-').map(Number)
+      if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+        return new Date(parts[0], parts[1] - 1, parts[2])
+      }
+    } catch {
+      /* fallback */
+    }
+    return new Date()
+  }, [selectedDate])
+
+  const selectedDateLabel = useMemo(() => {
+    if (isSelectedToday) return 'Today'
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    if (selectedDate === ymd(yesterday)) return 'Yesterday'
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    if (selectedDate === ymd(tomorrow)) return 'Tomorrow'
+    try {
+      return selectedDateObj.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
+    } catch {
+      return selectedDate
+    }
+  }, [isSelectedToday, selectedDate, selectedDateObj])
 
   const handleFocusColumn = (colId) => {
     setTargetColumn(colId)
@@ -783,39 +1084,30 @@ export function TodosWidget({ widget, variant }) {
 
   const isHero = variant === 'hero'
 
-  const filtered = useMemo(
+  const modeTodos = useMemo(
     () =>
-      todos.filter(
+      (todos || []).filter(
         (t) =>
-          // Pulled Google Calendar events live in the local gcal cache + the
-          // calendar views, never the to-do board (owner: no "happy birthday"
-          // dumped into to-dos).
-          t.source !== 'gcal' && (activeModeId === 'all' || t.modeId === activeModeId),
+          t &&
+          t.id &&
+          t.source !== 'gcal' &&
+          (activeModeId === 'all' || t.modeId === activeModeId),
       ),
     [todos, activeModeId],
   )
 
-  const backlogTodos = useMemo(
-    () =>
-      filtered
-        .filter((t) => !t.done && (t.column || 'backlog') === 'backlog')
-        .sort((a, b) => {
-          if (a.order != null && b.order != null) return a.order - b.order
-          return (PRIORITY_ORDER[a.priority || 'medium'] ?? 2) - (PRIORITY_ORDER[b.priority || 'medium'] ?? 2)
-        }),
-    [filtered],
-  )
-
-  const doingTodos = useMemo(
-    () => filtered.filter((t) => !t.done && (t.column || 'backlog') === 'doing'),
-    [filtered],
-  )
-
   // Completed tasks sorted with New / Recent on top (as annotated in media_1788918143530.png)
+  // When in 'day' mode (default), shows ONLY tasks completed on the selected day.
   const doneTodos = useMemo(() => {
-    const list = filtered.filter((t) => t.done)
+    const list = (modeTodos || []).filter((t) => {
+      if (!t || !t.done) return false
+      if (filterMode === 'all') return true
+      const compDay = getTodoCompletedDay(t)
+      return compDay === selectedDate
+    })
     return list.sort((a, b) => {
       const parseTime = (item) => {
+        if (!item) return 0
         if (item.completedAt) {
           const t = new Date(item.completedAt).getTime()
           if (!isNaN(t)) return t
@@ -835,7 +1127,57 @@ export function TodosWidget({ widget, variant }) {
       }
       return parseTime(b) - parseTime(a)
     })
-  }, [filtered])
+  }, [modeTodos, filterMode, selectedDate])
+
+  const filteredOpenTodos = useMemo(() => {
+    if (filterMode === 'all') {
+      return (modeTodos || []).filter((t) => t && !t.done)
+    }
+
+    return (modeTodos || []).filter((t) => {
+      if (!t || t.done) return false
+      const dueDay = getTodoDueDay(t)
+      const createdDay = getTodoCreatedDay(t)
+
+      // 1. Task has explicit due date
+      if (dueDay) {
+        if (dueDay === selectedDate) return true
+        // On today, carry forward overdue open tasks
+        if (isSelectedToday && dueDay < todayDateStr) return true
+        return false
+      }
+
+      // 2. Task has NO due date
+      if (isSelectedToday) {
+        // Active undated tasks show on today so user can see and work on them
+        return true
+      }
+
+      // On a past day: show tasks created on that day
+      if (selectedDate < todayDateStr) {
+        return createdDay === selectedDate
+      }
+
+      // On future days: only scheduled tasks appear
+      return false
+    })
+  }, [modeTodos, filterMode, selectedDate, isSelectedToday, todayDateStr])
+
+  const backlogTodos = useMemo(
+    () =>
+      (filteredOpenTodos || [])
+        .filter((t) => t && (t.column || 'backlog') === 'backlog')
+        .sort((a, b) => {
+          if (a.order != null && b.order != null) return a.order - b.order
+          return (PRIORITY_ORDER[a.priority || 'medium'] ?? 2) - (PRIORITY_ORDER[b.priority || 'medium'] ?? 2)
+        }),
+    [filteredOpenTodos],
+  )
+
+  const doingTodos = useMemo(
+    () => (filteredOpenTodos || []).filter((t) => t && (t.column || 'backlog') === 'doing'),
+    [filteredOpenTodos],
+  )
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -848,6 +1190,16 @@ export function TodosWidget({ widget, variant }) {
 
     let dueAt = pendingDueAt || parsed.date || null
     let taskText = parsed.date && parsed.title ? parsed.title : value
+
+    // If no explicit deadline was specified and we are viewing a specific day that is not today,
+    // default dueAt to the selected day at 09:00 AM so it lands on that day
+    if (!dueAt && !isSelectedToday && filterMode === 'day') {
+      const parts = selectedDate.split('-').map(Number)
+      if (parts.length === 3) {
+        const d = new Date(parts[0], parts[1] - 1, parts[2], 9, 0, 0, 0)
+        dueAt = d
+      }
+    }
 
     // If dueAt is at midnight (00:00) with unspecified time, default to 09:00 AM so it displays on the calendar
     if (dueAt) {
@@ -891,9 +1243,15 @@ export function TodosWidget({ widget, variant }) {
       playTodoChime()
       if (focusReadyId === t.id) setFocusReadyId(null)
     }
+    const completedAt = nextDone
+      ? (isSelectedToday || filterMode === 'all'
+          ? new Date().toISOString()
+          : `${selectedDate}T12:00:00.000Z`)
+      : null
+
     updateTodo(user.uid, t.id, {
       done: nextDone,
-      completedAt: nextDone ? new Date().toISOString() : null,
+      completedAt,
     })
   }
 
@@ -1072,14 +1430,14 @@ export function TodosWidget({ widget, variant }) {
   const activeTodo = useMemo(() => {
     if (!activeId) return null
     return (
-      columns.backlog.find((t) => t.id === activeId) ||
-      columns.doing.find((t) => t.id === activeId) ||
-      todos.find((t) => t.id === activeId) ||
+      columns?.backlog?.find((t) => t?.id === activeId) ||
+      columns?.doing?.find((t) => t?.id === activeId) ||
+      todos?.find((t) => t?.id === activeId) ||
       null
     )
   }, [activeId, columns, todos])
 
-  const openCount = columns.backlog.length + columns.doing.length
+  const openCount = (columns?.backlog?.length || 0) + (columns?.doing?.length || 0)
 
   const [hoveredSection, setHoveredSection] = useState(null)
 
@@ -1111,7 +1469,7 @@ export function TodosWidget({ widget, variant }) {
         completedFlex: '0.7 1 0%',
       }
     }
-    if (hoveredSection === 'completed' && hasDone) {
+    if (hoveredSection === 'completed') {
       return {
         backlogFlex: '0.7 1 0%',
         doingFlex: '0.7 1 0%',
@@ -1132,13 +1490,13 @@ export function TodosWidget({ widget, variant }) {
     const doingCount = columns.doing.length
 
     if (backlogCount === 0 && doingCount === 0) {
-      return { backlogFlex: '1 1 0%', doingFlex: '1 1 0%', completedFlex: '0 0 auto' }
+      return { backlogFlex: '1 1 0%', doingFlex: '1 1 0%', completedFlex: '0 0 64px' }
     }
     if (backlogCount === 0) {
-      return { backlogFlex: '0 0 76px', doingFlex: '1 1 0%', completedFlex: '0 0 auto' }
+      return { backlogFlex: '0 0 76px', doingFlex: '1 1 0%', completedFlex: '0 0 64px' }
     }
     if (doingCount === 0) {
-      return { backlogFlex: '1 1 0%', doingFlex: '0 0 76px', completedFlex: '0 0 auto' }
+      return { backlogFlex: '1 1 0%', doingFlex: '0 0 76px', completedFlex: '0 0 64px' }
     }
 
     // Both have tasks, scale proportionally with clamping to prevent extremes
@@ -1148,12 +1506,73 @@ export function TodosWidget({ widget, variant }) {
     return {
       backlogFlex: `${clamped} ${clamped} 0%`,
       doingFlex: `${1 - clamped} ${1 - clamped} 0%`,
-      completedFlex: '0 0 auto',
+      completedFlex: '0 0 64px',
     }
   }, [isHero, hoveredSection, doneTodos.length, columns.backlog.length, columns.doing.length])
 
+  const headerActions = (
+    <div className="flex items-center gap-1.5">
+      {/* Day / All toggle pill */}
+      <div className="flex items-center rounded-xl border border-white/10 bg-surface-2/40 p-0.5 text-[10px] font-medium backdrop-blur-md">
+        <button
+          type="button"
+          onClick={() => setFilterMode('day')}
+          className={cn(
+            'flex items-center gap-1 rounded-lg px-2 py-0.5 transition-all',
+            filterMode === 'day'
+              ? isSelectedToday
+                ? 'bg-emerald-500/20 text-emerald-300 font-bold shadow-xs'
+                : 'bg-accent/20 text-accent font-bold shadow-xs'
+              : 'text-muted hover:text-ink',
+          )}
+          title={`Filter to-dos for ${selectedDateLabel}`}
+        >
+          <Calendar className="h-2.5 w-2.5" />
+          <span>{selectedDateLabel}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilterMode('all')}
+          className={cn(
+            'rounded-lg px-2 py-0.5 transition-all',
+            filterMode === 'all'
+              ? 'bg-surface text-ink font-bold shadow-xs'
+              : 'text-muted hover:text-ink',
+          )}
+          title="Show all to-dos across all days"
+        >
+          All
+        </button>
+      </div>
+
+      {/* Quick return to today button when on a different day */}
+      {!isSelectedToday && filterMode === 'day' && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            resetSelectedDate()
+          }}
+          className="rounded-lg border border-white/10 bg-surface-2/40 px-1.5 py-0.5 text-[9px] font-semibold text-muted hover:text-ink hover:border-accent/40 transition-all"
+          title="Return to Today"
+        >
+          Today
+        </button>
+      )}
+    </div>
+  )
+
   return (
-    <WidgetFrame widget={widget} variant={variant} subtitle={`${openCount} open`}>
+    <WidgetFrame
+      widget={widget}
+      variant={variant}
+      subtitle={
+        filterMode === 'day'
+          ? `${openCount} open · ${selectedDateLabel}`
+          : `${openCount} open · All days`
+      }
+      headerActions={headerActions}
+    >
       <div className="flex min-h-0 flex-1 flex-col gap-2">
         {/* Add input capsule */}
         <form onSubmit={(e) => { e.preventDefault(); submit() }} className="flex flex-col gap-2">
@@ -1243,8 +1662,8 @@ export function TodosWidget({ widget, variant }) {
         {/* Priority Legend */}
         <PriorityLegend />
 
-        {/* Empty state */}
-        {filtered.length === 0 && (
+        {/* Empty state when no tasks exist at all in this mode */}
+        {modeTodos.length === 0 && (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center text-muted">
             <Flag className="h-6 w-6 text-muted/60" />
             <span className="text-xs">Capture your first task above.</span>
@@ -1252,7 +1671,7 @@ export function TodosWidget({ widget, variant }) {
         )}
 
         {/* Kanban board with fluid DragOverlay & designated drop area animation */}
-        {filtered.length > 0 && (
+        {modeTodos.length > 0 && (
           <DndContext
             sensors={sensors}
             collisionDetection={collisionDetectionStrategy}
@@ -1295,8 +1714,8 @@ export function TodosWidget({ widget, variant }) {
                 style={{ flex: doingFlex }}
               />
 
-              {/* (C) Completed Section in standard widget layout — expands on hover, inside scrollable without scrollbar (media_1788918143530.png) */}
-              {!isHero && doneTodos.length > 0 && (
+              {/* (C) Completed Section in standard widget layout — expands on hover */}
+              {!isHero && (
                 <div
                   style={{ flex: completedFlex }}
                   onMouseEnter={() => setHoveredSection('completed')}
@@ -1310,34 +1729,17 @@ export function TodosWidget({ widget, variant }) {
                       {doneTodos.length}
                     </span>
                   </p>
-                  <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto no-scrollbar scrollbar-none pr-0.5">
-                    {doneTodos.map((t) => (
-                      <div
-                        key={t.id}
-                        className="group flex items-center gap-2 rounded-xl px-2 py-1 transition-colors hover:bg-white/5"
-                      >
-                        <button
-                          onClick={() => onToggle(t)}
-                          className="flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 border-transparent bg-emerald-500/80 text-white transition-colors hover:bg-emerald-500 cursor-pointer"
-                          aria-label="Mark not done"
-                          title="Mark not done"
-                        >
-                          <Check className="h-2.5 w-2.5" />
-                        </button>
-                        <span className="min-w-0 flex-1 truncate text-xs text-muted/60 line-through">
-                          {t.text}
-                        </span>
-                        <button
-                          onClick={() => onDelete(t.id)}
-                          className="hidden text-muted/40 hover:text-rose-400 group-hover:block cursor-pointer"
-                          aria-label="Delete"
-                          title="Delete completed task"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                  {doneTodos.length === 0 ? (
+                    <div className="flex flex-1 items-center justify-center py-2 text-center text-xs font-medium text-muted/40 select-none">
+                      {filterMode === 'all'
+                        ? 'No completed tasks'
+                        : isSelectedToday
+                          ? 'No tasks completed today'
+                          : `No tasks completed on ${selectedDateLabel}`}
+                    </div>
+                  ) : (
+                    <VirtualDoneList doneTodos={doneTodos} onToggle={onToggle} onDelete={onDelete} />
+                  )}
                 </div>
               )}
             </div>
@@ -1354,34 +1756,24 @@ export function TodosWidget({ widget, variant }) {
         )}
 
         {/* In Hero expanded mode, show Completed section below the side-by-side columns */}
-        {isHero && doneTodos.length > 0 && (
+        {isHero && (
           <div className="mt-1 max-h-[30%] shrink-0 overflow-y-auto no-scrollbar scrollbar-none rounded-3xl border border-white/[0.08] bg-surface-2/40 px-3 py-2.5 backdrop-blur-md">
             <p className="mb-1.5 flex items-center gap-1.5 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
               <Check className="h-3 w-3 text-emerald-400" />
               <span>Completed</span>
               <span className="ml-auto rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-mono text-[10px] text-muted">{doneTodos.length}</span>
             </p>
-            <div className="flex flex-col gap-1 overflow-y-auto no-scrollbar scrollbar-none">
-              {doneTodos.map((t) => (
-                <div key={t.id} className="group flex items-center gap-2 rounded-xl px-2 py-1 hover:bg-white/5 transition-colors">
-                  <button
-                    onClick={() => onToggle(t)}
-                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 border-transparent bg-emerald-500/80 text-white transition-colors hover:bg-emerald-500 cursor-pointer"
-                    aria-label="Mark not done"
-                  >
-                    <Check className="h-2.5 w-2.5" />
-                  </button>
-                  <span className="min-w-0 flex-1 truncate text-xs text-muted/60 line-through">{t.text}</span>
-                  <button
-                    onClick={() => onDelete(t.id)}
-                    className="hidden text-muted/40 hover:text-rose-400 group-hover:block cursor-pointer"
-                    aria-label="Delete"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
+            {doneTodos.length === 0 ? (
+              <div className="py-2 text-center text-xs font-medium text-muted/40 select-none">
+                {filterMode === 'all'
+                  ? 'No completed tasks'
+                  : isSelectedToday
+                    ? 'No tasks completed today'
+                    : `No tasks completed on ${selectedDateLabel}`}
+              </div>
+            ) : (
+              <VirtualDoneList doneTodos={doneTodos} onToggle={onToggle} onDelete={onDelete} />
+            )}
           </div>
         )}
       </div>
