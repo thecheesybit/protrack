@@ -25,6 +25,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isDev = !app.isPackaged
 const DEV_URL = process.env.VITE_DEV_SERVER_URL
 
+// Clean application identity for OS desktop notifications and taskbar
+app.setName('PRO TRACK')
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.protrack.app')
+}
+
 // Isolate development userData to avoid lockfile collisions (Windows error code 32)
 // when an installed production build (PRO TRACK.exe) is running concurrently.
 if (isDev) {

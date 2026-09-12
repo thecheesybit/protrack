@@ -99,7 +99,13 @@ export function useSpeechRecognition() {
       return
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      })
       const mr = new MediaRecorder(stream)
       chunksRef.current = []
       mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data) }
@@ -113,7 +119,10 @@ export function useSpeechRecognition() {
           audioCtxRef.current = null
         }
         stream.getTracks().forEach((t) => t.stop())
-        if (chunksRef.current.length === 0) return
+        if (chunksRef.current.length === 0) {
+          setListening(false)
+          return
+        }
         setTranscribing(true)
         try {
           const blob = new Blob(chunksRef.current, { type: mr.mimeType || 'audio/webm' })
@@ -127,13 +136,21 @@ export function useSpeechRecognition() {
           setListening(false)
         }
       }
-      mr.start()
+      mr.start(200)
       mrRef.current = mr
       setListening(true)
       setError(null)
 
-      // VAD silence detection (auto-stop) for hands-free loop
-      let silenceStart = Date.now()
+      // Smart VAD: differentiates initial pause from post-speech silence.
+      // Never burns tokens transcribing quiet rooms.
+      let hasSpoken = false
+      let speechEndStart = null
+      const recordingStart = Date.now()
+      const INITIAL_SILENCE_TIMEOUT = 7000
+      const POST_SPEECH_SILENCE_TIMEOUT = 1400
+      const MAX_RECORDING_DURATION = 15000
+      const VOICE_THRESHOLD = 8
+
       try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)()
         audioCtxRef.current = audioCtx
@@ -152,18 +169,36 @@ export function useSpeechRecognition() {
           }
           const averageVolume = sum / bufferLength
 
-          // Threshold of silence (0-255). 5 is standard background noise floor
-          if (averageVolume < 5) {
+          if (averageVolume >= VOICE_THRESHOLD) {
+            hasSpoken = true
+            speechEndStart = null
+            setSpeechActive(true)
+          } else {
             setSpeechActive(false)
-            const silentDuration = Date.now() - silenceStart
-            if (silentDuration > 2000) { // 2 seconds of silence -> auto stop
-              if (mr.state !== 'inactive') {
-                mr.stop()
+            if (!hasSpoken) {
+              // Still waiting for speech to start
+              if (Date.now() - recordingStart > INITIAL_SILENCE_TIMEOUT) {
+                // Room is silent: discard chunks and stop without transcribing empty audio
+                if (mr.state !== 'inactive') {
+                  chunksRef.current = []
+                  mr.stop()
+                }
+              }
+            } else {
+              // Speech occurred, user has now paused
+              if (!speechEndStart) {
+                speechEndStart = Date.now()
+              } else if (Date.now() - speechEndStart > POST_SPEECH_SILENCE_TIMEOUT) {
+                // Finished sentence: stop and transcribe real speech
+                if (mr.state !== 'inactive') {
+                  mr.stop()
+                }
               }
             }
-          } else {
-            setSpeechActive(true)
-            silenceStart = Date.now() // noise detected, reset timer
+          }
+
+          if (Date.now() - recordingStart > MAX_RECORDING_DURATION && mr.state !== 'inactive') {
+            mr.stop()
           }
         }, 100)
       } catch (vadErr) {

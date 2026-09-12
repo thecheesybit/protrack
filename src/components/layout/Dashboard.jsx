@@ -81,6 +81,10 @@ export function Dashboard() {
   const firstName = (user?.displayName || 'Explorer').split(' ')[0]
   const handsFreeActive = useStore((s) => s.handsFreeActive)
   const setHandsFreeActive = useStore((s) => s.setHandsFreeActive)
+  // The ambient listener must stay mounted whenever the wake word is enabled so
+  // it can hear "Hey Track" — mounting it only while already-active was a
+  // chicken-and-egg bug that made the wake word impossible to trigger.
+  const wakeWordEnabled = useStore((s) => s.settings?.wakeWordEnabled === true)
   const handsFreeStatus = useStore((s) => s.handsFreeStatus)
   const handsFreeFeedback = useStore((s) => s.handsFreeFeedback)
   const clockCentered = useStore((s) => s.clockCentered)
@@ -466,23 +470,47 @@ export function Dashboard() {
                       handsFreeStatus === 'thinking' ? "bg-amber-400 animate-ping" :
                       handsFreeStatus === 'speaking' ? "bg-accent animate-bounce" : "bg-muted"
                     )} />
-                    Hands-Free: {handsFreeStatus}
+                    Track: {handsFreeStatus}
                   </span>
-                  <span className="text-[9px] text-muted font-semibold">Double-click to exit</span>
+                  <span className="text-[9px] text-muted font-semibold">Say "That's all" or double-click to exit</span>
                 </div>
                 
                 {handsFreeFeedback ? (
                   <div className="space-y-1.5">
-                    <p className="text-[10px] font-medium text-muted line-clamp-1 italic">
-                      User: "{handsFreeFeedback.userText}"
-                    </p>
-                    <p className="text-[11px] font-semibold text-accent leading-relaxed">
-                      {handsFreeFeedback.replyText}
-                    </p>
+                    {handsFreeFeedback.isInterim ? (
+                      <p className="text-[11px] font-medium text-ink italic leading-relaxed">
+                        Hearing: &ldquo;{handsFreeFeedback.userText}&rdquo;
+                      </p>
+                    ) : (
+                      <>
+                        {handsFreeFeedback.userText && (
+                          <p className="text-[10px] font-medium text-muted line-clamp-1 italic">
+                            You: &ldquo;{handsFreeFeedback.userText}&rdquo;
+                          </p>
+                        )}
+                        {handsFreeFeedback.replyText && (
+                          <p className="text-[11px] font-semibold text-accent leading-relaxed">
+                            {handsFreeFeedback.replyText}
+                          </p>
+                        )}
+                        {handsFreeFeedback.toolEvents?.length > 0 && (
+                          <div className="flex flex-wrap gap-1 pt-1">
+                            {handsFreeFeedback.toolEvents.map((ev, i) => (
+                              <span
+                                key={i}
+                                className="inline-flex items-center rounded-full bg-accent/10 px-2 py-0.5 text-[9px] font-semibold text-accent"
+                              >
+                                {ev.summary || ev.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 ) : (
                   <p className="text-[10px] text-muted leading-relaxed">
-                    Continuous voice loop active. Speak commands (e.g. "Add todo to study").
+                    Voice companion active. Speak naturally — e.g. &ldquo;What&apos;s due today?&rdquo; or &ldquo;Start 25m on Physics&rdquo;.
                   </p>
                 )}
               </motion.div>
@@ -522,7 +550,7 @@ export function Dashboard() {
 
       <Suspense fallback={null}>
         <AIAssistant />
-        {handsFreeActive && <BackgroundHandsFree />}
+        {(handsFreeActive || wakeWordEnabled) && <BackgroundHandsFree />}
         <SettingsPanel />
         {supportOpen && <SupportModal open={supportOpen} onClose={() => setSupportOpen(false)} />}
       </Suspense>

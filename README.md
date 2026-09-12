@@ -56,8 +56,11 @@ Surfaces and ambient light shift by time of day (crisp midday → deep obsidian 
 ### 🎯 Deep Focus
 Pomodoro with ambient soundscapes, curated video presets (Forest River, Lo-fi Jazz, mantras), YouTube embeds, exit prevention warnings, and an always-on miniature timer that follows you across every module.
 
-### 🔔 Interactive Habit Reminders
-Habits with `every-1h`, `every-2h`, `every-4h`, `morning`, or `evening` intervals trigger interactive in-app toasts with 10-minute snooze and one-tap completion, synchronized with persistent native OS notifications.
+### 🔔 In-App Habit Reminders & Dynamic Island
+Habits with interval or fixed time-of-day cadences trigger interactive in-app prompts and Dynamic Island banners with snooze and one-tap completion — strictly contained inside the workspace to eliminate desktop notification noise.
+
+### 🔕 Master & Granular Notification Controls
+A dedicated Notifications tab in Settings provides a master desktop toggle (ON/OFF), granular category filtering (Scheduled Alarms, Deep Focus, Deadlines, Hydration), and live permission diagnostics.
 
 ### 📅 Timetable, Class Schedule & Agenda
 Build your week from a **subject**: lecture / lab / tutorial times with a repeat, room, start date and an end ("after N sessions" or a date) — they fill the grid coloured by subject. **Week / Day / Month** views (Month is a real calendar grid), a merged day-at-a-glance timeline, and **zoom 0.75×–4×** for a minute-level breakdown. Natural-language capture — *"Revise Polity tomorrow 5pm for 2h"* — still works.

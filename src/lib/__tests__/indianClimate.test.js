@@ -144,4 +144,59 @@ describe('Indian Climate & Seasonal Ritu Engine', () => {
     expect(localStorage.getItem(WEATHER_ENABLED_KEY)).toBe('true')
     expect(isWeatherEffectsEnabled()).toBe(true)
   })
+
+  it('correctly normalizes all Weather Playground condition aliases and sets visual flags', () => {
+    // 1. Monsoon Rain & Cyclonic Storm
+    setWeatherOverride('monsoon_rain')
+    let state = computeWeatherState('varsha')
+    expect(state.isRaining).toBe(true)
+    expect(state.rain).toBe(true)
+    expect(state.intensity).toBe('heavy')
+    expect(state.wind.speed).toBeGreaterThanOrEqual(14)
+    expect(state.wind.direction).toBeDefined()
+
+    setWeatherOverride('cyclonic_storm')
+    state = computeWeatherState('varsha')
+    expect(state.isRaining).toBe(true)
+    expect(state.hasWindGusts).toBe(true)
+    expect(state.intensity).toBe('heavy')
+    expect(state.wind.speed).toBeGreaterThanOrEqual(44)
+
+    // 2. Summer Loo (activates both Heat Haze and hot gusty winds)
+    setWeatherOverride('summer_loo')
+    state = computeWeatherState('grishma')
+    expect(state.hasHeatHaze).toBe(true)
+    expect(state.haze).toBe(true)
+    expect(state.hasWindGusts).toBe(true)
+    expect(state.wind.speed).toBeGreaterThanOrEqual(38)
+
+    // 3. Winter Fog / Kohra
+    setWeatherOverride('winter_fog')
+    state = computeWeatherState('shishir')
+    expect(state.hasFog).toBe(true)
+    expect(state.fog).toBe(true)
+
+    // 4. Spring Breeze
+    setWeatherOverride('spring_breeze')
+    state = computeWeatherState('vasant')
+    expect(state.hasWindGusts).toBe(true)
+
+    // 5. Clear Sky
+    setWeatherOverride('clear_sky')
+    state = computeWeatherState('sharad')
+    expect(state.isRaining).toBe(false)
+    expect(state.hasFog).toBe(false)
+    expect(state.hasHeatHaze).toBe(false)
+
+    // Clean up
+    setWeatherOverride('auto')
+  })
+
+  it('defaults computeWeatherState() to active season instead of hardcoded winter', () => {
+    setSeasonOverride('grishma')
+    // Calling with no arguments should resolve active season 'grishma'
+    const state = computeWeatherState()
+    expect(state.wind.direction).toBe('WNW') // Grishma wind direction
+    setSeasonOverride('auto')
+  })
 })

@@ -15,6 +15,7 @@ import { cn } from '@/utils/cn'
 import toast from 'react-hot-toast'
 import { isDesktop } from '@/desktop/isDesktop'
 import { clearCalToken } from '@/services/calendarService'
+import { updateSettings } from '@/services/userService'
 import {
   areNotificationsEnabled,
   setDesktopNotificationsEnabled,
@@ -93,6 +94,9 @@ export function SystemTab({ user, deleteAccount, setSettingsOpen, appInfo }) {
     }
     setNotifEnabled(val)
     setDesktopNotificationsEnabled(val)
+    if (user?.uid) {
+      updateSettings(user.uid, { desktopNotifications: val }).catch(console.error)
+    }
     toast.success(val ? 'Desktop notifications enabled' : 'Desktop notifications disabled')
   }
 
@@ -385,7 +389,7 @@ export function SystemTab({ user, deleteAccount, setSettingsOpen, appInfo }) {
                   )}
                 </div>
                 <p className="mt-1 text-xs text-muted leading-relaxed">
-                  Receive banner notifications for completed focus sessions, ringing alarms, hourly chimes, and system updates even when minimized.
+                  Receive banner notifications for completed focus sessions, ringing alarms, and system updates even when minimized. For granular category filtering, visit the Notifications tab.
                 </p>
               </div>
             </div>

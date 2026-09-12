@@ -23,6 +23,7 @@ import {
   setWeatherEffectsEnabled,
   computeWeatherState,
   getCurrentSeason,
+  getActiveIndianSeason,
   CLIMATE_OVERRIDE_EVENT,
 } from '@/lib/indianClimate'
 import { cn } from '@/utils/cn'
@@ -77,7 +78,7 @@ const PRESETS = [
     id: 'cyclonic_storm',
     name: 'Squall & Thunderstorm',
     season: 'varsha',
-    weather: 'monsoon_rain',
+    weather: 'cyclonic_storm',
     icon: Zap,
     desc: 'Severe wind squalls, heavy angled precipitation, and dramatic lightning.',
     color: 'from-purple-500/20 to-indigo-600/20 text-purple-400 border-purple-500/30',
@@ -88,19 +89,28 @@ export function WeatherPlaygroundModal({ open, onClose }) {
   const [activeSeasonId, setActiveSeasonId] = useState(() => getSeasonOverride() || 'auto')
   const [activeWeather, setActiveWeather] = useState(() => getWeatherOverride())
   const [effectsEnabled, setEffectsEnabled] = useState(() => isWeatherEffectsEnabled())
-  const [currentAtmosphere, setCurrentAtmosphere] = useState(() => computeWeatherState())
+
+  const getEffectiveSeasonId = (seasonId) => {
+    return !seasonId || seasonId === 'auto' ? getActiveIndianSeason().id : seasonId
+  }
+
+  const [currentAtmosphere, setCurrentAtmosphere] = useState(() =>
+    computeWeatherState(getEffectiveSeasonId(getSeasonOverride()))
+  )
 
   useEffect(() => {
     if (!open) return
-    setActiveSeasonId(getSeasonOverride() || 'auto')
+    const season = getSeasonOverride() || 'auto'
+    setActiveSeasonId(season)
     setActiveWeather(getWeatherOverride())
     setEffectsEnabled(isWeatherEffectsEnabled())
-    setCurrentAtmosphere(computeWeatherState())
+    setCurrentAtmosphere(computeWeatherState(getEffectiveSeasonId(season)))
 
     const handleOverride = () => {
-      setActiveSeasonId(getSeasonOverride() || 'auto')
+      const s = getSeasonOverride() || 'auto'
+      setActiveSeasonId(s)
       setActiveWeather(getWeatherOverride())
-      setCurrentAtmosphere(computeWeatherState())
+      setCurrentAtmosphere(computeWeatherState(getEffectiveSeasonId(s)))
     }
 
     window.addEventListener(CLIMATE_OVERRIDE_EVENT, handleOverride)
@@ -110,13 +120,13 @@ export function WeatherPlaygroundModal({ open, onClose }) {
   const handleSelectSeason = (seasonId) => {
     setActiveSeasonId(seasonId)
     setSeasonOverride(seasonId === 'auto' ? null : seasonId)
-    setCurrentAtmosphere(computeWeatherState())
+    setCurrentAtmosphere(computeWeatherState(getEffectiveSeasonId(seasonId)))
   }
 
   const handleSelectWeather = (weatherType) => {
     setActiveWeather(weatherType)
     setWeatherOverride(weatherType)
-    setCurrentAtmosphere(computeWeatherState())
+    setCurrentAtmosphere(computeWeatherState(getEffectiveSeasonId(activeSeasonId)))
   }
 
   const handleApplyPreset = (preset) => {
@@ -124,13 +134,13 @@ export function WeatherPlaygroundModal({ open, onClose }) {
     setSeasonOverride(preset.season)
     setActiveWeather(preset.weather)
     setWeatherOverride(preset.weather)
-    setCurrentAtmosphere(computeWeatherState())
+    setCurrentAtmosphere(computeWeatherState(preset.season))
     toast.success(`Atmosphere set to ${preset.name}!`)
   }
 
   const handleRandomize = () => {
     const seasonOptions = ['shishir', 'vasant', 'grishma', 'varsha', 'sharad', 'hemant']
-    const weatherOptions = ['monsoon_rain', 'summer_loo', 'winter_fog', 'spring_breeze', 'clear_sky']
+    const weatherOptions = ['monsoon_rain', 'summer_loo', 'winter_fog', 'spring_breeze', 'clear_sky', 'cyclonic_storm']
 
     const randomSeason = seasonOptions[Math.floor(Math.random() * seasonOptions.length)]
     const randomWeather = weatherOptions[Math.floor(Math.random() * weatherOptions.length)]
@@ -139,7 +149,7 @@ export function WeatherPlaygroundModal({ open, onClose }) {
     setSeasonOverride(randomSeason)
     setActiveWeather(randomWeather)
     setWeatherOverride(randomWeather)
-    setCurrentAtmosphere(computeWeatherState())
+    setCurrentAtmosphere(computeWeatherState(randomSeason))
 
     const seasonObj = INDIAN_SEASONS.find((s) => s.id === randomSeason)
     toast.success(`Rolled: ${seasonObj?.name} (${seasonObj?.hindiName}) + ${randomWeather.replace('_', ' ')}!`, {
@@ -152,7 +162,7 @@ export function WeatherPlaygroundModal({ open, onClose }) {
     setSeasonOverride(null)
     setActiveWeather(null)
     setWeatherOverride(null)
-    setCurrentAtmosphere(computeWeatherState())
+    setCurrentAtmosphere(computeWeatherState(getActiveIndianSeason().id))
     toast.success('Restored natural Indian climate simulation.')
   }
 
@@ -228,13 +238,21 @@ export function WeatherPlaygroundModal({ open, onClose }) {
             <div className="rounded-xl border border-line/40 bg-surface/50 p-2.5">
               <span className="text-[calc(0.625rem*var(--text-scale,1))] font-medium text-muted block">Simulated Wind</span>
               <span className="font-mono text-xs font-bold text-ink truncate block mt-0.5">
-                {currentAtmosphere?.wind?.speed || 15} km/h · {currentAtmosphere?.wind?.direction || 'SW'}
+                {currentAtmosphere?.wind?.speed || currentAtmosphere?.windSpeed || 15} km/h · {currentAtmosphere?.wind?.direction || displaySeason?.windProfile?.direction || 'SW'}
               </span>
             </div>
             <div className="rounded-xl border border-line/40 bg-surface/50 p-2.5">
               <span className="text-[calc(0.625rem*var(--text-scale,1))] font-medium text-muted block">Atmospheric Layers</span>
               <span className="font-mono text-xs font-bold text-ink truncate block mt-0.5">
-                {currentAtmosphere?.rain ? 'Rain' : currentAtmosphere?.fog ? 'Fog' : currentAtmosphere?.haze ? 'Haze' : 'Crisp'}
+                {currentAtmosphere?.isRaining || currentAtmosphere?.rain
+                  ? 'Rain'
+                  : currentAtmosphere?.hasFog || currentAtmosphere?.fog
+                  ? 'Fog'
+                  : currentAtmosphere?.hasHeatHaze || currentAtmosphere?.haze
+                  ? 'Haze'
+                  : currentAtmosphere?.hasWindGusts
+                  ? 'Breeze'
+                  : 'Crisp'}
               </span>
             </div>
           </div>

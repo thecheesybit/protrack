@@ -1,7 +1,7 @@
 import { useEffect, useState, lazy, Suspense, useMemo } from 'react'
 import {
   Settings, Sun, Volume2, Film, Quote, KeyRound,
-  RefreshCw, AlertTriangle, ShieldCheck, Lock, X, Loader2
+  RefreshCw, AlertTriangle, ShieldCheck, Lock, X, Loader2, Bell
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '@/hooks/useAuth'
@@ -15,6 +15,7 @@ import { APP_VERSION } from '@/lib/version'
 const AccountTab = lazy(() => import('./tabs/AccountTab').then(m => ({ default: m.AccountTab })))
 const SecurityTab = lazy(() => import('./tabs/SecurityTab').then(m => ({ default: m.SecurityTab })))
 const AppearanceTab = lazy(() => import('./tabs/AppearanceTab').then(m => ({ default: m.AppearanceTab })))
+const NotificationsTab = lazy(() => import('./tabs/NotificationsTab').then(m => ({ default: m.NotificationsTab })))
 const SoundTab = lazy(() => import('./tabs/SoundTab').then(m => ({ default: m.SoundTab })))
 const FocusSceneTab = lazy(() => import('./tabs/FocusSceneTab').then(m => ({ default: m.FocusSceneTab })))
 const ZenQuotesTab = lazy(() => import('./tabs/ZenQuotesTab').then(m => ({ default: m.ZenQuotesTab })))
@@ -29,7 +30,8 @@ const TAB_GROUPS = [
     items: [
       { id: 'account', label: 'Account & Identity', icon: Settings },
       { id: 'appearance', label: 'Appearance & Themes', icon: Sun },
-      { id: 'audio', label: 'Sound & Alerts', icon: Volume2 },
+      { id: 'notifications', label: 'Notifications', icon: Bell },
+      { id: 'audio', label: 'Sound & Chimes', icon: Volume2 },
     ],
   },
   {
@@ -263,6 +265,9 @@ export function SettingsPanel() {
                       fontFamily={fontFamily}
                       setFontFamily={setFontFamily}
                     />
+                  )}
+                  {activeTab === 'notifications' && (
+                    <NotificationsTab user={user} settings={settings} />
                   )}
                   {activeTab === 'audio' && (
                     <SoundTab user={user} settings={settings} />

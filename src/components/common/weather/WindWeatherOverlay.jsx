@@ -81,74 +81,79 @@ export const WindWeatherOverlay = memo(function WindWeatherOverlay({
               top: p.top,
               animationDuration: `${p.dur}s`,
               animationDelay: `-${p.delay}s`,
-              transform: `scale(${p.scale})`,
-              '--drift-y': `${p.driftY}vh`,
             }}
           >
-            {/* Spring: Flower Petal */}
-            {isSpring && (
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 14 14"
-                className="animate-spin-slow opacity-75"
-                style={{ animationDuration: '9s' }}
-              >
-                <path
-                  d="M7 1 C9 4 11 8 7 13 C3 8 5 4 7 1 Z"
-                  fill={p.id % 2 === 0 ? '#f472b6' : '#fef08a'}
-                  opacity="0.8"
+            <div
+              className="pointer-events-none"
+              style={{
+                transform: `scale(${p.scale})`,
+              }}
+            >
+              {/* Spring: Flower Petal */}
+              {isSpring && (
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  className="animate-spin-slow opacity-75"
+                  style={{ animationDuration: '9s' }}
+                >
+                  <path
+                    d="M7 1 C9 4 11 8 7 13 C3 8 5 4 7 1 Z"
+                    fill={p.id % 2 === 0 ? '#f472b6' : '#fef08a'}
+                    opacity="0.8"
+                  />
+                </svg>
+              )}
+
+              {/* Summer: Dry Leaf / Dust Mote in Loo */}
+              {isSummer && (
+                <svg
+                  width="12"
+                  height="10"
+                  viewBox="0 0 12 10"
+                  className="animate-[flora-sway_4s_ease-in-out_infinite] opacity-60"
+                >
+                  <path
+                    d="M1 5 Q6 1 11 5 Q6 9 1 5 Z"
+                    fill={p.id % 2 === 0 ? '#d97706' : '#b45309'}
+                    opacity="0.75"
+                  />
+                </svg>
+              )}
+
+              {/* Autumn: Golden Amber Leaf */}
+              {isAutumn && (
+                <svg
+                  width="14"
+                  height="12"
+                  viewBox="0 0 14 12"
+                  className="animate-[flora-sway_5s_ease-in-out_infinite] opacity-70"
+                >
+                  <path
+                    d="M2 6 C5 1 10 2 12 6 C10 10 5 11 2 6 Z"
+                    fill="#f59e0b"
+                    opacity="0.85"
+                  />
+                </svg>
+              )}
+
+              {/* Winter: Frost Sparkle Crystal */}
+              {isWinter && (
+                <div
+                  className="h-1.5 w-1.5 rounded-full bg-sky-200 shadow-[0_0_6px_rgba(186,230,253,0.8)] opacity-55 animate-pulse"
+                  style={{ animationDuration: '3.5s' }}
                 />
-              </svg>
-            )}
+              )}
 
-          {/* Summer: Dry Leaf / Dust Mote in Loo */}
-          {isSummer && (
-            <svg
-              width="12"
-              height="10"
-              viewBox="0 0 12 10"
-              className="animate-[flora-sway_4s_ease-in-out_infinite] opacity-60"
-            >
-              <path
-                d="M1 5 Q6 1 11 5 Q6 9 1 5 Z"
-                fill={p.id % 2 === 0 ? '#d97706' : '#b45309'}
-                opacity="0.75"
-              />
-            </svg>
-          )}
-
-          {/* Autumn: Golden Amber Leaf */}
-          {isAutumn && (
-            <svg
-              width="14"
-              height="12"
-              viewBox="0 0 14 12"
-              className="animate-[flora-sway_5s_ease-in-out_infinite] opacity-70"
-            >
-              <path
-                d="M2 6 C5 1 10 2 12 6 C10 10 5 11 2 6 Z"
-                fill="#f59e0b"
-                opacity="0.85"
-              />
-            </svg>
-          )}
-
-          {/* Winter: Frost Sparkle Crystal */}
-          {isWinter && (
-            <div
-              className="h-1.5 w-1.5 rounded-full bg-sky-200 shadow-[0_0_6px_rgba(186,230,253,0.8)] opacity-55 animate-pulse"
-              style={{ animationDuration: '3.5s' }}
-            />
-          )}
-
-          {/* Monsoon: Vapor Moisture Wisp */}
-          {isMonsoon && (
-            <div
-              className="h-2 w-5 rounded-full bg-sky-300/30 blur-[1px] opacity-45"
-            />
-          )}
-        </div>
+              {/* Monsoon: Vapor Moisture Wisp */}
+              {isMonsoon && (
+                <div
+                  className="h-2 w-5 rounded-full bg-sky-300/30 blur-[1px] opacity-45"
+                />
+              )}
+            </div>
+          </div>
       )
     })}
     </div>

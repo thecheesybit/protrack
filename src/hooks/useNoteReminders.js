@@ -38,7 +38,7 @@ export function useNoteReminders() {
         ? `${label} is past its deadline${extra}`
         : `${label} is due soon${extra}`
 
-      notify(headline, detail)
+      notify(headline, detail, { category: 'deadlines' })
       toast(detail, { icon: overdue ? '⏰' : '🔔' })
       pushIsland({
         kind: 'deadline',

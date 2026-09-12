@@ -282,6 +282,114 @@ export function playPrompt() {
   }
 }
 
+/* ── Voice Assistant Earcons (Hands-Free acoustic feedback) ──────────────── */
+
+/** Warm ascending two-tone chime — assistant awakened (Alexa-style). */
+export function playWakeChime() {
+  if (!soundsEnabled()) return
+  try {
+    const ctx = audioCtx()
+    const now = ctx.currentTime
+    const notes = [
+      { freq: 587.33, t: 0, gain: 0.18, len: 0.22 }, // D5
+      { freq: 880.0, t: 0.11, gain: 0.22, len: 0.35 }, // A5
+    ]
+    notes.forEach(({ freq, t, gain, len }) => {
+      const osc = ctx.createOscillator()
+      const g = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(freq, now + t)
+      g.gain.setValueAtTime(0, now + t)
+      g.gain.linearRampToValueAtTime(gain, now + t + 0.02)
+      g.gain.exponentialRampToValueAtTime(0.001, now + t + len)
+      osc.connect(g)
+      g.connect(ctx.destination)
+      osc.start(now + t)
+      osc.stop(now + t + len)
+    })
+  } catch (err) {
+    console.warn('[sound] wake chime failed', err)
+  }
+}
+
+/** Subtle high gentle pip — microphone opened for user's turn. */
+export function playListeningChime() {
+  if (!soundsEnabled()) return
+  try {
+    const ctx = audioCtx()
+    const now = ctx.currentTime
+    const osc = ctx.createOscillator()
+    const g = ctx.createGain()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(987.77, now) // B5
+    g.gain.setValueAtTime(0, now)
+    g.gain.linearRampToValueAtTime(0.12, now + 0.015)
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.12)
+    osc.connect(g)
+    g.connect(ctx.destination)
+    osc.start(now)
+    osc.stop(now + 0.13)
+  } catch (err) {
+    console.warn('[sound] listening chime failed', err)
+  }
+}
+
+/** Soft subtle acknowledgment tone — speech heard, processing intent. */
+export function playThinkingChime() {
+  if (!soundsEnabled()) return
+  try {
+    const ctx = audioCtx()
+    const now = ctx.currentTime
+    const notes = [
+      { freq: 523.25, t: 0, gain: 0.12, len: 0.14 }, // C5
+      { freq: 659.25, t: 0.06, gain: 0.14, len: 0.2 }, // E5
+    ]
+    notes.forEach(({ freq, t, gain, len }) => {
+      const osc = ctx.createOscillator()
+      const g = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(freq, now + t)
+      g.gain.setValueAtTime(0, now + t)
+      g.gain.linearRampToValueAtTime(gain, now + t + 0.015)
+      g.gain.exponentialRampToValueAtTime(0.001, now + t + len)
+      osc.connect(g)
+      g.connect(ctx.destination)
+      osc.start(now + t)
+      osc.stop(now + t + len)
+    })
+  } catch (err) {
+    console.warn('[sound] thinking chime failed', err)
+  }
+}
+
+/** Gentle descending two-tone chime — assistant going to sleep. */
+export function playSleepChime() {
+  if (!soundsEnabled()) return
+  try {
+    const ctx = audioCtx()
+    const now = ctx.currentTime
+    const notes = [
+      { freq: 659.25, t: 0, gain: 0.16, len: 0.22 }, // E5
+      { freq: 440.0, t: 0.12, gain: 0.14, len: 0.38 }, // A4
+    ]
+    notes.forEach(({ freq, t, gain, len }) => {
+      const osc = ctx.createOscillator()
+      const g = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(freq, now + t)
+      g.gain.setValueAtTime(0, now + t)
+      g.gain.linearRampToValueAtTime(gain, now + t + 0.02)
+      g.gain.exponentialRampToValueAtTime(0.001, now + t + len)
+      osc.connect(g)
+      g.connect(ctx.destination)
+      osc.start(now + t)
+      osc.stop(now + t + len)
+    })
+  } catch (err) {
+    console.warn('[sound] sleep chime failed', err)
+  }
+}
+
 /* ── Sound bank — event distinctive chimes ──────────────────────────────── */
 
 /**
@@ -576,13 +684,17 @@ const BANK = {
   focus: playFocusChime,
   notification: playNotificationChime,
   alarm: playAlarmChime,
+  wake: playWakeChime,
+  listening: playListeningChime,
+  thinking: playThinkingChime,
+  sleep: playSleepChime,
 }
 
 /**
  * Play a named sound from the bank. Unknown or nullish names are a silent
  * no-op, so a caller can forward a "maybe a sound" value straight through.
  * Gated by {@link soundsEnabled} and never throws.
- * @param {'chime'|'pop'|'success'|'habit'|'notify'|'error'|'prompt'|'temple'|'todo'|'focus'|'notification'|'alarm'} name
+ * @param {'chime'|'pop'|'success'|'habit'|'notify'|'error'|'prompt'|'temple'|'todo'|'focus'|'notification'|'alarm'|'wake'|'listening'|'thinking'|'sleep'} name
  */
 export function playSound(name) {
   if (!soundsEnabled()) return

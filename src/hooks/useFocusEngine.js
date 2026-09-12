@@ -80,7 +80,7 @@ export function useFocusEngine() {
       const plantEmoji = plantType === 'flower' ? '🌸' : plantType === 'shrub' ? '🌿' : '🌲'
 
       st.bumpCompleted()
-      notify(`Focus complete! ${plantEmoji}`, `Congratulations! You completed your ${durationMin}-minute session.`)
+      notify(`Focus complete! ${plantEmoji}`, `Congratulations! You completed your ${durationMin}-minute session.`, { category: 'focus' })
       st.pushIsland({
         kind: 'success',
         title: '🎉 Focus session complete!',
@@ -142,7 +142,7 @@ export function useFocusEngine() {
       st.endToIdle()
       window.protrack?.window?.setFullScreen?.(false)
     } else {
-      notify('Break over', 'Ready for another deep focus session?')
+      notify('Break over', 'Ready for another deep focus session?', { category: 'focus' })
       st.pushIsland({
         kind: 'focus',
         title: 'Break over',

@@ -29,6 +29,11 @@ import {
   toggleHabitToday,
 } from '@/services/habitService'
 import { addLedgerEntry } from '@/services/ledgerService'
+import {
+  AGENT_TOOL_DECLARATIONS,
+  AGENT_ACTION_NAMES,
+  executeAgentAction,
+} from '@/services/agentActions'
 import { DAYS } from '@/lib/time'
 
 /* ── Helpers ───────────────────────────────────────────────── */
@@ -308,6 +313,10 @@ export const TOOL_DECLARATIONS = [
           required: ['text'],
         },
       },
+      // Extended agent surface (reads, navigation, focus, alarms, modes, notes,
+      // deletes) — declared in agentActions.js and merged here so the model sees
+      // one flat tool list.
+      ...AGENT_TOOL_DECLARATIONS,
     ],
   },
 ]
@@ -324,6 +333,13 @@ export async function executeTool(name, args, ctx) {
   try {
     const { uid, modeId, subjects, habits, todos } = ctx
     if (!uid) return { ok: false, error: 'Not signed in.' }
+
+    // Extended agent actions (reads/navigation/focus/alarms/modes/notes/deletes)
+    // live in agentActions.js. Route them there first.
+    if (AGENT_ACTION_NAMES.includes(name)) {
+      const result = await executeAgentAction(name, args, ctx)
+      if (result) return result
+    }
 
     switch (name) {
       case 'complete_task': {

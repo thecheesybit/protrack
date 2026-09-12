@@ -2,6 +2,14 @@
 import { formatTime12h } from '@/services/alarmService'
 
 export const DESKTOP_NOTIF_STORAGE_KEY = 'protrack:desktop_notifications'
+export const CATEGORY_STORAGE_PREFIX = 'protrack:notif_cat_'
+
+export const DEFAULT_CATEGORY_PREFERENCES = {
+  alarms: true,
+  focus: true,
+  hydration: false,
+  deadlines: true,
+}
 
 function getNotificationCtor() {
   if (typeof window !== 'undefined' && window.Notification) return window.Notification
@@ -55,6 +63,49 @@ export function setDesktopNotificationsEnabled(enabled) {
   }
 }
 
+/** Check if a specific notification category is enabled. */
+export function isNotificationCategoryEnabled(category) {
+  if (!areNotificationsEnabled()) return false
+  if (!category) return true
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const val = localStorage.getItem(`${CATEGORY_STORAGE_PREFIX}${category}`)
+      if (val !== null) return val === 'true'
+    }
+  } catch {
+    // ignore
+  }
+  return DEFAULT_CATEGORY_PREFERENCES[category] ?? true
+}
+
+/** Set preference for a specific notification category. */
+export function setNotificationCategoryEnabled(category, enabled) {
+  try {
+    if (typeof localStorage !== 'undefined' && category) {
+      localStorage.setItem(`${CATEGORY_STORAGE_PREFIX}${category}`, enabled ? 'true' : 'false')
+    }
+  } catch {
+    // ignore
+  }
+}
+
+/** Get all category preferences. */
+export function getNotificationCategories() {
+  const categories = { ...DEFAULT_CATEGORY_PREFERENCES }
+  if (typeof localStorage === 'undefined') return categories
+  try {
+    for (const key of Object.keys(DEFAULT_CATEGORY_PREFERENCES)) {
+      const val = localStorage.getItem(`${CATEGORY_STORAGE_PREFIX}${key}`)
+      if (val !== null) {
+        categories[key] = val === 'true'
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return categories
+}
+
 export async function ensureNotificationPermission() {
   const Notif = getNotificationCtor()
   if (!Notif) return false
@@ -71,13 +122,17 @@ export async function ensureNotificationPermission() {
 export function notify(title, body, options = {}) {
   try {
     if (!areNotificationsEnabled()) return null
+    if (options.category && !isNotificationCategoryEnabled(options.category)) {
+      return null
+    }
     const NotifCtor = getNotificationCtor()
     if (NotifCtor && NotifCtor.permission === 'granted') {
+      const { category: _category, ...notifOptions } = options
       return new NotifCtor(title, {
         body,
         icon: '/logo.png',
         silent: false,
-        ...options,
+        ...notifOptions,
       })
     }
   } catch (err) {
@@ -108,7 +163,7 @@ export function notifyAlarm(alarm, { onClick } = {}) {
   closeActiveAlarmNotification()
 
   try {
-    if (!areNotificationsEnabled()) return null
+    if (!areNotificationsEnabled() || !isNotificationCategoryEnabled('alarms')) return null
     const NotifCtor = getNotificationCtor()
     if (NotifCtor && NotifCtor.permission === 'granted') {
       const { formatted } = formatTime12h(alarm?.time || '09:00')

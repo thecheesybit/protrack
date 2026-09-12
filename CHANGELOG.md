@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.8.3 — 2026-09-12
+
+### 🔔 Notification System Overhaul & User Controls
+- **Dedicated Notifications Tab in Settings**: Elevated Notifications to a first-class settings tab with a master desktop toggle (ON/OFF) and granular category controls for Scheduled Alarms, Deep Focus, Deadlines & Notes, and Hydration Alerts.
+- **Proper Windows Desktop Branding**: Configured application name (`PRO TRACK`) and Windows Application User Model ID (`com.protrack.app`) in the Electron main process, fixing the issue where desktop toast notifications displayed cryptic internal identifiers (`pro.track...` / `com.protrack.app`) in the Windows notification header.
+- **Purged Habit Desktop Dev-Log Dumps**: Completely removed the desktop OS notification channel from habit cues, as well as lengthy academic `scienceRationale` text that read like technical debug logs.
+- **Habits Are Strictly In-App**: Habit reminders are now exclusively handled in-app via the **Dynamic Island** banner, interactive **Center Prompts** (with Snooze and Done actions), and subtle audio chimes—guaranteeing zero desktop notification spam.
+- **Category-Based Desktop Notification Filtering**: Desktop notifications now respect category preferences (`alarms`, `focus`, `deadlines`, `hydration`). Hydration desktop alerts are muted by default while remaining active in the in-app Dynamic Island.
+- **Live Diagnostics & Test Button**: Added system/browser permission diagnostics and a 1-click "Test Alert" button to easily verify desktop alert functionality.
+
+### 🎙️ Voice & Hands-Free AI Companion
+- **Unified Voice Agent State Machine (`useVoiceAgent`)**: Robust state machine managing conversational turns, silence VAD, speech recognition, and Gemini audio response streaming.
+- **Expanded Agent Action Capabilities (`agentActions.js`)**: Voice agent can inspect live workspace status (agenda, todos, habits, alarms, subjects), trigger navigation, control timers, and manage tasks.
+- **Aesthetic Climate & Weather Scaling**: Atmospheric particle speed dynamically scales with simulated wind intensity across all Indian seasonal themes.
+
 ## v2.8.2 — 2026-09-12
 
 ### 🔍 App-Wide Rendering Crispness

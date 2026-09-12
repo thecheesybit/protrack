@@ -1,32 +1,100 @@
-# PRO TRACK v1.2.0 - Complete Documentation
+# PRO TRACK Architecture & Technical Documentation
 
 ## Architecture Overview
-PRO TRACK is a hyper-focused, auto-adapting productivity workspace designed to minimize friction and prevent context switching. Built primarily with React, Vite, Tailwind CSS, and Framer Motion.
+PRO TRACK is a hyper-focused, auto-adapting productivity workspace designed to minimize friction and eliminate context switching. Built with **React 18**, **Vite 5**, **Tailwind CSS**, and **Framer Motion**, backed by **Firebase (Firestore & Auth)** with a dual-target architecture (Web Gateway via Netlify and Desktop App via Electron).
 
-## 1. Focus Engine & Multi-Track Audio
-The `FocusWidget` and `focusSlice` have been overhauled to support deep, uninterrupted work sessions:
-- **Focus Lock Screen:** Triggers a `backdrop-blur-3xl` full-screen overlay during focus phases, obfuscating the UI and leaving only the hero-variant Focus Widget and the FlipClock accessible.
-- **Web Audio API Mixer:** Uses a dynamic audio graph (`AudioContext`) to mix dual-track ambient sounds (e.g., Rain + White Noise), while also synthesizing UI event tones natively (`lock-initiated`, `todo-added`, `task-complete`).
-- **YouTube Audio Stream:** Added an input field for custom YouTube background streams via the iframe API, circumventing CORS and storage limits.
+---
 
-## 2. Gemini AI & Resilient Voice Recognition
-Integrated the Web Speech API tightly with the Gemini SDK to form the `AIAssistant` interface:
-- **Speech Lock Mechanism:** Implemented an aggressive debounce lock in `useSpeechRecognition.js`. The `onend` handler checks the `shouldBeListening` reference and instantly forces a restart, preventing Chromium from prematurely killing the mic stream.
-- **Action NLP Matrix:** The AI parses text into actionable intents, manipulating the Zustand store to instantly add tasks, complete items, and set calendar appointments without manual UI interaction.
+## 1. Notification Architecture & Multi-Surface Delivery
 
-## 3. Serverless Integration & Calendar Sync
-To keep the primary architecture client-side and free-tier compliant, all external integrations are piped through Netlify Edge.
-- **`gcal-sync` Function:** Located at `netlify/functions/gcal-sync.js`, this serverless endpoint securely processes Google OAuth token exchanges (`exchange_code`), and handles `sync_up` and `sync_down` actions to merge local Chrome IndexedDB scheduling with the user's remote Google Calendar.
+PRO TRACK separates notifications into two distinct channels based on urgency and user presence:
 
-## 4. Edge-Hosted Motivational Quotes
-- Migrated away from real-time API text generation for the `ZenOverlay` component.
-- The `ZenOverlay` now reads from `public/zen_quotes.json`, served directly from Netlify's Edge CDN. This guarantees zero-latency rendering of motivational text during the 3-minute idle timeout.
+### A. In-App Notification Surfaces (Always Contained)
+1. **Universal Dynamic Island (`pushIsland` in `uiSlice.js`)**:
+   - Morphing status capsule anchored at the top of the workspace.
+   - Dispatches non-intrusive status updates for focus session milestones, timer ticks, network transitions, hourly chimes, and auto-update downloads.
+2. **Center Prompt System (`pushPrompt` in `promptSlice.js`)**:
+   - High-contrast interactive overlay for tasks requiring immediate feedback (Daily Check-ins, Habit Reminders).
+   - Features built-in grace periods, automatic coalescing, and single-instance snooze logic (`HABIT_SNOOZE_MS`).
+3. **Purely In-App Habits**:
+   - Routine habit reminders are strictly restricted to the Dynamic Island and Center Prompts with audio feedback.
+   - **Zero** habit reminders are dispatched to the desktop OS notification center, preventing repetitive notification spam.
 
-## 5. Offline Capabilities (Service Worker)
-- PRO TRACK now ships with an active Service Worker (`sw.js`).
-- **Caching Strategy:** Implements a `stale-while-revalidate` network pattern, ensuring that the app shell, core CSS/JS chunks, and edge-hosted JSON assets are available instantly offline, allowing seamless focus sessions even on spotty connections.
+### B. Desktop OS Native Notifications (`notify.js`)
+- **Chromium / Electron Web Notifications API**:
+  - Pushes high-priority alerts to Windows Action Center and macOS Notification Center even when PRO TRACK is minimized or running in the tray.
+  - On Windows, `app.setName('PRO TRACK')` and `app.setAppUserModelId('com.protrack.app')` are registered on startup to ensure all toasts show the official app branding and icon instead of raw package strings.
+- **Granular Category Filtering**:
+  - `alarms`: High-priority ringing notifications pinned with `requireInteraction: true` and one-click window restore.
+  - `focus`: Pomodoro sprint completion and break expiration notices.
+  - `deadlines`: Milestone notices for syllabus and note deadlines entering the 48-hour window.
+  - `hydration`: Optional desktop water nudges (disabled by default; in-app Dynamic Island is active).
+- **Settings & User Control**:
+  - First-class **Notifications** tab in Settings with a master ON/OFF switch, category toggles, permission diagnostic banner, and test alert trigger.
+  - Fully synchronized across local storage and Firestore user settings.
 
-## 6. Structural Components
-- **FlipClock:** Extracted into a universal floating component that can be dragged and scroll-wheel-resized. Persists size and position to `localStorage`.
-- **ModeSwitcher:** Re-architected to remove local drag-and-drop structural updates, shifting that responsibility exclusively to the Settings Modal. Now includes a permanently pinned "All Scopes" aggregate view.
-- **WidgetFrame Bounds:** Hardcoded `min-h` bounds on widget containers to eliminate layout shifting during component mount cycles.
+---
+
+## 2. Gemini AI & Voice Assistant
+
+### A. Conversational Chat Assistant
+- Chat interface in `AIAssistant.jsx` powered by `@google/generative-ai`.
+- **Function Calling & Write Access (`geminiTools.js` & `agentActions.js`)**:
+  - Dispatches tools for adding tasks, updating subject progress, logging syllabus completions, scheduling timetable slots, managing habits, and controlling focus timers.
+  - Natural-language slash command shortcuts (`/done`, `/todo`, `/progress`, `/task`).
+
+### B. Hands-Free Voice Agent (`useVoiceAgent.js`)
+- Unified finite state machine managing conversational turns: `idle` → `listening` → `thinking` → `acting` → `speaking` → `idle`.
+- Speech recognition via Web Speech API with automatic retry and Gemini transcription fallback.
+- Context snapshot builder (`voiceContext.js`) providing real-time workspace context to the model without redundant database subscriptions.
+- Opt-in background wake word detection ("Hey Track").
+
+---
+
+## 3. Focus Engine & Multi-Track Audio
+
+- **Pomodoro & Focus Timer (`useFocusEngine.js`)**:
+  - Single source of truth in `focusSlice.js` (`phaseTotalSec`).
+  - Seamless transitions between Focus, Short Break, and Long Break phases.
+  - Mini-overlay, PiP floating widget, and full-screen Focus Lock Screen.
+- **Calendar Forest (`CalendarForest.jsx`)**:
+  - Automatically plants trees, shrubs, and flowers on the interactive calendar upon session completion.
+- **Web Audio API Engine (`sound.js` & `audioFX.js`)**:
+  - Procedural sound synthesis for chimes, button clicks, alarm ringtones, and temple bell hourly chimes.
+  - Curated YouTube ambient streaming with volume normalization.
+
+---
+
+## 4. Timetable, Agenda & Indian Climate Seasons
+
+- **Class Timetable & Natural Language Capture**:
+  - Flexible repeat rules, lecture/lab/tutorial/seminar badge categorization, and multi-view grid (Week, Day, Month).
+  - Time-of-day chrono-adaptive styling shifting across morning, afternoon, sunset, and night.
+- **Indian Climate & Atmospheric Engine (`indianClimate.js`)**:
+  - 6 classical Indian Ritus (Vasant, Grishma, Varsha, Sharad, Hemant, Shishir) modulating lighting and ambient atmospheric effects.
+  - Wind and particle physics in `WindWeatherOverlay.jsx` scaling dynamically with simulated wind speed.
+
+---
+
+## 5. Security & Multi-Device Sync
+
+- **Client-Side Cryptographic Vault (`cryptoService.js`)**:
+  - PBKDF2 key derivation with AES-GCM 256-bit encryption for sensitive notes and exam records.
+  - Passcode / PIN lock screen with auto-lock timeout.
+- **QR Handshake Device Linking**:
+  - Cross-device authentication without entering Google credentials inside the desktop browser.
+- **Google Calendar Two-Way Sync**:
+  - Serverless Netlify functions (`gcal-sync.js`) for secure OAuth token exchange and incremental timetable synchronization.
+
+---
+
+## 6. Desktop Architecture (Electron)
+
+- **Main Process (`electron/main.js`)**:
+  - Internal localhost HTTP static server to maintain clean origin for YouTube embeds and Firebase auth.
+  - Picture-in-Picture window morphing (`pip:enter` / `pip:exit`).
+  - System-wide hotkeys (Window visibility, focus toggle, mute).
+  - Single instance lock with tray minimization.
+  - Windows AUMID registration for clean desktop notifications.
+- **Preload Bridge (`electron/preload.js`)**:
+  - Secure context-isolated IPC bridge (`window.protrack`).

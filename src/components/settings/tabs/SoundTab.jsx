@@ -7,6 +7,7 @@ import {
   Play,
   AlertCircle,
   Sparkles,
+  AudioLines,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import {
@@ -43,9 +44,15 @@ export function SoundTab({ user, settings }) {
   const [hydration, setHydration] = useState(settings?.hydrationIntervalMin || 60)
   const [checkinsEnabled, setCheckinsEnabled] = useState(settings?.checkinsEnabled !== false)
 
+  // Voice / hands-free
+  const [wakeWordOn, setWakeWordOn] = useState(settings?.wakeWordEnabled === true)
+  const [wakePhrase, setWakePhrase] = useState(settings?.wakeWord || 'hey track')
+
   useEffect(() => {
     setHydration(settings?.hydrationIntervalMin || 60)
     setCheckinsEnabled(settings?.checkinsEnabled !== false)
+    setWakeWordOn(settings?.wakeWordEnabled === true)
+    setWakePhrase(settings?.wakeWord || 'hey track')
     if (settings?.desktopNotifications !== undefined) {
       const active = settings.desktopNotifications && !isNotificationPermissionDenied()
       setNotifOn(active)
@@ -131,12 +138,37 @@ export function SoundTab({ user, settings }) {
     }
   }
 
+  // Toggle always-on wake word
+  const handleToggleWakeWord = async (next) => {
+    setWakeWordOn(next)
+    if (next) toast('Say "' + wakePhrase + '" anytime to start a hands-free chat.', { icon: '🎙️' })
+    if (user?.uid) {
+      try {
+        await updateSettings(user.uid, { wakeWordEnabled: next })
+      } catch (err) {
+        console.error('[settings] wake word save failed', err)
+      }
+    }
+  }
+
+  // Pick the wake phrase
+  const handleSaveWakePhrase = async (val) => {
+    setWakePhrase(val)
+    if (user?.uid) {
+      try {
+        await updateSettings(user.uid, { wakeWord: val })
+      } catch (err) {
+        console.error('[settings] wake phrase save failed', err)
+      }
+    }
+  }
+
   return (
     <div className="space-y-8 pb-4">
       {/* ── Desktop Notifications & Alerts ───────────────────────────── */}
       <SettingsSection
-        title="Desktop Notifications & Alerts"
-        description="Configure system-level banners for alarms, scheduled study blocks, and habit prompts."
+        title="Desktop Notifications Quick Switch"
+        description="Quick master switch for OS-level banners. For granular category filtering, see the Notifications tab."
       >
         <SettingsToggleRow
           icon={Bell}
@@ -252,6 +284,54 @@ export function SoundTab({ user, settings }) {
           badge={checkinsEnabled ? 'Active' : 'Off'}
           badgeVariant={checkinsEnabled ? 'emerald' : 'muted'}
         />
+      </SettingsSection>
+
+      {/* ── Voice & Hands-Free ───────────────────────────────────────── */}
+      <SettingsSection
+        title="Voice & Hands-Free Assistant"
+        description="Run your entire workspace by voice — create tasks, start focus sessions, ask questions. Also available anytime from the AI Companion's Voice tab, or by double-clicking the assistant button."
+      >
+        <SettingsToggleRow
+          icon={AudioLines}
+          title="Always-listening Wake Word"
+          description="Keep a background listener alive so a spoken wake phrase starts a hands-free conversation, like a smart speaker. Needs microphone access; on desktop the ambient listener uses Gemini transcription, so leave it off unless you want that."
+          checked={wakeWordOn}
+          onChange={handleToggleWakeWord}
+          badge={wakeWordOn ? 'Listening' : 'Off'}
+          badgeVariant={wakeWordOn ? 'emerald' : 'muted'}
+        />
+
+        {wakeWordOn && (
+          <SettingsCard>
+            <div className="flex items-start gap-3.5 mb-4">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent shadow-glow-xs">
+                <AudioLines className="h-4.5 w-4.5" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-sans text-sm font-semibold tracking-tight text-ink">
+                    Wake Phrase
+                  </span>
+                  <SettingsBadge variant="accent">&ldquo;{wakePhrase}&rdquo;</SettingsBadge>
+                </div>
+                <p className="mt-0.5 text-xs text-muted leading-relaxed font-sans">
+                  Say this (optionally after &ldquo;hey&rdquo;) to wake the assistant.
+                </p>
+              </div>
+            </div>
+
+            <SettingsSegmentGroup
+              options={[
+                { value: 'hey track', label: 'Hey Track' },
+                { value: 'track', label: 'Track' },
+                { value: 'assistant', label: 'Assistant' },
+                { value: 'computer', label: 'Computer' },
+              ]}
+              value={wakePhrase}
+              onChange={handleSaveWakePhrase}
+            />
+          </SettingsCard>
+        )}
       </SettingsSection>
     </div>
   )

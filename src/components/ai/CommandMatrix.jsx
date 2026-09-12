@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, ListTodo, BookOpen, CalendarDays, Zap, BarChart3, Heart } from 'lucide-react'
+import { ChevronDown, ListTodo, BookOpen, CalendarDays, Zap, BarChart3, Heart, Timer } from 'lucide-react'
 
 const CMD_KEY = 'protrack:cmdMatrixOpen'
 
@@ -51,8 +51,18 @@ const CATEGORIES = [
     color: 'text-amber-400',
     commands: [
       'Set Physics progress to 75%',
-      'Analyze my study pattern',
-      'Add a subject called Chemistry',
+      "What's overdue?",
+      'How am I doing on my subjects?',
+    ],
+  },
+  {
+    label: 'Focus & Navigate',
+    Icon: Timer,
+    color: 'text-teal-400',
+    commands: [
+      'Start a 25 minute focus on Physics',
+      'Open my analytics',
+      'Switch to Exam mode',
     ],
   },
   {

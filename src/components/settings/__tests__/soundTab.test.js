@@ -87,4 +87,29 @@ describe('Desktop Notification Toggle & Service Logic', () => {
     expect(result).not.toBeNull()
     expect(mockCtor).toHaveBeenCalledWith('PRO TRACK Alert Test', expect.anything())
   })
+
+  it('respects category preferences: hydration is muted by default', async () => {
+    const { isNotificationCategoryEnabled } = await import('@/lib/notify')
+    setDesktopNotificationsEnabled(true)
+    expect(isNotificationCategoryEnabled('hydration')).toBe(false)
+    const result = notify('Water', 'Drink water', { category: 'hydration' })
+    expect(result).toBeNull()
+  })
+
+  it('allows category notification when category is enabled', async () => {
+    const { setNotificationCategoryEnabled } = await import('@/lib/notify')
+    setDesktopNotificationsEnabled(true)
+    setNotificationCategoryEnabled('hydration', true)
+    const result = notify('Water', 'Drink water', { category: 'hydration' })
+    expect(result).not.toBeNull()
+    expect(mockCtor).toHaveBeenCalledWith('Water', expect.objectContaining({ body: 'Drink water' }))
+  })
+
+  it('suppresses category notification when category is explicitly disabled', async () => {
+    const { setNotificationCategoryEnabled } = await import('@/lib/notify')
+    setDesktopNotificationsEnabled(true)
+    setNotificationCategoryEnabled('focus', false)
+    const result = notify('Focus done', 'Great job', { category: 'focus' })
+    expect(result).toBeNull()
+  })
 })

@@ -11,6 +11,7 @@ import {
   CloudFog,
   RotateCcw,
   Check,
+  Flame,
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { useLowPowerMode } from '@/lib/lowPower'
@@ -261,13 +262,13 @@ export function AppearanceTab({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
             <button
               type="button"
               onClick={() => handleTestWeather('rain')}
               className={cn(
                 'flex items-center gap-2 rounded-xl border p-3 text-xs font-semibold transition-all cursor-pointer',
-                weatherOverride === 'rain'
+                weatherOverride === 'rain' || weatherOverride === 'monsoon_rain' || weatherOverride === 'cyclonic_storm'
                   ? 'border-accent bg-accent/15 text-accent shadow-xs font-bold'
                   : 'border-line/60 bg-surface-2/40 text-muted hover:text-ink hover:bg-surface-2'
               )}
@@ -281,13 +282,27 @@ export function AppearanceTab({
               onClick={() => handleTestWeather('breezy')}
               className={cn(
                 'flex items-center gap-2 rounded-xl border p-3 text-xs font-semibold transition-all cursor-pointer',
-                weatherOverride === 'breezy'
+                weatherOverride === 'breezy' || weatherOverride === 'spring_breeze'
                   ? 'border-accent bg-accent/15 text-accent shadow-xs font-bold'
                   : 'border-line/60 bg-surface-2/40 text-muted hover:text-ink hover:bg-surface-2'
               )}
             >
               <Wind className="h-4 w-4 text-amber-400" />
-              <span>Summer Loo (Wind)</span>
+              <span>Summer Loo</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleTestWeather('heat_haze')}
+              className={cn(
+                'flex items-center gap-2 rounded-xl border p-3 text-xs font-semibold transition-all cursor-pointer',
+                weatherOverride === 'heat_haze' || weatherOverride === 'summer_loo'
+                  ? 'border-accent bg-accent/15 text-accent shadow-xs font-bold'
+                  : 'border-line/60 bg-surface-2/40 text-muted hover:text-ink hover:bg-surface-2'
+              )}
+            >
+              <Flame className="h-4 w-4 text-orange-400" />
+              <span>Heat Haze</span>
             </button>
 
             <button
@@ -295,21 +310,21 @@ export function AppearanceTab({
               onClick={() => handleTestWeather('mist')}
               className={cn(
                 'flex items-center gap-2 rounded-xl border p-3 text-xs font-semibold transition-all cursor-pointer',
-                weatherOverride === 'mist'
+                weatherOverride === 'mist' || weatherOverride === 'winter_fog'
                   ? 'border-accent bg-accent/15 text-accent shadow-xs font-bold'
                   : 'border-line/60 bg-surface-2/40 text-muted hover:text-ink hover:bg-surface-2'
               )}
             >
               <CloudFog className="h-4 w-4 text-slate-400" />
-              <span>Winter Fog (Kohra)</span>
+              <span>Winter Fog</span>
             </button>
 
             <button
               type="button"
               onClick={() => handleTestWeather('clear')}
               className={cn(
-                'flex items-center gap-2 rounded-xl border p-3 text-xs font-semibold transition-all cursor-pointer',
-                weatherOverride === 'clear'
+                'flex items-center gap-2 rounded-xl border p-3 text-xs font-semibold transition-all cursor-pointer col-span-2 sm:col-span-1',
+                weatherOverride === 'clear' || weatherOverride === 'clear_sky'
                   ? 'border-accent bg-accent/15 text-accent shadow-xs font-bold'
                   : 'border-line/60 bg-surface-2/40 text-muted hover:text-ink hover:bg-surface-2'
               )}

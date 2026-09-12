@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react'
-import { Sparkles, Mic, X } from 'lucide-react'
+import { Sparkles, Mic, X, MessageSquare, AudioLines } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChatTab } from './ChatTab'
 import { VoiceNotesTab } from './VoiceNotesTab'
+import { HandsFreeTab } from './HandsFreeTab'
+import { cn } from '@/utils/cn'
 
 export function AIAssistant() {
   const open = useStore((s) => s.aiOpen)
   const setAiOpen = useStore((s) => s.setAiOpen)
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
-  const [showVoiceNotes, setShowVoiceNotes] = useState(false)
+  // 'chat' | 'voice' | 'notes'
+  const [tab, setTab] = useState('chat')
 
   const openSettings = () => {
     setAiOpen(false)
@@ -59,27 +62,32 @@ export function AIAssistant() {
                   <h3 id="ai-companion-title" className="text-base font-bold tracking-tight text-ink">AI Companion</h3>
                 </div>
                 <span className="text-[10px] text-muted font-semibold mt-1">
-                  Double-click the bottom-right AI button to enable background Hands-Free Mode
+                  Chat, talk hands-free, or capture a voice note
                 </span>
               </div>
               <div className="flex items-center gap-3">
-                {showVoiceNotes ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowVoiceNotes(false)}
-                    className="flex items-center gap-1.5 rounded-xl border border-line bg-surface-2/40 px-3.5 py-1.5 text-xs font-semibold text-muted transition-colors hover:text-ink hover:bg-surface-2"
-                  >
-                    Back to Companion
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setShowVoiceNotes(true)}
-                    className="flex items-center gap-1.5 rounded-xl border border-accent/20 bg-accent/5 px-3.5 py-1.5 text-xs font-semibold text-accent transition-colors hover:bg-accent/10"
-                  >
-                    <Mic className="h-3.5 w-3.5" /> Save Voice Note
-                  </button>
-                )}
+                {/* Tab switcher */}
+                <div className="flex items-center gap-1 rounded-xl border border-line bg-surface-2/40 p-1">
+                  {[
+                    { id: 'chat', label: 'Chat', Icon: MessageSquare },
+                    { id: 'voice', label: 'Voice', Icon: AudioLines },
+                    { id: 'notes', label: 'Note', Icon: Mic },
+                  ].map(({ id, label, Icon }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setTab(id)}
+                      className={cn(
+                        'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors',
+                        tab === id
+                          ? 'bg-accent/10 text-accent'
+                          : 'text-muted hover:text-ink hover:bg-surface-2',
+                      )}
+                    >
+                      <Icon className="h-3.5 w-3.5" /> {label}
+                    </button>
+                  ))}
+                </div>
                 <button
                   type="button"
                   onClick={() => setAiOpen(false)}
@@ -93,12 +101,14 @@ export function AIAssistant() {
 
             {/* Content Area */}
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-surface-2/5">
-              {showVoiceNotes ? (
+              {tab === 'notes' ? (
                 <VoiceNotesTab onOpenSettings={openSettings} />
+              ) : tab === 'voice' ? (
+                <HandsFreeTab />
               ) : (
-                <ChatTab 
-                  onOpenSettings={openSettings} 
-                  onToggleVoiceNote={() => setShowVoiceNotes(true)} 
+                <ChatTab
+                  onOpenSettings={openSettings}
+                  onToggleVoiceNote={() => setTab('notes')}
                 />
               )}
             </div>

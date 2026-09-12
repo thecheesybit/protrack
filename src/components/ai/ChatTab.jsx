@@ -169,7 +169,7 @@ export function ChatTab({ onOpenSettings, onToggleVoiceNote }) {
     ].join('\n')
   }
 
-  const ctx = { uid: user?.uid, modeId: activeModeId, subjects, habits, todos }
+  const ctx = { uid: user?.uid, modeId: activeModeId, subjects, habits, todos, slots }
 
   const send = async (text) => {
     const content = (text ?? input).trim()

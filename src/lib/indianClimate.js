@@ -248,23 +248,71 @@ function pseudoRandom(seed) {
  *   windAngle: number,
  * }}
  */
-export function computeWeatherState(seasonId = 'shishir', now = new Date()) {
+export function computeWeatherState(seasonId, now = new Date()) {
+  const resolvedSeasonId = seasonId || getActiveIndianSeason().id
+  const season = INDIAN_SEASONS.find((s) => s.id === resolvedSeasonId) || INDIAN_SEASONS[0]
+
   // Check manual override first
   const manualOverride = readWeatherOverride()
   if (manualOverride && manualOverride !== 'auto') {
+    const isRain =
+      manualOverride === 'rain' ||
+      manualOverride === 'monsoon_rain' ||
+      manualOverride === 'cyclonic_storm'
+    const isFog =
+      manualOverride === 'mist' ||
+      manualOverride === 'winter_fog' ||
+      manualOverride === 'fog'
+    const isHeatHaze =
+      manualOverride === 'heat_haze' ||
+      manualOverride === 'summer_loo' ||
+      manualOverride === 'haze'
+    const isBreezy =
+      manualOverride === 'breezy' ||
+      manualOverride === 'spring_breeze' ||
+      manualOverride === 'summer_loo' ||
+      manualOverride === 'cyclonic_storm'
+
+    const intensity =
+      manualOverride === 'cyclonic_storm' || manualOverride === 'monsoon_rain'
+        ? 'heavy'
+        : isRain
+        ? 'moderate'
+        : isFog
+        ? 'moderate'
+        : 'light'
+
+    const windSpeed =
+      manualOverride === 'cyclonic_storm'
+        ? 46
+        : manualOverride === 'summer_loo'
+        ? 40
+        : isBreezy
+        ? 32
+        : 14
+
+    const windAngle = 18
+
     return {
       condition: manualOverride,
-      intensity: manualOverride === 'rain' ? 'moderate' : 'light',
-      isRaining: manualOverride === 'rain',
-      hasFog: manualOverride === 'mist',
-      hasHeatHaze: manualOverride === 'heat_haze',
-      hasWindGusts: manualOverride === 'breezy',
-      windSpeed: manualOverride === 'breezy' ? 32 : 14,
-      windAngle: 18,
+      intensity,
+      isRaining: isRain,
+      hasFog: isFog,
+      hasHeatHaze: isHeatHaze,
+      hasWindGusts: isBreezy,
+      windSpeed,
+      windAngle,
+      wind: {
+        speed: windSpeed,
+        direction: season.windProfile.direction || 'SW',
+        angle: windAngle,
+      },
+      rain: isRain,
+      fog: isFog,
+      haze: isHeatHaze,
     }
   }
 
-  const season = INDIAN_SEASONS.find((s) => s.id === seasonId) || INDIAN_SEASONS[0]
   const hour = now.getHours()
   const minute = now.getMinutes()
 
@@ -334,5 +382,13 @@ export function computeWeatherState(seasonId = 'shishir', now = new Date()) {
     hasWindGusts,
     windSpeed,
     windAngle,
+    wind: {
+      speed: windSpeed,
+      direction: season.windProfile.direction || 'SW',
+      angle: windAngle,
+    },
+    rain: isRaining,
+    fog: hasFog,
+    haze: hasHeatHaze,
   }
 }

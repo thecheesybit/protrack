@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { useHabits } from '@/hooks/useWellness'
 import { useStore } from '@/store/useStore'
-import { notify } from '@/lib/notify'
 import { playHabitChime } from '@/lib/audioFX'
 import { toggleHabitToday } from '@/services/habitService'
 import { ymd } from '@/lib/dates'
@@ -189,23 +188,15 @@ export function triggerHabitCue(uid, habit, options = {}) {
     }
   }
 
-  // 3. Dynamic Island Banner
+  // 3. Dynamic Island In-App Banner
   useStore.getState().pushIsland({
     kind: habit.icon === 'Droplets' ? 'water' : 'info',
     title: isSnoozed ? `Reminder: Time to ${habit.name}` : `Time to ${habit.name}`,
-    detail: habit.scienceRationale
-      ? `${habit.scienceRationale.slice(0, 75)}…`
-      : isSnoozed
-        ? 'Snoozed reminder. Open to mark it done.'
-        : 'Open the reminder to mark it done.',
+    detail: isSnoozed
+      ? 'Snoozed reminder. Open to mark it done.'
+      : 'Open the reminder to mark it done.',
     duration: 6500,
   })
-
-  // 4. Background OS Native Notification
-  notify(
-    isSnoozed ? `Habit Reminder (Snoozed) · ${habit.name}` : `Habit Reminder · ${habit.name}`,
-    habit.scienceRationale || `Time to ${habit.name.toLowerCase()}. Open PRO TRACK to track response.`,
-  )
 }
 
 /**

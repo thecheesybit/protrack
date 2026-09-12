@@ -21,7 +21,7 @@ export function HydrationReminder() {
           detail: 'Take a sip of water.',
           duration: 7000,
         })
-        notify('Stay hydrated', 'Time for a glass of water.')
+        notify('Stay hydrated', 'Time for a glass of water.', { category: 'hydration' })
       },
       interval * 60 * 1000,
     )
