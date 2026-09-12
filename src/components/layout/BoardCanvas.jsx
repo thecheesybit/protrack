@@ -6,7 +6,6 @@ import { getIcon } from '@/lib/icons'
 import { WIDGETS } from '@/components/widgets/widgetRegistry'
 import { getWidgetComponent } from '@/components/widgets/widgetComponents'
 import { getWidgetVideo } from '@/lib/videoPacks'
-import { TimetableContextRail } from '@/components/timetable/TimetableContextRail'
 import { cn } from '@/utils/cn'
 
 // ── Layout config ─────────────────────────────────────────────────────────────
@@ -156,7 +155,7 @@ function MiniCard({ widget, isDockOpen = true, onSingleClick, onDoubleClick }) {
           <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
         </span>
         <span className="font-display text-xs sm:text-sm font-semibold tracking-tight text-ink truncate max-w-[115px]">{widget.title}</span>
-        <span className="max-w-[110px] truncate rounded-full border border-white/5 bg-white/5 px-2.5 py-0.5 text-[0.625rem] font-medium text-muted/70 transition-colors group-hover:border-white/10 group-hover:text-muted/90">
+        <span className="max-w-[110px] truncate rounded-full border border-white/5 bg-white/5 px-2.5 py-0.5 text-[calc(0.625rem*var(--text-scale,1))] font-medium text-muted/70 transition-colors group-hover:border-white/10 group-hover:text-muted/90">
           {meta.desc}
         </span>
       </div>
@@ -455,7 +454,6 @@ export function BoardCanvas() {
             }}
             className="relative min-h-0 min-w-0 flex-1 rounded-3xl"
           >
-            {leftWidget.id === 'timetable' && <TimetableContextRail />}
             <div className="h-full">
               <Widget widget={leftWidget} variant="grid" context={contextFor(leftWidget.id)} />
             </div>
@@ -476,14 +474,14 @@ export function BoardCanvas() {
               e.preventDefault()
               setSplitRatio((r) => {
                 const next = Math.max(0.35, Number((r - 0.05).toFixed(3)))
-                try { localStorage.setItem(SPLIT_KEY, next.toString()) } catch {}
+                try { localStorage.setItem(SPLIT_KEY, next.toString()) } catch { /* best-effort persistence */ }
                 return next
               })
             } else if (e.key === 'ArrowRight') {
               e.preventDefault()
               setSplitRatio((r) => {
                 const next = Math.min(0.75, Number((r + 0.05).toFixed(3)))
-                try { localStorage.setItem(SPLIT_KEY, next.toString()) } catch {}
+                try { localStorage.setItem(SPLIT_KEY, next.toString()) } catch { /* best-effort persistence */ }
                 return next
               })
             } else if (e.key === 'Home' || e.key === 'Enter') {
@@ -599,7 +597,7 @@ export function BoardCanvas() {
             <span className="font-display text-xs font-semibold tracking-tight text-ink/90">
               Workspaces & Widgets
             </span>
-            <span className="flex h-4 items-center rounded-full bg-accent/20 px-1.5 text-[0.625rem] font-mono font-bold text-accent">
+            <span className="flex h-4 items-center rounded-full bg-accent/20 px-1.5 text-[calc(0.625rem*var(--text-scale,1))] font-mono font-bold text-accent">
               {bottomWidgets.length}
             </span>
           </button>

@@ -55,7 +55,7 @@ export function QrLoginScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Single static image chosen randomly once per session/load
-  const [imageIndex, setImageIndex] = useState(() => Math.floor(Math.random() * IMAGES.length))
+  const [imageIndex] = useState(() => Math.floor(Math.random() * IMAGES.length))
 
   // App information
   const [appInfo, setAppInfo] = useState(null)

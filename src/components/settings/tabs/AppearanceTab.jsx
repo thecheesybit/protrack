@@ -6,11 +6,9 @@ import {
   Sunset,
   Clock,
   Sparkles,
-  Zap,
   CloudRain,
   Wind,
   CloudFog,
-  Flower2,
   RotateCcw,
   Check,
 } from 'lucide-react'
@@ -34,7 +32,6 @@ import {
   setWeatherOverride,
   isWeatherEffectsEnabled,
   setWeatherEffectsEnabled,
-  computeWeatherState,
   CLIMATE_OVERRIDE_EVENT,
 } from '@/lib/indianClimate'
 import { WeatherPlaygroundModal } from '@/components/common/weather/WeatherPlaygroundModal'
@@ -173,7 +170,7 @@ export function AppearanceTab({
           </div>
 
           <div className="shrink-0 flex items-center gap-2">
-            <span className="font-mono text-[0.6875rem] uppercase tracking-wider text-muted bg-surface-2/60 border border-line/60 rounded-lg px-2.5 py-1">
+            <span className="font-mono text-[calc(0.6875rem*var(--text-scale,1))] uppercase tracking-wider text-muted bg-surface-2/60 border border-line/60 rounded-lg px-2.5 py-1">
               {activeSeason.monthsText}
             </span>
           </div>
@@ -223,7 +220,7 @@ export function AppearanceTab({
                   </div>
                   {isSelected && <Check className="h-4 w-4 text-accent stroke-[2.5] shrink-0" />}
                 </div>
-                <span className="font-mono text-[0.625rem] uppercase tracking-wider text-accent font-semibold mb-1">
+                <span className="font-mono text-[calc(0.625rem*var(--text-scale,1))] uppercase tracking-wider text-accent font-semibold mb-1">
                   {s.monthsText} · {s.hindiName}
                 </span>
                 <span className="text-xs text-muted/80 leading-tight line-clamp-2">
@@ -400,7 +397,7 @@ export function AppearanceTab({
         {/* DEV-only Granular Chrono Slot inspector */}
         {import.meta.env.DEV && (
           <SettingsCard className="mt-4 p-3.5">
-            <label className="mb-2 block font-mono text-[0.625rem] font-bold uppercase tracking-wider text-muted/70">
+            <label className="mb-2 block font-mono text-[calc(0.625rem*var(--text-scale,1))] font-bold uppercase tracking-wider text-muted/70">
               Developer Chrono Slot Override
             </label>
             <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
@@ -410,7 +407,7 @@ export function AppearanceTab({
                   type="button"
                   onClick={() => handleSetChrono(slot === 'live' ? 'auto' : slot)}
                   className={cn(
-                    'rounded-lg border py-1 px-1.5 font-mono text-[0.625rem] font-semibold uppercase tracking-wider transition-colors text-center cursor-pointer',
+                    'rounded-lg border py-1 px-1.5 font-mono text-[calc(0.625rem*var(--text-scale,1))] font-semibold uppercase tracking-wider transition-colors text-center cursor-pointer',
                     (chronoOverride || 'live') === slot
                       ? 'border-accent/50 bg-accent/20 text-accent shadow-xs'
                       : 'border-line/60 bg-surface-2/40 text-muted hover:text-ink hover:bg-surface-2'
@@ -439,7 +436,7 @@ export function AppearanceTab({
                 Controls base typography, spacing density, and container sizing across all dashboard views.
               </p>
             </div>
-            <span className="font-mono text-[0.6875rem] font-bold uppercase tracking-wider text-accent bg-accent/10 border border-accent/20 px-2 py-0.5 rounded-full shrink-0">
+            <span className="font-mono text-[calc(0.6875rem*var(--text-scale,1))] font-bold uppercase tracking-wider text-accent bg-accent/10 border border-accent/20 px-2 py-0.5 rounded-full shrink-0">
               Active: {fontScale.toUpperCase()}
             </span>
           </div>
@@ -466,7 +463,7 @@ export function AppearanceTab({
                 )}
               >
                 <span className="text-xs font-bold leading-tight">{opt.label}</span>
-                <span className="font-mono text-[0.625rem] opacity-75 mt-0.5">{opt.sub}</span>
+                <span className="font-mono text-[calc(0.625rem*var(--text-scale,1))] opacity-75 mt-0.5">{opt.sub}</span>
               </button>
             ))}
           </div>
@@ -509,7 +506,7 @@ export function AppearanceTab({
                   )}
                 >
                   <span className="text-xs font-bold">{opt.label}</span>
-                  <span className="font-mono text-[0.625rem] uppercase tracking-wider opacity-70 mt-0.5">
+                  <span className="font-mono text-[calc(0.625rem*var(--text-scale,1))] uppercase tracking-wider opacity-70 mt-0.5">
                     {opt.desc}
                   </span>
                 </button>

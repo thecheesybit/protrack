@@ -6,7 +6,6 @@ import {
   HeartPulse,
   Play,
   AlertCircle,
-  CheckCircle2,
   Sparkles,
 } from 'lucide-react'
 import toast from 'react-hot-toast'

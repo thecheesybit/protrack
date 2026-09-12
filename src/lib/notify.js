@@ -38,7 +38,9 @@ export function areNotificationsEnabled() {
       const pref = localStorage.getItem(DESKTOP_NOTIF_STORAGE_KEY)
       if (pref !== null) return pref === 'true'
     }
-  } catch {}
+  } catch {
+    // localStorage unavailable — fall through to the permission-granted default
+  }
   return true
 }
 
@@ -48,7 +50,9 @@ export function setDesktopNotificationsEnabled(enabled) {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(DESKTOP_NOTIF_STORAGE_KEY, enabled ? 'true' : 'false')
     }
-  } catch {}
+  } catch {
+    // localStorage unavailable (private mode, quota) — preference just won't persist
+  }
 }
 
 export async function ensureNotificationPermission() {
@@ -88,7 +92,9 @@ export function closeActiveAlarmNotification() {
   if (activeAlarmNotification) {
     try {
       activeAlarmNotification.close()
-    } catch {}
+    } catch {
+      // notification may already be dismissed by the OS — nothing to clean up
+    }
     activeAlarmNotification = null
   }
 }
@@ -126,7 +132,9 @@ export function notifyAlarm(alarm, { onClick } = {}) {
               window.protrack.window.restore()
             }
           }
-        } catch {}
+        } catch {
+          // window/protrack bridge unavailable — still run onClick below
+        }
         if (onClick) onClick()
         notif.close()
       }

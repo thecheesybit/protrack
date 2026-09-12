@@ -27,7 +27,7 @@ export function ConfirmLogoutModal({ open, onClose, onConfirm, user }) {
           )}
           <div className="min-w-0 flex-1">
             <p className="truncate font-display text-sm font-semibold text-ink">{displayName}</p>
-            {email && <p className="truncate font-mono text-[0.6875rem] text-muted">{email}</p>}
+            {email && <p className="truncate font-mono text-[calc(0.6875rem*var(--text-scale,1))] text-muted">{email}</p>}
           </div>
         </div>
 
@@ -40,7 +40,7 @@ export function ConfirmLogoutModal({ open, onClose, onConfirm, user }) {
         </div>
 
         {/* Security Note */}
-        <div className="flex items-center gap-2 rounded-xl border border-white/5 bg-surface-2/20 px-3 py-2 text-[0.6875rem] text-muted">
+        <div className="flex items-center gap-2 rounded-xl border border-white/5 bg-surface-2/20 px-3 py-2 text-[calc(0.6875rem*var(--text-scale,1))] text-muted">
           <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
           <span>Local session tokens and caches are safely locked upon sign out.</span>
         </div>

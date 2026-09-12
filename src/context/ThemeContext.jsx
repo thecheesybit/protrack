@@ -43,7 +43,9 @@ export function ThemeProvider({ children }) {
 
     try {
       localStorage.setItem(STORAGE_KEYS.theme, targetTheme)
-    } catch {}
+    } catch {
+      // localStorage unavailable (private mode, quota) — preference just won't persist
+    }
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('protrack:chrono-override'))

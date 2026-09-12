@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { RefreshCw, Github, ExternalLink, Sparkles, Play, Pause, History } from 'lucide-react'
+import { RefreshCw, Github, ExternalLink, Sparkles, Play, Pause } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/utils/cn'
 import { isDesktop, desktopBridge } from '@/desktop/isDesktop'
@@ -36,7 +36,7 @@ function renderMarkdownInline(text) {
       parts.push(
         <code
           key={matchIndex}
-          className="rounded bg-accent/15 px-1 py-0.2 text-[0.6875rem] text-accent font-mono border border-accent/10"
+          className="rounded bg-accent/15 px-1 py-0.2 text-[calc(0.6875rem*var(--text-scale,1))] text-accent font-mono border border-accent/10"
         >
           {codeContent}
         </code>
@@ -77,7 +77,9 @@ export function UpdatesTab({
     setUpdateMode(mode)
     try {
       localStorage.setItem(UPDATE_MODE_STORAGE_KEY, mode)
-    } catch {}
+    } catch {
+      // localStorage unavailable (private mode, quota) — preference just won't persist
+    }
     toast.success(
       mode === 'manual'
         ? 'Manual mode active: automatic background downloads are deferred.'
@@ -195,7 +197,7 @@ export function UpdatesTab({
               {updateMode === 'manual' && (
                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-300 space-y-1">
                   <p className="font-semibold text-amber-200">Manual Update Mode Active</p>
-                  <p className="text-amber-300/90 leading-relaxed text-[0.6875rem]">
+                  <p className="text-amber-300/90 leading-relaxed text-[calc(0.6875rem*var(--text-scale,1))]">
                     Automated background downloads are deferred until verified stable builds to keep your workstation light, preserve network bandwidth, and avoid mid-session pauses.
                   </p>
                 </div>
@@ -261,7 +263,7 @@ export function UpdatesTab({
             {/* Overlay gradient & controls */}
             <div className="absolute inset-0 flex flex-col justify-between p-5 bg-gradient-to-t from-black/85 via-black/30 to-black/40 pointer-events-none">
               <div className="flex items-center justify-between pointer-events-auto">
-                <span className="rounded-full border border-white/20 bg-black/60 px-3 py-1 font-mono text-[0.6875rem] font-semibold uppercase tracking-wider text-white backdrop-blur-md flex items-center gap-1.5">
+                <span className="rounded-full border border-white/20 bg-black/60 px-3 py-1 font-mono text-[calc(0.6875rem*var(--text-scale,1))] font-semibold uppercase tracking-wider text-white backdrop-blur-md flex items-center gap-1.5">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
                   v{appInfo?.version || APP_VERSION} Release Tour
                 </span>
@@ -275,7 +277,7 @@ export function UpdatesTab({
                   >
                     {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5 fill-current" />}
                   </button>
-                  <span className="hidden sm:inline-block rounded-full bg-white/10 px-3 py-1 text-[0.6875rem] font-medium text-white/90 backdrop-blur-sm">
+                  <span className="hidden sm:inline-block rounded-full bg-white/10 px-3 py-1 text-[calc(0.6875rem*var(--text-scale,1))] font-medium text-white/90 backdrop-blur-sm">
                     Click card for fullscreen tour
                   </span>
                 </div>
@@ -346,11 +348,11 @@ export function UpdatesTab({
                 {/* Release Content */}
                 <div>
                   <div className="flex items-center gap-2 mb-1.5">
-                    <span className="rounded-md bg-accent/10 border border-accent/20 px-2 py-0.5 text-[0.625rem] font-mono font-bold text-accent tracking-wider uppercase">
+                    <span className="rounded-md bg-accent/10 border border-accent/20 px-2 py-0.5 text-[calc(0.625rem*var(--text-scale,1))] font-mono font-bold text-accent tracking-wider uppercase">
                       v{c.version}
                     </span>
                     {c.date && (
-                      <span className="text-[0.625rem] font-mono font-bold text-muted/80 uppercase tracking-wider">
+                      <span className="text-[calc(0.625rem*var(--text-scale,1))] font-mono font-bold text-muted/80 uppercase tracking-wider">
                         {c.date}
                       </span>
                     )}

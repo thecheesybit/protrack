@@ -8,12 +8,11 @@ import {
   Shuffle,
   RotateCcw,
   Sparkles,
-  Check,
-  Compass,
   Zap,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Modal } from '@/components/ui/Modal'
+import { SettingsToggleRow } from '@/components/settings/SettingsUI'
 import {
   INDIAN_SEASONS,
   getSeasonOverride,
@@ -205,35 +204,35 @@ export function WeatherPlaygroundModal({ open, onClose }) {
         {/* Live Atmosphere Status Badge */}
         <div className="rounded-2xl border border-line/60 bg-surface-2/30 p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="font-mono text-[0.6875rem] font-bold uppercase tracking-wider text-muted">
+            <span className="font-mono text-[calc(0.6875rem*var(--text-scale,1))] font-bold uppercase tracking-wider text-muted">
               Live Atmosphere Status
             </span>
-            <span className="font-mono text-[0.6875rem] font-bold text-accent">
+            <span className="font-mono text-[calc(0.6875rem*var(--text-scale,1))] font-bold text-accent">
               {activeSeasonId === 'auto' ? 'Natural Calendar Sync' : 'Sandbox Override Active'}
             </span>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             <div className="rounded-xl border border-line/40 bg-surface/50 p-2.5">
-              <span className="text-[0.625rem] font-medium text-muted block">Active Ritu</span>
+              <span className="text-[calc(0.625rem*var(--text-scale,1))] font-medium text-muted block">Active Ritu</span>
               <span className="font-display text-xs font-bold text-ink truncate block mt-0.5">
                 {displaySeason?.sanskritName} ({displaySeason?.hindiName})
               </span>
             </div>
             <div className="rounded-xl border border-line/40 bg-surface/50 p-2.5">
-              <span className="text-[0.625rem] font-medium text-muted block">Weather Condition</span>
+              <span className="text-[calc(0.625rem*var(--text-scale,1))] font-medium text-muted block">Weather Condition</span>
               <span className="font-display text-xs font-bold text-ink capitalize truncate block mt-0.5">
                 {currentAtmosphere?.condition?.replace('_', ' ') || 'Clear Sky'}
               </span>
             </div>
             <div className="rounded-xl border border-line/40 bg-surface/50 p-2.5">
-              <span className="text-[0.625rem] font-medium text-muted block">Simulated Wind</span>
+              <span className="text-[calc(0.625rem*var(--text-scale,1))] font-medium text-muted block">Simulated Wind</span>
               <span className="font-mono text-xs font-bold text-ink truncate block mt-0.5">
                 {currentAtmosphere?.wind?.speed || 15} km/h · {currentAtmosphere?.wind?.direction || 'SW'}
               </span>
             </div>
             <div className="rounded-xl border border-line/40 bg-surface/50 p-2.5">
-              <span className="text-[0.625rem] font-medium text-muted block">Atmospheric Layers</span>
+              <span className="text-[calc(0.625rem*var(--text-scale,1))] font-medium text-muted block">Atmospheric Layers</span>
               <span className="font-mono text-xs font-bold text-ink truncate block mt-0.5">
                 {currentAtmosphere?.rain ? 'Rain' : currentAtmosphere?.fog ? 'Fog' : currentAtmosphere?.haze ? 'Haze' : 'Crisp'}
               </span>
@@ -241,13 +240,23 @@ export function WeatherPlaygroundModal({ open, onClose }) {
           </div>
         </div>
 
+        {/* Weather Effects Toggle */}
+        <SettingsToggleRow
+          icon={Wind}
+          title="Atmospheric Effects"
+          description="Rain streaks, fog, wind particles, and heat haze rendered over the dashboard. Turn off for a calmer, static background."
+          checked={effectsEnabled}
+          onChange={handleToggleEffects}
+          badge={effectsEnabled ? 'Enabled' : 'Off'}
+        />
+
         {/* Atmosphere Presets Grid */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="font-mono text-[0.6875rem] font-bold uppercase tracking-wider text-muted">
+            <span className="font-mono text-[calc(0.6875rem*var(--text-scale,1))] font-bold uppercase tracking-wider text-muted">
               Atmosphere Presets
             </span>
-            <span className="text-[0.6875rem] text-muted">Click to instantly load</span>
+            <span className="text-[calc(0.6875rem*var(--text-scale,1))] text-muted">Click to instantly load</span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -268,7 +277,7 @@ export function WeatherPlaygroundModal({ open, onClose }) {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="font-display text-xs font-bold text-ink">{p.name}</p>
-                    <p className="text-[0.6875rem] text-muted/90 mt-0.5 leading-relaxed line-clamp-2">{p.desc}</p>
+                    <p className="text-[calc(0.6875rem*var(--text-scale,1))] text-muted/90 mt-0.5 leading-relaxed line-clamp-2">{p.desc}</p>
                   </div>
                 </button>
               )
@@ -278,7 +287,7 @@ export function WeatherPlaygroundModal({ open, onClose }) {
 
         {/* Manual Fine-Grained Controls */}
         <div className="space-y-4 pt-2 border-t border-line/40">
-          <span className="font-mono text-[0.6875rem] font-bold uppercase tracking-wider text-muted block">
+          <span className="font-mono text-[calc(0.6875rem*var(--text-scale,1))] font-bold uppercase tracking-wider text-muted block">
             Manual Season & Weather Overrides
           </span>
 
@@ -290,7 +299,7 @@ export function WeatherPlaygroundModal({ open, onClose }) {
                 type="button"
                 onClick={() => handleSelectSeason('auto')}
                 className={cn(
-                  'rounded-xl border px-2 py-1.5 text-[0.6875rem] font-semibold transition-all cursor-pointer text-center',
+                  'rounded-xl border px-2 py-1.5 text-[calc(0.6875rem*var(--text-scale,1))] font-semibold transition-all cursor-pointer text-center',
                   activeSeasonId === 'auto'
                     ? 'border-accent bg-accent/20 text-accent font-bold shadow-xs'
                     : 'border-line/60 bg-surface-2/40 text-muted hover:text-ink'
@@ -304,7 +313,7 @@ export function WeatherPlaygroundModal({ open, onClose }) {
                   type="button"
                   onClick={() => handleSelectSeason(s.id)}
                   className={cn(
-                    'rounded-xl border px-2 py-1.5 text-[0.6875rem] font-semibold transition-all cursor-pointer text-center',
+                    'rounded-xl border px-2 py-1.5 text-[calc(0.6875rem*var(--text-scale,1))] font-semibold transition-all cursor-pointer text-center',
                     activeSeasonId === s.id
                       ? 'border-accent bg-accent/20 text-accent font-bold shadow-xs'
                       : 'border-line/60 bg-surface-2/40 text-muted hover:text-ink'
@@ -342,7 +351,7 @@ export function WeatherPlaygroundModal({ open, onClose }) {
                     )}
                   >
                     <Icon className="h-4 w-4" />
-                    <span className="text-[0.6875rem] font-semibold">{w.label}</span>
+                    <span className="text-[calc(0.6875rem*var(--text-scale,1))] font-semibold">{w.label}</span>
                   </button>
                 )
               })}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { RotateCcw, Loader2, User, Save, KeyRound, ShieldAlert, Sparkles } from 'lucide-react'
+import { RotateCcw, Loader2, Save } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/utils/cn'
 import { deriveUniqueCode } from '@/services/cryptoService'
@@ -125,7 +125,7 @@ export function AccountTab({ user, userDoc, setSettingsOpen }) {
 
             {/* Unique Code Pill */}
             <div className="shrink-0 rounded-2xl border border-line/60 bg-surface-2/40 px-4 py-3 text-center sm:text-right">
-              <span className="block font-mono text-[0.625rem] font-bold uppercase tracking-wider text-muted">
+              <span className="block font-mono text-[calc(0.625rem*var(--text-scale,1))] font-bold uppercase tracking-wider text-muted">
                 Unique Sync Code
               </span>
               <span className="block font-mono text-xs font-bold text-ink tracking-wider mt-0.5 select-all">

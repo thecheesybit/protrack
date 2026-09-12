@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
-import { ExternalLink, ChevronDown, Check, Calendar, Cpu, Mic, RefreshCw, Bot } from 'lucide-react'
+import { ExternalLink, ChevronDown, Calendar, RefreshCw } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { cn } from '@/utils/cn'
-import { Button } from '@/components/ui/Button'
 import { updateSettings } from '@/services/userService'
 import {
   getGeminiKey, setGeminiKey,
@@ -24,7 +23,6 @@ import {
 import {
   isCalendarConnected,
   connectCalendar,
-  clearCalToken,
   resetCalendarSyncState,
   getLastSyncAt,
 } from '@/services/calendarService'

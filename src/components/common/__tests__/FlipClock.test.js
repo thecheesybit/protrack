@@ -91,7 +91,7 @@ describe('FlipClock defaults and positioning', () => {
     expect(pos.y).toBeCloseTo(258.5, 1)
   })
 
-  it('verifies all React hooks including useMemo are explicitly imported in FlipClock.jsx', async () => {
+  it('verifies core React hooks are explicitly imported in FlipClock.jsx', async () => {
     const fs = await import('fs')
     const path = await import('path')
     const clockPath = path.resolve(__dirname, '../FlipClock.jsx')
@@ -99,7 +99,9 @@ describe('FlipClock defaults and positioning', () => {
     const importMatch = content.match(/import\s*\{([^}]+)\}\s*from\s*['"]react['"]/)
     expect(importMatch).toBeTruthy()
     const importedHooks = importMatch[1].split(',').map((s) => s.trim())
-    expect(importedHooks).toContain('useMemo')
+    // useMemo isn't asserted here — the component has no expensive per-render
+    // computation worth memoizing (positions/scale are cheap arithmetic), so
+    // it was an unused import (ESLint no-unused-vars) rather than a real hook.
     expect(importedHooks).toContain('useEffect')
     expect(importedHooks).toContain('useState')
     expect(importedHooks).toContain('useRef')

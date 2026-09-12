@@ -3,9 +3,12 @@ import { useStore } from '@/store/useStore'
 
 /**
  * Reflects the user's typography preference to the DOM: writes
- * `data-font-scale` on <html> so the CSS variable cascade in `index.css`
- * picks up the new --root-font-size, which every `rem` in the app scales
- * against. Mounted once in App.jsx; cheap (no listeners, no rAF).
+ * `data-font-scale` on <html> so index.css sets --text-scale, a multiplier
+ * applied only inside Tailwind's fontSize scale (tailwind.config.js) — text
+ * grows/shrinks with this preference, but the document root's font-size
+ * itself stays fixed at 16px so spacing/sizing/border-radius utilities never
+ * pick up fractional pixel values. Mounted once in App.jsx; cheap (no
+ * listeners, no rAF).
  */
 const FONT_MAP = {
   dmsans: "'DM Sans', system-ui, -apple-system, sans-serif",

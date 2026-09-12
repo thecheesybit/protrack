@@ -4,6 +4,30 @@ export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
+      // Text-only scale: --text-scale (index.css) is set per data-font-scale
+      // preset and applied ONLY here, not on the document root, so Tailwind's
+      // rem-based spacing/sizing/border-radius utilities elsewhere stay pure
+      // rem-against-a-fixed-16px-root (always whole CSS pixels for half-unit
+      // classes like p-1.5/gap-1.5/h-1.5) regardless of the user's text-size
+      // preference. Values below are Tailwind's own defaults, each wrapped in
+      // the multiplier — a fractional font-size doesn't cause the visible
+      // edge-antialiasing that a fractional box/border dimension does, so
+      // there's no crispness downside to keeping text's old scaling behavior.
+      fontSize: {
+        xs: ['calc(0.75rem * var(--text-scale, 1))', { lineHeight: 'calc(1rem * var(--text-scale, 1))' }],
+        sm: ['calc(0.875rem * var(--text-scale, 1))', { lineHeight: 'calc(1.25rem * var(--text-scale, 1))' }],
+        base: ['calc(1rem * var(--text-scale, 1))', { lineHeight: 'calc(1.5rem * var(--text-scale, 1))' }],
+        lg: ['calc(1.125rem * var(--text-scale, 1))', { lineHeight: 'calc(1.75rem * var(--text-scale, 1))' }],
+        xl: ['calc(1.25rem * var(--text-scale, 1))', { lineHeight: 'calc(1.75rem * var(--text-scale, 1))' }],
+        '2xl': ['calc(1.5rem * var(--text-scale, 1))', { lineHeight: 'calc(2rem * var(--text-scale, 1))' }],
+        '3xl': ['calc(1.875rem * var(--text-scale, 1))', { lineHeight: 'calc(2.25rem * var(--text-scale, 1))' }],
+        '4xl': ['calc(2.25rem * var(--text-scale, 1))', { lineHeight: 'calc(2.5rem * var(--text-scale, 1))' }],
+        '5xl': ['calc(3rem * var(--text-scale, 1))', { lineHeight: '1' }],
+        '6xl': ['calc(3.75rem * var(--text-scale, 1))', { lineHeight: '1' }],
+        '7xl': ['calc(4.5rem * var(--text-scale, 1))', { lineHeight: '1' }],
+        '8xl': ['calc(6rem * var(--text-scale, 1))', { lineHeight: '1' }],
+        '9xl': ['calc(8rem * var(--text-scale, 1))', { lineHeight: '1' }],
+      },
       fontFamily: {
         // `sans` follows the user's typography preference (useFontScale writes
         // --font-sans); DM Sans is the design-system default.

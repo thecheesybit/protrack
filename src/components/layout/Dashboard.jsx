@@ -93,6 +93,14 @@ export function Dashboard() {
   useEffect(() => {
     helpOpenRef.current = helpOpen
   }, [helpOpen])
+  // Mirrored into a ref for the same reason as helpOpenRef above: the global
+  // keydown listener below is attached once ([] deps) so it can't see fresh
+  // state directly — without this, Escape could never close the Weather
+  // Playground modal (the check would always read the initial `false`).
+  const weatherPlaygroundOpenRef = useRef(weatherPlaygroundOpen)
+  useEffect(() => {
+    weatherPlaygroundOpenRef.current = weatherPlaygroundOpen
+  }, [weatherPlaygroundOpen])
 
   const clickCountRef = useRef(0)
   const clickTimerRef = useRef(null)
@@ -169,7 +177,7 @@ export function Dashboard() {
           setHelpOpen(false)
           return
         }
-        if (weatherPlaygroundOpen) setWeatherPlaygroundOpen(false)
+        if (weatherPlaygroundOpenRef.current) setWeatherPlaygroundOpen(false)
         else if (st.alarmModalOpen) st.setAlarmModalOpen(false)
         else if (st.clockCentered) st.setClockCentered(false)
         else if (st.focusContext) st.closeFocus()
@@ -331,23 +339,6 @@ export function Dashboard() {
         } else {
           st.maximizeWidget(st.activeWidgetId || 'timetable')
         }
-        return
-      }
-
-      // ── L : Toggle Timetable Legends & Details (on / off) ──
-      if (k === 'l') {
-        e.preventDefault()
-        const wasEnabled = st.timetableLegendsEnabled
-        const wasExpanded = st.timetableLegendsExpanded
-        st.toggleTimetableLegends?.()
-        if (!wasEnabled) {
-          toast.success('Legends turned ON · Press L to turn off', { id: 'legends-toggle', icon: '📖' })
-        } else if (wasExpanded) {
-          toast('Legends turned OFF · Press L to turn on', { id: 'legends-toggle', icon: '🔒' })
-        } else {
-          toast.success('Legends expanded · Press L to turn off', { id: 'legends-toggle', icon: '📖' })
-        }
-        return
       }
     }
     window.addEventListener('keydown', onKey)

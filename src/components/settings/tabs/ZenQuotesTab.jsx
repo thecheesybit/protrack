@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Sparkles, Volume2, Clock, Check, Quote } from 'lucide-react'
+import { Sparkles, Volume2, Check } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import toast from 'react-hot-toast'
 import { updateSettings } from '@/services/userService'
-import { SettingsSection, SettingsCard, SettingsToggleRow, SettingsBadge } from '../SettingsUI'
+import { SettingsSection, SettingsCard, SettingsToggleRow } from '../SettingsUI'
 
 const QUOTE_CATEGORIES = [
   { id: 'stoic', label: 'Stoic Philosophy', desc: 'Marcus Aurelius, Seneca, Epictetus' },

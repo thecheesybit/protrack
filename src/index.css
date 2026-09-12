@@ -5,12 +5,25 @@
 @tailwind utilities;
 
 /* ─────────────────────────────────────────────────────────────
-   Root font-size: every `rem` in the app resolves against this.
-   `useFontScale` toggles data-font-scale on <html> to give users a
-   Tiny / Compact / Standard / Large / Huge preference without touching layout code.
+   Root font-size is FIXED at 16px — every `rem` from Tailwind's spacing,
+   sizing, and border-radius utilities (p-*, gap-*, h-* and w-*, rounded-*, etc.)
+   resolves against this, so half-unit classes (p-1.5, gap-1.5, h-1.5 = 0.375rem
+   and similar) always land on a whole CSS pixel: 0.375rem * 16px = 6px, not
+   the 6.75px you'd get at an 18px root. Fractional box/border dimensions force
+   sub-pixel anti-aliasing on edges and hairlines, which reads as general
+   softness across the whole app even at 100% display scaling — this used to
+   move WITH the font-scale preference (18px for "standard"), so most users
+   were seeing it by default.
+   Text itself no longer scales via this root — `useFontScale` still toggles
+   data-font-scale on <html>, but now only to set --text-scale (a multiplier
+   applied inside Tailwind's fontSize scale in tailwind.config.js). Fractional
+   font-size values don't cause the same visible artifact text glyphs are
+   already sub-pixel positioned and antialiased regardless of size, so this
+   keeps every preset's text at exactly its previous rendered size while only
+   spacing/borders change.
    ───────────────────────────────────────────────────────────── */
 html {
-  font-size: var(--root-font-size, 16px);
+  font-size: 16px;
   /* Stop iOS / WebView from auto-bumping text when the window narrows. */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
@@ -35,25 +48,27 @@ input, textarea, select, button {
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
-/* Base type scale bumped +2px at every preset (standard is now 18px, up from
-   16px) for a larger, more legible app. Every `rem` scales from this. */
+/* Text-only scale multiplier — replaces the old --root-font-size px values.
+   Each multiplier is that preset's old px value divided by 16, so every
+   preset's actual rendered text size is unchanged from before; only spacing
+   and borders stopped moving with it (see tailwind.config.js's fontSize). */
 :root {
-  --root-font-size: 18px;
+  --text-scale: 1.125; /* standard: 18/16 */
 }
 :root[data-font-scale='tiny'] {
-  --root-font-size: 14px;
+  --text-scale: 0.875; /* 14/16 */
 }
 :root[data-font-scale='compact'] {
-  --root-font-size: 16px;
+  --text-scale: 1; /* 16/16 */
 }
 :root[data-font-scale='standard'] {
-  --root-font-size: 18px;
+  --text-scale: 1.125; /* 18/16 */
 }
 :root[data-font-scale='large'] {
-  --root-font-size: 20px;
+  --text-scale: 1.25; /* 20/16 */
 }
 :root[data-font-scale='huge'] {
-  --root-font-size: 22px;
+  --text-scale: 1.375; /* 22/16 */
 }
 
 /* ─────────────────────────────────────────────────────────────

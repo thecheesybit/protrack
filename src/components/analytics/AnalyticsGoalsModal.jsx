@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Target, Check } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/utils/cn'

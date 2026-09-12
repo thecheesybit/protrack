@@ -148,7 +148,7 @@ export function parseSectionTable(text) {
   if (rows.length === 0) {
     ADDA_ROW_RE.lastIndex = 0
     while ((m = ADDA_ROW_RE.exec(text)) !== null) {
-      const [, rawName, nQ, attempted, correct, wrong, marks, timeStr, accuracy] = m
+      const [, rawName, nQ, , correct, wrong, marks, timeStr, accuracy] = m
       const c = parseInt(correct, 10)
       const w = parseInt(wrong, 10)
       const totalQ = parseInt(nQ, 10)
@@ -205,7 +205,10 @@ export function parseSectionTable(text) {
   if (rows.length === 0) {
     OLIVEBOARD_ROW_RE.lastIndex = 0
     while ((m = OLIVEBOARD_ROW_RE.exec(text)) !== null) {
-      const [, rawName, score, totalMarks, rank, totalCandidates, percentile, accuracy, timeStr] = m
+      // rank/totalCandidates also appear in this per-section match, but the
+      // overall-level extraction below (rankPipeMatch/rankColonMatch/rankHash)
+      // already handles them more robustly — no need to duplicate per row.
+      const [, rawName, score, totalMarks, , , percentile, accuracy, timeStr] = m
       rows.push({
         name: rawName.trim(),
         canonicalName: canonicalSectionName(rawName),

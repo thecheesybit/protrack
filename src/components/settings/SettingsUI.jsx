@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { AlertTriangle, ChevronRight, ShieldAlert, X } from 'lucide-react'
+import { ShieldAlert } from 'lucide-react'
 import { cn } from '@/utils/cn'
 
 /**
@@ -162,7 +162,7 @@ export function SettingsBadge({ children, variant = 'accent', className }) {
   return (
     <span
       className={cn(
-        'font-mono text-[0.6875rem] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-full border',
+        'font-mono text-[calc(0.6875rem*var(--text-scale,1))] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-full border',
         variants[variant] || variants.accent,
         className
       )}
@@ -211,7 +211,7 @@ export function SettingsShortcutRow({ keys, description, category }) {
           {description}
         </span>
         {category && (
-          <span className="font-mono text-[0.625rem] uppercase tracking-wider text-muted/60">
+          <span className="font-mono text-[calc(0.625rem*var(--text-scale,1))] uppercase tracking-wider text-muted/60">
             {category}
           </span>
         )}
@@ -221,13 +221,13 @@ export function SettingsShortcutRow({ keys, description, category }) {
           keys.map((k, idx) => (
             <kbd
               key={idx}
-              className="rounded-lg border border-line/80 bg-surface px-2 py-0.5 font-mono text-[0.6875rem] font-semibold text-ink shadow-xs"
+              className="rounded-lg border border-line/80 bg-surface px-2 py-0.5 font-mono text-[calc(0.6875rem*var(--text-scale,1))] font-semibold text-ink shadow-xs"
             >
               {k}
             </kbd>
           ))
         ) : (
-          <kbd className="rounded-lg border border-line/80 bg-surface px-2 py-0.5 font-mono text-[0.6875rem] font-semibold text-ink shadow-xs">
+          <kbd className="rounded-lg border border-line/80 bg-surface px-2 py-0.5 font-mono text-[calc(0.6875rem*var(--text-scale,1))] font-semibold text-ink shadow-xs">
             {keys}
           </kbd>
         )}

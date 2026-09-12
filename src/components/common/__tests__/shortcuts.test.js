@@ -104,14 +104,6 @@ describe('Keyboard Shortcuts & Navigation', () => {
       expect(content).toContain("e.altKey && e.key.toLowerCase() === 't'")
       expect(content).toContain("st.setAlarmModalOpen")
       expect(content).toContain("st.setSettingsOpen")
-      expect(content).toContain("k === 'l'")
-      expect(content).toContain("st.toggleTimetableLegends")
-    })
-
-    it('HelpModal registers L shortcut for toggling legends', () => {
-      const helpModalPath = path.resolve(__dirname, '../HelpModal.jsx')
-      const content = fs.readFileSync(helpModalPath, 'utf8')
-      expect(content).toContain("['L', 'Toggle Timetable Legends & Details (on / off)']")
     })
   })
 

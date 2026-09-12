@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import { cn } from '@/utils/cn'
 import { VIDEO_PRESETS, youtubeId, toCanonicalYouTubeUrl } from '@/lib/focusScenes'
 import { updateSettings } from '@/services/userService'
-import { SettingsSection, SettingsCard, SettingsToggleRow, SettingsBadge } from '../SettingsUI'
+import { SettingsSection, SettingsCard, SettingsToggleRow } from '../SettingsUI'
 
 export function FocusSceneTab({ user, settings }) {
   const [focusUrlInput, setFocusUrlInput] = useState(settings?.focusAudioUrl || '')

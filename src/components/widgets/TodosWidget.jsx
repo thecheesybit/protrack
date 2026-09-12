@@ -49,8 +49,9 @@ import { classifyDeadline } from '@/lib/deadlines'
 import { parseCapture } from '@/lib/nlParse'
 import { ymd } from '@/lib/dates'
 import toast from 'react-hot-toast'
-import { playPop, playSuccess, playTodoChime } from '@/lib/audioFX'
+import { playPop, playTodoChime } from '@/lib/audioFX'
 import { useVirtualList } from '@/hooks/useVirtualList'
+import { useGlobalTick } from '@/hooks/useGlobalTick'
 import { cn } from '@/utils/cn'
 
 // ── Column configuration ──────────────────────────────────────────────────────
@@ -1040,7 +1041,30 @@ export function TodosWidget({ widget, variant }) {
 
   const rawSelectedDate = useStore((s) => s.selectedDate)
   const resetSelectedDate = useStore((s) => s.resetSelectedDate)
-  const todayDateStr = useMemo(() => ymd(new Date()), [])
+
+  // This is a long-running desktop app — a `useMemo(..., [])` here would freeze
+  // "today" at mount time forever, so a session left open across midnight would
+  // silently stop matching due-today tasks and break the overdue carry-forward
+  // check (dueDay < todayDateStr) since dueDay would then be "in the past"
+  // relative to a today that's stuck a day behind. Re-derive on the shared
+  // 1-second tick instead; `setTodayDateStr` only actually re-renders on the
+  // (rare) day it changes since React bails out when the value is unchanged.
+  const [todayDateStr, setTodayDateStr] = useState(() => ymd(new Date()))
+  useGlobalTick(() => setTodayDateStr(ymd(new Date())))
+
+  // If the user was viewing "today" by default (never manually navigated the
+  // day picker), keep them on today as the real day rolls over. A user who
+  // deliberately navigated to a specific past/future day is left alone.
+  const prevTodayRef = useRef(todayDateStr)
+  useEffect(() => {
+    if (prevTodayRef.current !== todayDateStr) {
+      if (rawSelectedDate === prevTodayRef.current) {
+        resetSelectedDate?.()
+      }
+      prevTodayRef.current = todayDateStr
+    }
+  }, [todayDateStr, rawSelectedDate, resetSelectedDate])
+
   const selectedDate =
     typeof rawSelectedDate === 'string' && rawSelectedDate.length === 10
       ? rawSelectedDate
@@ -1777,6 +1801,7 @@ export function TodosWidget({ widget, variant }) {
           </div>
         )}
       </div>
+
 
       {/* Calendar deadline picker — portaled to document.body */}
       {createPortal(

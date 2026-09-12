@@ -121,7 +121,9 @@ export function setChronoOverride(val) {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event(CHRONO_OVERRIDE_EVENT))
     }
-  } catch {}
+  } catch {
+    // localStorage unavailable (private mode, quota) — override just won't persist
+  }
 }
 
 /**

@@ -1,7 +1,5 @@
 import { useState, useMemo } from 'react'
 import {
-  AlertTriangle,
-  Trash2,
   Command,
   ShieldAlert,
   Search,
@@ -79,6 +77,13 @@ export function SystemTab({ user, deleteAccount, setSettingsOpen, appInfo }) {
 
   const handleToggleNotifications = async (val) => {
     if (val && notifPermission !== 'granted') {
+      if (!isNotificationSupported()) {
+        // Distinct from "denied" — there's no browser permission prompt to
+        // retry here at all, so the generic denied-by-browser message below
+        // would be actively misleading.
+        toast.error('Desktop notifications are not supported on this platform.')
+        return
+      }
       const granted = await ensureNotificationPermission()
       setNotifPermission(granted ? 'granted' : 'denied')
       if (!granted) {
@@ -277,7 +282,7 @@ export function SystemTab({ user, deleteAccount, setSettingsOpen, appInfo }) {
               <SettingsCard className="space-y-2.5 p-5">
                 <div className="flex items-center gap-2 mb-1">
                   <Command className="h-3.5 w-3.5 text-accent" />
-                  <span className="font-mono text-[0.6875rem] font-bold uppercase tracking-wider text-muted">
+                  <span className="font-mono text-[calc(0.6875rem*var(--text-scale,1))] font-bold uppercase tracking-wider text-muted">
                     Global Desktop Hotkeys (OS-Wide)
                   </span>
                 </div>
@@ -297,7 +302,7 @@ export function SystemTab({ user, deleteAccount, setSettingsOpen, appInfo }) {
             <SettingsCard className="space-y-2.5 p-5">
               <div className="flex items-center gap-2 mb-1">
                 <LayoutGrid className="h-3.5 w-3.5 text-accent" />
-                <span className="font-mono text-[0.6875rem] font-bold uppercase tracking-wider text-muted">
+                <span className="font-mono text-[calc(0.6875rem*var(--text-scale,1))] font-bold uppercase tracking-wider text-muted">
                   Quick Navigation Keys
                 </span>
               </div>
@@ -316,7 +321,7 @@ export function SystemTab({ user, deleteAccount, setSettingsOpen, appInfo }) {
             <SettingsCard className="space-y-2.5 p-5">
               <div className="flex items-center gap-2 mb-1">
                 <Keyboard className="h-3.5 w-3.5 text-accent" />
-                <span className="font-mono text-[0.6875rem] font-bold uppercase tracking-wider text-muted">
+                <span className="font-mono text-[calc(0.6875rem*var(--text-scale,1))] font-bold uppercase tracking-wider text-muted">
                   In-App Productivity Commands
                 </span>
               </div>
@@ -336,7 +341,7 @@ export function SystemTab({ user, deleteAccount, setSettingsOpen, appInfo }) {
               <SettingsCard className="space-y-2.5 p-5">
                 <div className="flex items-center gap-2 mb-1">
                   <MonitorSmartphone className="h-3.5 w-3.5 text-accent" />
-                  <span className="font-mono text-[0.6875rem] font-bold uppercase tracking-wider text-muted">
+                  <span className="font-mono text-[calc(0.6875rem*var(--text-scale,1))] font-bold uppercase tracking-wider text-muted">
                     Window Controls & Interaction
                   </span>
                 </div>

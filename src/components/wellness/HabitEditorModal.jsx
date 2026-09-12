@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { MODE_PALETTE, SCIENTIFIC_HABIT_PRESETS } from '@/lib/constants'
 import { getIcon } from '@/lib/icons'
 import { addHabit, updateHabit, deleteHabit } from '@/services/habitService'
+import { clearPendingHabitSnooze } from '@/hooks/useHabitReminders'
 import { cn } from '@/utils/cn'
 
 const HABIT_ICONS = [
@@ -143,6 +144,11 @@ export function HabitEditorModal({ open, onClose, habit, order }) {
   const remove = async () => {
     setSaving(true)
     try {
+      // Cancel any pending snooze re-fire first — otherwise a habit snoozed
+      // right before deletion still rings ~5 min later for a habit that no
+      // longer exists, and the resulting "Mark done" tap fails silently
+      // against a missing Firestore doc.
+      clearPendingHabitSnooze(habit.id)
       await deleteHabit(user.uid, habit.id)
       onClose()
     } catch {

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState, useEffect } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { Flame, Clock, CalendarCheck, Trophy, Target, Filter } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { useFocusSessions } from '@/hooks/useFocusSessions'
@@ -18,7 +18,9 @@ function getSavedGoals() {
   try {
     const raw = localStorage.getItem(GOALS_STORAGE_KEY)
     if (raw) return { focusGoalMin: 120, sessionsGoal: 4, ...JSON.parse(raw) }
-  } catch {}
+  } catch {
+    // malformed/unavailable storage — fall through to defaults below
+  }
   return { focusGoalMin: 120, sessionsGoal: 4 }
 }
 
@@ -43,7 +45,9 @@ export function AnalyticsWidget({ widget, variant }) {
     setGoals(newGoals)
     try {
       localStorage.setItem(GOALS_STORAGE_KEY, JSON.stringify(newGoals))
-    } catch {}
+    } catch {
+      // localStorage unavailable (private mode, quota) — goals just won't persist
+    }
   }
 
   // Filter sessions by selected mode

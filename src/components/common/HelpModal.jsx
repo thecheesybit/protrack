@@ -30,7 +30,6 @@ const IN_APP = [
   ['Ctrl / Cmd + K', 'Open the AI companion'],
   ['Ctrl / Cmd + T', 'Center the clock (Zen)'],
   ['Alt + A', 'Set Alarm / Reminder (Flip Clock)'],
-  ['L', 'Toggle Timetable Legends & Details (on / off)'],
   ['F', 'Toggle fullscreen (when idle or already fullscreen)'],
   ['Esc', 'Close the top overlay — panel, modal, maximized widget, then fullscreen'],
   ['Double-click empty space', 'Quick-add (subject, to-do, timetable cell)'],

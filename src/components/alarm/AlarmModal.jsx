@@ -12,11 +12,8 @@ import {
   Square,
   ChevronUp,
   ChevronDown,
-  Sparkles,
   Check,
   RotateCw,
-  Repeat,
-  CheckCircle2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Modal } from '@/components/ui/Modal'
@@ -172,7 +169,6 @@ export function AlarmModal({ open, onClose }) {
 
     playSound(soundId)
 
-    const opt = ALARM_SOUND_OPTIONS.find((s) => s.id === soundId)
     const duration = soundId === 'alarm' ? 2600 : soundId === 'temple' ? 3400 : 2000
     previewTimerRef.current = setTimeout(() => {
       setPreviewingSound(null)

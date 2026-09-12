@@ -1,5 +1,37 @@
 # Changelog
 
+## v2.8.2 — 2026-09-12
+
+### 🔍 App-Wide Rendering Crispness
+- **Fixed systemic fractional-pixel spacing**: the document root's font-size used to move with your text-size preference (18px for "Standard"), which made every half-unit Tailwind spacing/sizing class (`p-1.5`, `gap-1.5`, `h-1.5`, and dozens like them, used everywhere) compute to a fractional CSS pixel value — e.g. 6.75px instead of 6px. Fractional box and border dimensions force the browser into sub-pixel anti-aliasing, which reads as general softness across borders, dots, and hairlines even at 100% display scaling, by default, for every user.
+- **The fix**: the root is now permanently fixed at 16px, so all spacing/sizing/border-radius utilities always land on whole pixels. Text-size preference still works exactly as before — it now scales through a separate multiplier applied only to text, so every preset renders text at exactly the same size it did previously. Nothing about the "Standard" default look changes; only the fractional-pixel spacing artifact goes away.
+
+### ⏰ Alarm Clock Reliability
+- **Fixed a silent alarm loss**: if two alarms were due close together, the second would never ring at all once its exact due-minute passed — which, since dismissing an alarm can take a minute or more, was a real and repeatable way to lose a scheduled alarm entirely. A second alarm due while one is already ringing now queues and rings the instant the first is dismissed.
+
+### 🌦️ Weather Sandbox Fixes
+- **Atmospheric Effects toggle was missing**: the on/off switch for rain/fog/wind particle effects existed in the underlying logic but had no control in the UI — added to the Weather Sandbox panel.
+- **Wind speed now actually affects the animation**: gusty presets (Loo, squalls) previously looked identical in speed to a calm breeze; particle and wind-line animation now scales with the simulated wind speed.
+
+### 🌳 Focus Forest Variety
+- Both the daily and monthly Focus Forest views now render the intended mix of oak/pine/blossom/palm tree species per session instead of always falling back to fully random sprites — the variety logic existed but was never wired to the render.
+
+### 🐛 Smaller Fixes
+- **To-dos no longer go stale at midnight**: in a long-running session, "today" could get stuck on the previous day, hiding tasks actually due today and breaking the overdue carry-forward check. Now re-checked continuously.
+- **Deleting a snoozed habit no longer leaves a ghost reminder**: a pending 5-minute snooze re-fire is now cancelled when its habit is deleted, instead of notifying for (and failing to mark done) a habit that no longer exists.
+- **Esc now correctly closes the Weather Sandbox** modal — it previously read a stale value and never closed on Escape.
+- **Clearer message when notifications aren't supported** on the current platform, instead of the misleading "permission not granted by browser."
+
+### 🚚 Removed
+- **Timetable Legends** (the interactive hover rail, subject inspector, and class-type legend introduced in v2.8.0) has been removed.
+
+### 🛠️ Release Pipeline — Independent Per-Platform Publishing
+- Windows, macOS, and Linux installers now build and publish **independently** — previously, all three had to succeed before *any* installer shipped, so a single flaky macOS notarization run could hold back Windows and Linux releases that had already built successfully. Each platform now uploads straight to the release as soon as it's ready.
+- **Releases no longer ship with a blank description** when the developer forgets to add a matching `CHANGELOG.md` section before tagging — falls back to GitHub's auto-generated notes instead.
+
+### 🧹 Code Quality
+- Resolved every ESLint warning and error in `src/` (21 errors, 54 warnings) — several turned out to be genuinely half-wired features (see Weather/Forest fixes above) rather than dead code.
+
 ## v2.8.0 — 2026-09-09
 
 ### 🎛️ Timetable Legends — Interactive Hover Rail, Subject Inspector & Class Type Legend

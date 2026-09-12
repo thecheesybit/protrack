@@ -365,7 +365,7 @@ export function FullScreenForestModal({ sessions = [], initialMonthOffset = 0, o
  * The month's forest: one hand-drawn tree per successful focus session in the
  * selected calendar month, with a month switcher and a motivating summary.
  */
-export function MonthlyForest({ sessions = [], compact = false }) {
+export function MonthlyForest({ sessions = [] }) {
   const [monthOffset, setMonthOffset] = useState(0)
   const [isFullScreen, setIsFullScreen] = useState(false)
   const [hoveredSession, setHoveredSession] = useState(null)
@@ -395,10 +395,6 @@ export function MonthlyForest({ sessions = [], compact = false }) {
     () => new Set(monthSessions.map((s) => toDate(s.startedAt || s.createdAt)?.getDate())).size,
     [monthSessions],
   )
-
-  // Trees shrink + overlap more as the grove grows, so a big month still fits.
-  const baseH = Math.max(compact ? 34 : 44, Math.min(compact ? 60 : 84, 96 - Math.min(count, 30) * 1.9))
-  const overlap = count > 14 ? -Math.round(baseH * 0.32) : count > 7 ? -Math.round(baseH * 0.18) : 4
 
   return (
     <>
@@ -524,7 +520,7 @@ export function MonthlyForest({ sessions = [], compact = false }) {
                     />
                     <SpriteFoliage
                       type={pType}
-                      species="all"
+                      species={speciesFor(s, i)}
                       variant={seed}
                       height={pHeight}
                       delay={Math.min(0.35, i * 0.02)}

@@ -2,10 +2,12 @@ name: Release
 
 # Production pipeline. A push to `master` is the single source of truth for
 # shipping: this workflow auto-detects the version bump from conventional commits
-# (major/minor/patch), deploys the marketing/web shell to Netlify, builds Electron
-# installers for Windows / macOS / Linux, and publishes them as GitHub Release
-# assets so the in-app auto-updater picks them up. CHANGELOG.md is curated by the
-# developer before committing — CI never overwrites it.
+# (major/minor/patch), deploys the marketing/web shell to Netlify, and builds +
+# publishes Electron installers for Windows / macOS / Linux. Web, Windows, macOS
+# and Linux each ship independently of one another — a failure building or
+# publishing one platform never blocks the others (see `create-release` +
+# `build-electron` below). CHANGELOG.md is curated by the developer before
+# committing — CI never overwrites it.
 #
 # Manual `workflow_dispatch` is also supported for ad-hoc releases (e.g. a
 # point fix that doesn't land on master through the normal commit flow).
@@ -111,6 +113,63 @@ jobs:
           git push origin "HEAD:development" || \
             echo "::warning::Could not fast-forward development — manual rebase may be needed."
 
+  # Creates the GitHub Release shell (tag + notes, no assets) exactly once,
+  # before any platform build starts. Each platform job below then uploads its
+  # own installer to this already-existing release independently — so one
+  # platform failing (macOS notarization flaking is the classic case) never
+  # blocks the other two from shipping. This replaces the old single
+  # `finalize` gate that needed ALL THREE matrix legs to succeed before ANY
+  # installer was published.
+  create-release:
+    name: Create release shell
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Extract release section from CHANGELOG
+        id: notes
+        env:
+          NEW_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          awk "/^## v$NEW_VERSION /{flag=1; next} /^## v/{flag=0} flag" CHANGELOG.md > release-notes.md
+          # v2.7.0 and v2.8.1 both shipped with a blank release body because no
+          # matching "## vX.Y.Z" section existed at tag time and this silently
+          # produced an empty file. Fall back to GitHub's auto-generated notes
+          # instead of publishing a blank description.
+          if [ -s release-notes.md ]; then
+            echo "has_notes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_notes=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No '## v$NEW_VERSION' section in CHANGELOG.md — using auto-generated release notes instead. Add a changelog entry before releasing for curated notes."
+          fi
+
+      - name: Create GitHub Release (curated notes)
+        if: steps.notes.outputs.has_notes == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: PRO TRACK ${{ needs.prepare.outputs.tag }}
+          body_path: release-notes.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release (auto-generated notes fallback)
+        if: steps.notes.outputs.has_notes != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: PRO TRACK ${{ needs.prepare.outputs.tag }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   deploy-web:
     name: Deploy web → Netlify
     needs: prepare
@@ -156,9 +215,14 @@ jobs:
 
   build-electron:
     name: Build Electron · ${{ matrix.os }}
-    needs: prepare
+    # Depends on create-release (not on the other OS legs) — this job publishes
+    # its own installer straight to the release as soon as IT is done, so
+    # Windows/macOS/Linux ship independently of one another.
+    needs: [prepare, create-release]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -196,16 +260,18 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-electron-builder-
 
-      - name: Build installer (no publish — uploads handled in finalize)
-        # `--publish never` produces the installer + electron-updater
-        # metadata locally; the dedicated `finalize` job then uploads them
-        # synchronously, which avoids electron-builder's race condition that
-        # killed Windows/Mac uploads in 1.1.3 when each matrix job exited
-        # before its async PUT to the GH releases API completed.
+      - name: Build installer (no publish — this job uploads it below)
+        # `--publish never` produces the installer + electron-updater metadata
+        # locally; the "Publish installer to release" step below then uploads
+        # them synchronously and independently per OS, which avoids
+        # electron-builder's own async-publish race condition that killed
+        # Windows/Mac uploads in 1.1.3 when each matrix job exited before its
+        # async PUT to the GH releases API completed.
         #
-        # Retried up to 3× — a single transient binary-mirror 504 on ONE OS used
-        # to fail the whole `build-electron` job, which `finalize` needs, so the
-        # entire release was dropped (v1.6.0 was lost this way). Retry absorbs it.
+        # Retried up to 3× — a single transient binary-mirror 504 on ONE OS
+        # only fails that OS's leg now, not the whole release (in the old
+        # single-gate design this dropped the entire release — v1.6.0 was
+        # lost this way).
         uses: nick-fields/retry@v3
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
@@ -222,13 +288,13 @@ jobs:
           retry_wait_seconds: 30
           command: npm run electron:build -- --publish never
 
-      - name: Upload installer artifacts
+      - name: Keep a short-lived debug copy of the installer
+        # Not the distribution path anymore (see next step) — just a recovery
+        # net if the publish step below fails after a successful build, so a
+        # re-run doesn't require rebuilding from scratch.
         uses: actions/upload-artifact@v4
         with:
           name: installers-${{ matrix.os }}
-          # Keep only the user-facing installer + the auto-update manifest.
-          # Drop blockmaps (delta-update side-channel), unpacked dirs,
-          # builder-effective-config dumps, and other build clutter.
           path: |
             release/*.exe
             release/*.dmg
@@ -237,44 +303,25 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-  finalize:
-    name: Publish release notes + installers
-    needs: [prepare, deploy-web, build-electron]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout tag
-        uses: actions/checkout@v4
+      # Publishes straight to the release created by `create-release`,
+      # independently of the other two OS legs. Retried like the build step —
+      # a transient GitHub API hiccup here shouldn't cost a whole platform's
+      # release when the installer already built fine.
+      - name: Publish installer to release
+        # `shell: bash` matters here: windows-latest's default `run:` shell is
+        # pwsh, which doesn't glob-expand args to external commands the way
+        # bash does — gh would get literal "release/*.dmg" strings and error.
+        # `nullglob` makes patterns with no match on this OS (e.g. *.dmg on
+        # Windows) disappear instead of being passed through literally.
+        uses: nick-fields/retry@v3
         with:
-          ref: ${{ needs.prepare.outputs.tag }}
-
-      - name: Download all installer artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: installers-*
-          merge-multiple: true
-          path: release-assets
-
-      - name: List downloaded assets
-        run: ls -la release-assets
-
-      - name: Extract release section from CHANGELOG
-        id: notes
-        env:
-          NEW_VERSION: ${{ needs.prepare.outputs.version }}
-        run: |
-          awk "/^## v$NEW_VERSION /{flag=1; next} /^## v/{flag=0} flag" CHANGELOG.md > release-notes.md
-          echo "path=release-notes.md" >> "$GITHUB_OUTPUT"
-
-      - name: Publish GitHub Release with installers
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.prepare.outputs.tag }}
-          name: PRO TRACK ${{ needs.prepare.outputs.tag }}
-          body_path: ${{ steps.notes.outputs.path }}
-          files: release-assets/*
-          fail_on_unmatched_files: true
-          generate_release_notes: false
+          timeout_minutes: 5
+          max_attempts: 3
+          retry_wait_seconds: 20
+          shell: bash
+          command: |
+            shopt -s nullglob
+            files=(release/*.exe release/*.dmg release/*.AppImage release/latest*.yml)
+            gh release upload "${{ needs.prepare.outputs.tag }}" "${files[@]}" --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

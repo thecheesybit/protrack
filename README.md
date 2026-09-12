@@ -158,7 +158,7 @@ Draggable, scroll-to-scale (0.5x to 3.0x) split-flap clock with tactile 3D alarm
 | Layer | Technology | Notes |
 |:------|:-----------|:------|
 | **UI** | React 18 + Vite | Blazing-fast HMR |
-| **Styling** | Tailwind CSS v3 | CSS-variable theming, `--root-font-size` cascade |
+| **Styling** | Tailwind CSS v3 | CSS-variable theming; fixed 16px root keeps spacing pixel-crisp, text scales separately via `--text-scale` |
 | **Animation** | Framer Motion | Shared-layout morphing + flip-card clock |
 | **Drag & Drop** | @dnd-kit/core + sortable | Kanban + todo reorder |
 | **State** | Zustand | Feature slices, no boilerplate |
@@ -166,7 +166,7 @@ Draggable, scroll-to-scale (0.5x to 3.0x) split-flap clock with tactile 3D alarm
 | **AI** | `@google/generative-ai` (`gemini-2.5-flash` cascade) | Function-calling with full write access; auto-fallback on "high demand" |
 | **Security & Crypto** | Web Crypto API + Electron safeStorage | PBKDF2 (100k iter) + AES-GCM 256-bit encryption |
 | **Audio & SFX** | Web Audio API | Zero-latency synthesized chimes & UI audioFX |
-| **Testing** | Vitest 2 + ESLint 10 | 411 unit tests across 25 suites; zero lint warnings |
+| **Testing** | Vitest 2 + ESLint 10 | 534 unit tests across 45 suites; zero lint errors or warnings |
 | **Desktop** | Electron + electron-builder + electron-updater | Multi-OS builds |
 | **NL Parsing** | chrono-node | *"tomorrow 5pm for 2h"* → Date objects |
 | **CI/CD** | GitHub Actions | Auto-merge dev→master, multi-OS matrix, changelog |

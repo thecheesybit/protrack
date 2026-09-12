@@ -130,7 +130,7 @@ export function SettingsPanel() {
                   <h3 className="font-display font-bold tracking-tight text-ink text-base">
                     Settings
                   </h3>
-                  <p className="font-mono text-[0.625rem] uppercase tracking-widest text-muted">
+                  <p className="font-mono text-[calc(0.625rem*var(--text-scale,1))] uppercase tracking-widest text-muted">
                     PRO TRACK v{APP_VERSION}
                   </p>
                 </div>
@@ -140,7 +140,7 @@ export function SettingsPanel() {
               <nav className="flex flex-row gap-1 overflow-x-auto p-2 md:flex-col md:overflow-y-auto md:p-4 no-scrollbar">
                 {TAB_GROUPS.map((group) => (
                   <div key={group.group} className="flex flex-row md:flex-col shrink-0 gap-1 md:mb-3">
-                    <span className="hidden md:block font-mono text-[0.625rem] font-bold uppercase tracking-widest text-muted/60 px-3.5 pt-1.5 pb-1 select-none">
+                    <span className="hidden md:block font-mono text-[calc(0.625rem*var(--text-scale,1))] font-bold uppercase tracking-widest text-muted/60 px-3.5 pt-1.5 pb-1 select-none">
                       {group.group}
                     </span>
 
@@ -206,7 +206,7 @@ export function SettingsPanel() {
                     <h2 className="font-display text-xl sm:text-2xl font-bold tracking-tight text-ink truncate leading-tight">
                       {currentTab.label}
                     </h2>
-                    <p className="font-mono text-[0.6875rem] uppercase tracking-widest text-muted mt-0.5">
+                    <p className="font-mono text-[calc(0.6875rem*var(--text-scale,1))] uppercase tracking-widest text-muted mt-0.5">
                       {currentGroup} · Preferences
                     </p>
                   </div>
@@ -220,7 +220,7 @@ export function SettingsPanel() {
                   title="Close Settings (Esc)"
                 >
                   <span className="hidden sm:inline font-sans text-xs">Close</span>
-                  <kbd className="font-mono text-[0.625rem] text-muted/70 px-1 py-0.5 rounded border border-line/60 bg-surface">
+                  <kbd className="font-mono text-[calc(0.625rem*var(--text-scale,1))] text-muted/70 px-1 py-0.5 rounded border border-line/60 bg-surface">
                     ESC
                   </kbd>
                   <X className="h-3.5 w-3.5" />

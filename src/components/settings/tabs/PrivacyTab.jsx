@@ -1,6 +1,5 @@
 import { Shield, Lock, Cpu, Cloud, Calendar, Mic, FileText, CheckCircle2 } from 'lucide-react'
 import { APP_VERSION } from '@/lib/version'
-import { CREATOR } from '@/lib/constants'
 import { SettingsSection, SettingsCard, SettingsBadge } from '../SettingsUI'
 
 const PRIVACY_PILLARS = [
@@ -133,7 +132,7 @@ export function PrivacyTab({ appInfo }) {
               <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
               <span>Full user data sovereignty guaranteed</span>
             </div>
-            <span className="font-mono text-[0.6875rem] text-muted/80">
+            <span className="font-mono text-[calc(0.6875rem*var(--text-scale,1))] text-muted/80">
               Version {appInfo?.version || APP_VERSION} · ProTrack
             </span>
           </div>

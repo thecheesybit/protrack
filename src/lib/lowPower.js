@@ -17,7 +17,9 @@ export function setLowPowerMode(enabled) {
   try {
     localStorage.setItem(LOW_POWER_STORAGE_KEY, enabled ? 'true' : 'false')
     window.dispatchEvent(new CustomEvent(LOW_POWER_EVENT, { detail: { enabled } }))
-  } catch {}
+  } catch {
+    // localStorage unavailable (private mode, quota) — preference just won't persist
+  }
 }
 
 export function useLowPowerMode() {

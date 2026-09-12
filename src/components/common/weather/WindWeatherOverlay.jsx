@@ -21,28 +21,34 @@ export const WindWeatherOverlay = memo(function WindWeatherOverlay({
   const isWinter = seasonId === 'shishir' || seasonId === 'hemant'
   const isMonsoon = seasonId === 'varsha'
 
+  // Higher windSpeed → shorter animation duration (faster drift). 16 km/h is
+  // the prop default and the speed the base durations below were tuned for,
+  // so it maps to a 1x factor; clamped so a calm 8 km/h doesn't crawl to a
+  // stop and a 48 km/h squall doesn't turn into a strobe.
+  const speedFactor = Math.min(1.8, Math.max(0.45, 16 / (windSpeed || 16)))
+
   // Stable particle dataset: prevents animation pops or resets when weather values update
   const particles = useMemo(() => {
     return Array.from({ length: 18 }, (_, i) => ({
       id: i,
       top: `${15 + (i * 7.5 + (i % 3) * 4) % 70}%`,
-      dur: 16 + (i % 5) * 4,
+      dur: (16 + (i % 5) * 4) * speedFactor,
       delay: (i * 1.8) % 12,
       scale: 0.7 + (i % 3) * 0.25,
       driftY: (i % 2 === 0 ? 1 : -1) * (12 + (i % 4) * 8),
       isGustOnly: i >= 10,
     }))
-  }, [])
+  }, [speedFactor])
 
   // Aerodynamic wind streamlines that surge during gusts
   const windLines = useMemo(() => {
     if (!hasWindGusts) return []
     return [
-      { id: 1, top: '22%', dur: 8, delay: 0 },
-      { id: 2, top: '46%', dur: 6.5, delay: 2.5 },
-      { id: 3, top: '68%', dur: 7.5, delay: 4.8 },
+      { id: 1, top: '22%', dur: 8 * speedFactor, delay: 0 },
+      { id: 2, top: '46%', dur: 6.5 * speedFactor, delay: 2.5 },
+      { id: 3, top: '68%', dur: 7.5 * speedFactor, delay: 4.8 },
     ]
-  }, [hasWindGusts])
+  }, [hasWindGusts, speedFactor])
 
   return (
     <div

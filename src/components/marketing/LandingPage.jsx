@@ -234,7 +234,7 @@ export function LandingPage() {
               {CREATOR.name}
             </a>
           </p>
-          <p className="text-[0.7rem] text-muted/70">PRO TRACK — a calm, all-in-one productivity workspace.</p>
+          <p className="text-[calc(0.7rem*var(--text-scale,1))] text-muted/70">PRO TRACK — a calm, all-in-one productivity workspace.</p>
         </footer>
       </div>
     </div>

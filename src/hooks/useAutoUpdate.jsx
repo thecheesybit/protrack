@@ -55,7 +55,9 @@ export function useAutoUpdate() {
           if (typeof localStorage !== 'undefined') {
             isManual = localStorage.getItem('protrack:update_mode') === 'manual'
           }
-        } catch {}
+        } catch {
+          // localStorage unavailable — fall through to automatic-mode default
+        }
 
         st().reportUpdateAvailable(p?.version)
 

@@ -2,7 +2,7 @@ import { memo, useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ymd } from '@/lib/dates'
 import { cn } from '@/utils/cn'
-import { SpriteTree, SpriteFoliage, getSessionFoliageSeed, formatFloraBreakdown } from './ForestSprites'
+import { SpriteFoliage, getSessionFoliageSeed } from './ForestSprites'
 
 export { SpriteTree, SpriteFoliage, getSessionFoliageSeed, formatFloraBreakdown } from './ForestSprites'
 
@@ -469,7 +469,7 @@ export function DayGrove({
                     : 'pine'
                   : speciesList[idx % speciesList.length]
 
-              let h = 84
+              let h
               if (pType === 'flower') {
                 const fFactors = [0.94, 1.06, 0.96, 1.08]
                 h = Math.round(34 * fFactors[idx % fFactors.length])
@@ -517,7 +517,7 @@ export function DayGrove({
                 >
                   <SpriteFoliage
                     type={pType}
-                    species="all"
+                    species={species}
                     variant={getSessionFoliageSeed(s, idx)}
                     height={h}
                     delay={Math.min(0.35, idx * 0.04)}

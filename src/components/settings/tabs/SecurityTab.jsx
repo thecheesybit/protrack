@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Shield, ShieldCheck, Loader2, Lock, X, KeyRound, Minimize2, Power } from 'lucide-react'
+import { Shield, ShieldCheck, Loader2, Lock, X, Minimize2, Power } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/utils/cn'
 import {

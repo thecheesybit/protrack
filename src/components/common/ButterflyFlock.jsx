@@ -1,4 +1,4 @@
-import { memo, useState, useEffect, useRef } from 'react'
+import { memo, useState, useEffect } from 'react'
 
 const rnd = (min, max) => min + Math.random() * (max - min)
 const uid = () => Math.random().toString(36).slice(2)

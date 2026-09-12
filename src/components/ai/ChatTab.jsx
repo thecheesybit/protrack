@@ -90,7 +90,9 @@ function loadSavedMessages(uid) {
 function saveMessages(uid, msgs) {
   try {
     localStorage.setItem(getChatStorageKey(uid), JSON.stringify(msgs.slice(-50)))
-  } catch {}
+  } catch {
+    // localStorage unavailable (private mode, quota) — chat history just won't persist
+  }
 }
 
 export function ChatTab({ onOpenSettings, onToggleVoiceNote }) {
@@ -120,7 +122,9 @@ export function ChatTab({ onOpenSettings, onToggleVoiceNote }) {
     setMessages([])
     try {
       localStorage.removeItem(getChatStorageKey(user?.uid))
-    } catch {}
+    } catch {
+      // localStorage unavailable — in-memory state is already cleared above
+    }
     toast.success('Chat history cleared')
   }
 

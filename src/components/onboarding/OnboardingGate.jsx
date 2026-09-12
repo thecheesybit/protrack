@@ -40,7 +40,7 @@ function PolicyBlock({ icon: Icon, doc }) {
       <div className="space-y-3">
         {doc.sections.map((s) => (
           <div key={s.heading}>
-            <h4 className="text-[0.8rem] font-semibold text-ink/90">{s.heading}</h4>
+            <h4 className="text-[calc(0.8rem*var(--text-scale,1))] font-semibold text-ink/90">{s.heading}</h4>
             <p className="text-xs leading-relaxed text-muted">{s.body}</p>
           </div>
         ))}
@@ -205,7 +205,7 @@ export function OnboardingGate() {
                           <Icon className="h-5 w-5" />
                         </span>
                         <span className="text-sm font-semibold text-ink">{preset.name}</span>
-                        <span className="text-[0.7rem] leading-snug text-muted">{preset.blurb}</span>
+                        <span className="text-[calc(0.7rem*var(--text-scale,1))] leading-snug text-muted">{preset.blurb}</span>
                         <span
                           className={`absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full transition-opacity ${
                             on ? 'bg-accent text-white opacity-100' : 'opacity-0'

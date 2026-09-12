@@ -59,17 +59,6 @@ function persistCollapsed(id, val) {
   }
 }
 
-const LEGENDS_ENABLED_KEY = 'protrack:timetable_legends_enabled'
-function readInitialLegendsEnabled() {
-  try {
-    if (typeof localStorage === 'undefined') return false
-    const val = localStorage.getItem(LEGENDS_ENABLED_KEY)
-    return val === 'true'
-  } catch {
-    return false
-  }
-}
-
 export const createUiSlice = (set, get) => ({
   maximizedWidgetId: null,
   activeWidgetId: 'timetable',
@@ -82,22 +71,15 @@ export const createUiSlice = (set, get) => ({
   fontScale: readInitialFontScale(),
   fontFamily: readInitialFontFamily(),
 
-  // Timetable dynamic hover inspector & subject legends
+  // Timetable dynamic hover inspector
   hoveredTimetableItem: null, // { type: 'slot'|'event'|'task', data, subject } | null
   hoveredSubjectId: null, // string | null (to highlight all slots of this subject)
-  timetableLegendsPinned: typeof localStorage !== 'undefined' && localStorage.getItem('protrack:timetable_legends_pinned') === 'true',
-  timetableLegendsExpanded: false,
 
   // Workspaces & Widgets bottom dock state
   bottomDockOpen: false,
   setBottomDockOpen: (open) => {
     const next = typeof open === 'function' ? open(get().bottomDockOpen) : Boolean(open)
-    if (next) {
-      // Mutual exclusion: opening bottom dock closes timetable legends
-      set({ bottomDockOpen: true, timetableLegendsExpanded: false })
-    } else {
-      set({ bottomDockOpen: false })
-    }
+    set({ bottomDockOpen: next })
   },
 
   // Selected Scope Dropdown state
@@ -105,8 +87,7 @@ export const createUiSlice = (set, get) => ({
   setScopeDropdownOpen: (open) => {
     const next = typeof open === 'function' ? open(get().scopeDropdownOpen) : Boolean(open)
     if (next) {
-      // While scope dropdown is open, legend always closes and cannot open
-      set({ scopeDropdownOpen: true, timetableLegendsExpanded: false })
+      set({ scopeDropdownOpen: true })
     } else {
       // When scope list goes back up, pill reappears!
       set({ scopeDropdownOpen: false, modeRailOpen: true })
@@ -117,13 +98,7 @@ export const createUiSlice = (set, get) => ({
   modeRailOpen: true,
   setModeRailOpen: (open) => {
     const next = typeof open === 'function' ? open(get().modeRailOpen) : Boolean(open)
-    if (next) {
-      // If pill opens, legend closes
-      set({ modeRailOpen: true, timetableLegendsExpanded: false })
-    } else {
-      // Both can be closed at the same time
-      set({ modeRailOpen: false })
-    }
+    set({ modeRailOpen: next })
   },
 
   setActiveWidgetId: (activeWidgetId) => set({ activeWidgetId }),
@@ -132,76 +107,6 @@ export const createUiSlice = (set, get) => ({
 
   setHoveredTimetableItem: (hoveredTimetableItem) => set({ hoveredTimetableItem }),
   setHoveredSubjectId: (hoveredSubjectId) => set({ hoveredSubjectId }),
-  setTimetableLegendsPinned: (timetableLegendsPinned) => {
-    try {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('protrack:timetable_legends_pinned', timetableLegendsPinned ? 'true' : 'false')
-      }
-    } catch { /* private mode */ }
-    set({ timetableLegendsPinned })
-  },
-
-  // L key toggle for legends on / off
-  timetableLegendsEnabled: readInitialLegendsEnabled(),
-  setTimetableLegendsEnabled: (enabled) => {
-    const next = typeof enabled === 'function' ? enabled(get().timetableLegendsEnabled) : Boolean(enabled)
-    try {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(LEGENDS_ENABLED_KEY, next ? 'true' : 'false')
-      }
-    } catch { /* private mode */ }
-    if (!next) {
-      // When toggled off, legend closes and remains closed
-      set({ timetableLegendsEnabled: false, timetableLegendsExpanded: false })
-    } else {
-      // When toggled on, enable and expand legends (unless selecting scope)
-      if (get().scopeDropdownOpen) {
-        set({ timetableLegendsEnabled: true })
-        return
-      }
-      set({
-        timetableLegendsEnabled: true,
-        timetableLegendsExpanded: true,
-        modeRailOpen: false,
-        bottomDockOpen: false,
-      })
-    }
-  },
-  toggleTimetableLegends: () => {
-    const enabled = get().timetableLegendsEnabled
-    const expanded = get().timetableLegendsExpanded
-    if (!enabled) {
-      // Toggled off -> turn on and expand
-      get().setTimetableLegendsEnabled(true)
-    } else if (expanded) {
-      // Toggled on & expanded -> turn off and close
-      get().setTimetableLegendsEnabled(false)
-    } else {
-      // Toggled on but closed -> expand
-      get().setTimetableLegendsExpanded(true)
-    }
-  },
-
-  setTimetableLegendsExpanded: (open) => {
-    const next = typeof open === 'function' ? open(get().timetableLegendsExpanded) : Boolean(open)
-    if (next) {
-      // Guard: if legends are toggled off, or while selecting scope, legend CANNOT open
-      if (!get().timetableLegendsEnabled || get().scopeDropdownOpen) {
-        set({ timetableLegendsExpanded: false })
-        return
-      }
-      // If legend opens and pill is open, pill closes
-      // Both can't be open at the same time
-      set({
-        timetableLegendsExpanded: true,
-        modeRailOpen: false,
-        bottomDockOpen: false,
-      })
-    } else {
-      // Both can be closed at the same time
-      set({ timetableLegendsExpanded: false })
-    }
-  },
 
   // Day synchronization across Timetable, To-dos, and other day-linked widgets
   selectedDate: ymd(new Date()),

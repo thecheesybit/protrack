@@ -164,7 +164,9 @@ export function setSeasonOverride(seasonId) {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event(CLIMATE_OVERRIDE_EVENT))
     }
-  } catch {}
+  } catch {
+    // localStorage unavailable (private mode, quota) — override just won't persist
+  }
 }
 
 export function readWeatherOverride() {
@@ -188,7 +190,9 @@ export function setWeatherOverride(condition) {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event(CLIMATE_OVERRIDE_EVENT))
     }
-  } catch {}
+  } catch {
+    // localStorage unavailable (private mode, quota) — override just won't persist
+  }
 }
 
 export function isWeatherEffectsEnabled() {
@@ -208,7 +212,9 @@ export function setWeatherEffectsEnabled(enabled) {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event(CLIMATE_OVERRIDE_EVENT))
     }
-  } catch {}
+  } catch {
+    // localStorage unavailable (private mode, quota) — override just won't persist
+  }
 }
 
 /**
@@ -271,7 +277,7 @@ export function computeWeatherState(seasonId = 'shishir', now = new Date()) {
   const roll2 = pseudoRandom(seed + 1337)
   const roll3 = pseudoRandom(seed + 9999)
 
-  let condition = 'clear'
+  let condition
   let intensity = 'light'
   let isRaining = false
   let hasFog = false
