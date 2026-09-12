@@ -1,6 +1,6 @@
 # Changelog
 
-## v2.8.3 — 2026-09-12
+## v2.9.0 — 2026-09-12
 
 ### 🔔 Notification System Overhaul & User Controls
 - **Dedicated Notifications Tab in Settings**: Elevated Notifications to a first-class settings tab with a master desktop toggle (ON/OFF) and granular category controls for Scheduled Alarms, Deep Focus, Deadlines & Notes, and Hydration Alerts.
