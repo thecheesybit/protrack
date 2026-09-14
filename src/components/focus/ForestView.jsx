@@ -1,6 +1,6 @@
-import { MonthlyForest, FullScreenForestModal } from './MonthlyForest'
+import { MonthlyForest } from './MonthlyForest'
 
-export { MonthlyForest, FullScreenForestModal }
+export { MonthlyForest }
 
 /**
  * ForestView component rendering the complete botanical forest grove.

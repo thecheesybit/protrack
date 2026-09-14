@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { X, Play } from 'lucide-react'
 import { useStore } from '@/store/useStore'
+import { resumableSessionMatches } from '@/lib/focusPersistence'
 
 /**
  * Distraction-free overlay opened from a timetable slot (or subject).
@@ -13,8 +14,18 @@ export function FocusPanel() {
   const maximizeWidget = useStore((s) => s.maximizeWidget)
   const startFocus = useStore((s) => s.startFocus)
   const activeModeId = useStore((s) => s.activeModeId)
+  const resumableSession = useStore((s) => s.resumableSession)
+  const resumeFocusSession = useStore((s) => s.resumeFocusSession)
 
   const start = () => {
+    // Resume an interrupted session instead of starting fresh when this is
+    // the exact same slot/todo it was crash-recovered from.
+    if (resumableSessionMatches(resumableSession, { slotId: ctx.slotId, todoId: ctx.todoId })) {
+      resumeFocusSession()
+      maximizeWidget('focus')
+      closeFocus()
+      return
+    }
     startFocus({
       label: ctx.title,
       color: ctx.color,

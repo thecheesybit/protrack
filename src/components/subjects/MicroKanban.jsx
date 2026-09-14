@@ -19,10 +19,11 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Plus, X, GripVertical, Flag, StickyNote, ChevronDown, Calendar, Pencil, Copy } from 'lucide-react'
+import { Plus, X, GripVertical, Flag, StickyNote, ChevronDown, Calendar, Pencil, Copy, ListTodo } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
 import { useTasks } from '@/hooks/useSubjects'
+import { useTodos } from '@/hooks/useWellness'
 import {
   addTask,
   updateTask,
@@ -30,6 +31,8 @@ import {
   setSubjectProgress,
   reorderTasks,
 } from '@/services/subjectService'
+import { updateTodo, deleteTodo, reorderTodos } from '@/services/todoService'
+import { mergeSubjectCards } from '@/lib/kanbanMerge'
 import { addLedgerEntry } from '@/services/ledgerService'
 import { getPriority, nextPriority, PRIORITIES } from '@/lib/priority'
 import { classifyDeadline } from '@/lib/deadlines'
@@ -136,6 +139,13 @@ function TaskCard({ task, index, onDelete, onUpdate, onDuplicate, dragging }) {
         </button>
         <div className="min-w-0 flex-1 flex items-start gap-1.5">
           <span className="text-muted/50 font-mono text-[10px] mt-0.5 select-none shrink-0">{index + 1}.</span>
+          {task._kind === 'todo' && (
+            <ListTodo
+              className="mt-0.5 h-3 w-3 shrink-0 text-sky-400"
+              aria-label="From your general to-dos"
+              title="From your general to-dos"
+            />
+          )}
           {editing ? (
             <input
               autoFocus
@@ -186,15 +196,17 @@ function TaskCard({ task, index, onDelete, onUpdate, onDuplicate, dragging }) {
         >
           <Pencil className="h-3 w-3" />
         </button>
-        <button
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); onDuplicate(task) }}
-          className="mt-0.5 opacity-0 transition-opacity group-hover/card:opacity-100 text-muted hover:text-ink"
-          aria-label="Duplicate card"
-          title="Duplicate"
-        >
-          <Copy className="h-3 w-3" />
-        </button>
+        {onDuplicate && (
+          <button
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onDuplicate(task) }}
+            className="mt-0.5 opacity-0 transition-opacity group-hover/card:opacity-100 text-muted hover:text-ink"
+            aria-label="Duplicate card"
+            title="Duplicate"
+          >
+            <Copy className="h-3 w-3" />
+          </button>
+        )}
         <button
           onPointerDown={(e) => e.stopPropagation()}
           onClick={() => onDelete(task.id)}
@@ -314,7 +326,7 @@ function Column({ col, tasks, onAdd, onDelete, onUpdate, onDuplicate }) {
                 index={idx}
                 onDelete={onDelete}
                 onUpdate={(patch) => onUpdate(t.id, patch)}
-                onDuplicate={onDuplicate}
+                onDuplicate={t._kind === 'todo' ? undefined : onDuplicate}
               />
             ))}
           </div>
@@ -349,7 +361,12 @@ function Column({ col, tasks, onAdd, onDelete, onUpdate, onDuplicate }) {
 export function MicroKanban({ modeId, subjectId, subjectName }) {
   const { user } = useAuth()
   const tasks = useTasks(modeId, subjectId)
+  const todos = useTodos()
   const [activeId, setActiveId] = useState(null)
+
+  // Unified board: this subject's own Kanban tasks + any general todo linked
+  // to it (todo.subjectId === subjectId) — see lib/kanbanMerge.js.
+  const cards = useMemo(() => mergeSubjectCards(tasks, todos, subjectId), [tasks, todos, subjectId])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -366,28 +383,41 @@ export function MicroKanban({ modeId, subjectId, subjectName }) {
       notes: task.notes || '',
       dueAt: task.dueAt || null,
     })
-  const del = (taskId) => {
-    deleteTask(user.uid, modeId, subjectId, taskId)
-    const remaining = tasks.filter((t) => t.id !== taskId)
+  const del = (cardId) => {
+    const card = cards.find((c) => c.id === cardId)
+    if (!card) return
+    if (card._kind === 'todo') deleteTodo(user.uid, cardId)
+    else deleteTask(user.uid, modeId, subjectId, cardId)
+
+    const remaining = cards.filter((c) => c.id !== cardId)
     const total = remaining.length
-    const done = remaining.filter((t) => t.column === 'done').length
+    const done = remaining.filter((c) => c.column === 'done').length
     const pct = total ? Math.round((done / total) * 100) : 0
     setSubjectProgress(user.uid, modeId, subjectId, pct)
   }
-  const upd = (taskId, patch) => updateTask(user.uid, modeId, subjectId, taskId, patch)
+  const upd = (cardId, patch) => {
+    const card = cards.find((c) => c.id === cardId)
+    if (!card) return
+    if (card._kind === 'todo') {
+      // Cards are normalized to `.title`; a merged todo stores it as `.text`.
+      const { title, ...rest } = patch
+      return updateTodo(user.uid, cardId, title !== undefined ? { ...rest, text: title } : rest)
+    }
+    return updateTask(user.uid, modeId, subjectId, cardId, patch)
+  }
 
-  /** Find which column a draggable id belongs to (task id OR column id). */
+  /** Find which column a draggable id belongs to (card id OR column id). */
   const findColumnFor = (id) => {
     if (COLUMNS.some((c) => c.id === id)) return id
-    const t = tasks.find((x) => x.id === id)
-    return t?.column
+    const c = cards.find((x) => x.id === id)
+    return c?.column
   }
 
   const onDragEnd = ({ active, over }) => {
     setActiveId(null)
     if (!over) return
 
-    const task = tasks.find((t) => t.id === active.id)
+    const task = cards.find((c) => c.id === active.id)
     if (!task) return
 
     const targetCol = findColumnFor(over.id)
@@ -396,17 +426,21 @@ export function MicroKanban({ modeId, subjectId, subjectName }) {
     // Case 1: dropping on a different column → move + recompute progress.
     if (task.column !== targetCol) {
       if (targetCol === 'done') playSuccess()
-      
-      updateTask(user.uid, modeId, subjectId, task.id, {
-        column: targetCol,
-        order: Date.now(),
-      })
+
+      if (task._kind === 'todo') {
+        updateTodo(user.uid, task.id, { subjectColumn: targetCol, done: targetCol === 'done' })
+      } else {
+        updateTask(user.uid, modeId, subjectId, task.id, {
+          column: targetCol,
+          order: Date.now(),
+        })
+      }
 
       const crossesDone = targetCol === 'done' || task.column === 'done'
       if (crossesDone) {
-        const total = tasks.length
+        const total = cards.length
         const doneAfter =
-          tasks.filter((t) => t.id !== task.id && t.column === 'done').length +
+          cards.filter((c) => c.id !== task.id && c.column === 'done').length +
           (targetCol === 'done' ? 1 : 0)
         const pct = total ? Math.round((doneAfter / total) * 100) : 0
         setSubjectProgress(user.uid, modeId, subjectId, pct)
@@ -433,17 +467,24 @@ export function MicroKanban({ modeId, subjectId, subjectName }) {
       return
     }
 
-    // Case 2: same-column reorder.
+    // Case 2: same-column reorder. Tasks and todos live in separate
+    // collections with independent `order` sequences, so each kind's batch
+    // reorder is re-applied to just its own subset in the new relative
+    // order — exact between-kind interleaving isn't guaranteed, but moving
+    // a card between columns (the main point of merging them in) always is.
     if (active.id === over.id) return
-    const colTasks = tasks.filter((t) => t.column === targetCol)
-    const oldIndex = colTasks.findIndex((t) => t.id === active.id)
-    const newIndex = colTasks.findIndex((t) => t.id === over.id)
+    const colCards = cards.filter((c) => c.column === targetCol)
+    const oldIndex = colCards.findIndex((c) => c.id === active.id)
+    const newIndex = colCards.findIndex((c) => c.id === over.id)
     if (oldIndex < 0 || newIndex < 0) return
-    const reordered = arrayMove(colTasks, oldIndex, newIndex)
-    reorderTasks(user.uid, modeId, subjectId, reordered.map((t) => t.id))
+    const reordered = arrayMove(colCards, oldIndex, newIndex)
+    const reorderedTaskIds = reordered.filter((c) => c._kind === 'task').map((c) => c.id)
+    const reorderedTodoIds = reordered.filter((c) => c._kind === 'todo').map((c) => c.id)
+    if (reorderedTaskIds.length) reorderTasks(user.uid, modeId, subjectId, reorderedTaskIds)
+    if (reorderedTodoIds.length) reorderTodos(user.uid, reorderedTodoIds)
   }
 
-  const activeTask = tasks.find((t) => t.id === activeId)
+  const activeTask = cards.find((c) => c.id === activeId)
 
   return (
     <DndContext
@@ -460,7 +501,7 @@ export function MicroKanban({ modeId, subjectId, subjectName }) {
             <Column
               key={col.id}
               col={col}
-              tasks={tasks.filter((t) => t.column === col.id)}
+              tasks={cards.filter((c) => c.column === col.id)}
               onAdd={add}
               onDelete={del}
               onUpdate={upd}

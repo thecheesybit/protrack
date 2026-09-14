@@ -37,6 +37,8 @@ import { HelpModal } from '@/components/common/HelpModal'
 import { WhatsNewModal } from '@/components/common/WhatsNewModal'
 import { useHourlyChime } from '@/hooks/useHourlyChime'
 import { useAlarmWatcher } from '@/hooks/useAlarmWatcher'
+import { useTopicMappingBatch } from '@/hooks/useTopicMappingBatch'
+import { useFocusRecovery } from '@/hooks/useFocusRecovery'
 import { AlarmModal } from '@/components/alarm/AlarmModal'
 import { AlarmRingingBanner } from '@/components/alarm/AlarmRingingBanner'
 import { WeatherPlaygroundModal } from '@/components/common/weather/WeatherPlaygroundModal'
@@ -143,6 +145,8 @@ export function Dashboard() {
   useCalendarSync()  // two-way Google Calendar sync while the app is open (P2)
   useHourlyChime()   // rings temple bell on every :00 and pushes mindful island pill
   useAlarmWatcher()  // monitors scheduled alarms and triggers audio + visual overlay
+  useFocusRecovery() // restores an interrupted Deep Focus session after a crash/relaunch
+  useTopicMappingBatch() // daily AI re-rank of flagged subjects' topic queues (no-op without a key)
 
   // In-app keyboard shortcuts
   useEffect(() => {

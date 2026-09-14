@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { addLedgerEntry } from '@/services/ledgerService'
+import { getTodosOnce, updateTodo } from '@/services/todoService'
 
 const subjectsCol = (uid, modeId) =>
   collection(db, 'users', uid, 'modes', modeId, 'subjects')
@@ -102,6 +103,72 @@ export function subscribeToTasks(uid, modeId, subjectId, callback) {
   })
 }
 
+/**
+ * One-shot tasks fetch (mirrors {@link getSubjectsOnce}) — for the Deep Focus
+ * session->topic mapping suggestion, computed once at session completion
+ * rather than via a standing listener.
+ */
+export async function getTasksOnce(uid, modeId, subjectId) {
+  const snap = await getDocs(tasksCol(uid, modeId, subjectId))
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+}
+
+/**
+ * Overall completion for a subject's unified board: its own Kanban tasks PLUS
+ * any general todo merged into it via `todo.subjectId` (see MicroKanban /
+ * lib/kanbanMerge.js) — so finishing a merged todo moves the same progress
+ * bar finishing a task would, and vice versa.
+ */
+export async function computeSubjectProgressPct(uid, modeId, subjectId) {
+  const [tasks, todos] = await Promise.all([
+    getTasksOnce(uid, modeId, subjectId),
+    getTodosOnce(uid),
+  ])
+  const subjectTodos = todos.filter((t) => t.subjectId === subjectId)
+  const total = tasks.length + subjectTodos.length
+  if (total === 0) return 0
+  const done =
+    tasks.filter((t) => t.column === 'done').length +
+    subjectTodos.filter((t) => t.done).length
+  return Math.round((done / total) * 100)
+}
+
+/**
+ * Marks one task done and recomputes the subject's progress in the same pass
+ * — used when a Deep Focus session's topic mapping is confirmed at
+ * session-end, where the caller has no local `tasks` array to recompute
+ * progress from the way MicroKanban's drag-drop handler does.
+ */
+export async function completeTaskAndRecomputeProgress(uid, modeId, subjectId, taskId) {
+  await updateTask(uid, modeId, subjectId, taskId, { column: 'done' })
+  const pct = await computeSubjectProgressPct(uid, modeId, subjectId)
+  await setSubjectProgress(uid, modeId, subjectId, pct)
+}
+
+/**
+ * Same as {@link completeTaskAndRecomputeProgress} but for a general todo
+ * merged into a subject's board — used by SessionCompleteModal when the
+ * confirmed mapping target is a todo rather than a Kanban task.
+ */
+export async function completeTodoAndRecomputeProgress(uid, modeId, subjectId, todoId) {
+  await updateTodo(uid, todoId, { done: true })
+  if (!modeId || !subjectId) return
+  const pct = await computeSubjectProgressPct(uid, modeId, subjectId)
+  await setSubjectProgress(uid, modeId, subjectId, pct)
+}
+
+/**
+ * Flags a subject's topic queue as needing the AI batch pass (see
+ * useTopicMappingBatch) — set when a live session-end mapping is edited away
+ * from the deterministic FIFO suggestion, the signal that plain order isn't
+ * tracking this subject's actual class flow.
+ */
+export async function setMappingNeedsReview(uid, modeId, subjectId, needsReview = true) {
+  return updateSubject(uid, modeId, subjectId, { mappingNeedsReview: needsReview })
+}
+
 export async function addTask(uid, modeId, subjectId, { title, column, priority, notes, dueAt }) {
   return addDoc(tasksCol(uid, modeId, subjectId), {
     title,
@@ -173,15 +240,10 @@ export async function addTasksBulk(uid, modeId, subjectId, titles, opts = {}) {
     await batch.commit()
   }
 
-  // Recompute progress once
+  // Recompute progress once (tasks + any merged subject-linked todos)
   try {
-    const snap = await getDocs(tasksCol(uid, modeId, subjectId))
-    if (!snap.empty) {
-      const total = snap.docs.length
-      const done = snap.docs.filter((d) => d.data().column === 'done').length
-      const pct = Math.round((done / total) * 100)
-      await setSubjectProgress(uid, modeId, subjectId, pct)
-    }
+    const pct = await computeSubjectProgressPct(uid, modeId, subjectId)
+    await setSubjectProgress(uid, modeId, subjectId, pct)
   } catch (err) {
     console.warn('[subjectService] bulk task progress recompute error:', err)
   }

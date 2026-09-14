@@ -22,7 +22,7 @@ export const createFocusSlice = (set) => ({
   // Phase 1.1: New State payloads
   focusLocked: false,
   pipActive: false,
-  congratulations: null, // { durationMin, label, timestamp } | null
+  congratulations: null, // { durationMin, plantings, counts, label, timestamp, modeId, subjectId, topicSuggestion, topicCandidates } | null
   customTimerSetting: { work: DEFAULT_FOCUS * 60, break: DEFAULT_BREAK * 60 },
   volume: 0.5,
   audioTracks: { ambient1: 'off', ambient2: 'off', ytTrack: '' },
@@ -78,6 +78,41 @@ export const createFocusSlice = (set) => ({
   setSceneVideoError: (v) => set({ sceneVideoError: Boolean(v) }),
   clearCongratulations: () => set({ congratulations: null }),
 
+  // A snapshot (from lib/focusPersistence) of a session that was still
+  // running/paused the last time this device wrote one, discovered by
+  // useFocusRecovery on boot. Non-null means "there is a pending interrupted
+  // session the user hasn't resumed or discarded yet" — read by the calendar
+  // "click the same slot/todo to resume" entry points and by the boot-time
+  // resume/discard prompt. Cleared the moment it's resumed, discarded, or
+  // superseded by a fresh startFocus().
+  resumableSession: null,
+  setResumableSession: (snapshot) => set({ resumableSession: snapshot }),
+  discardResumableSession: () => set({ resumableSession: null }),
+  resumeFocusSession: () =>
+    set((s) => {
+      const snap = s.resumableSession
+      if (!snap) return {}
+      // Snapshot comes from localStorage (untrusted/external) — fall back to
+      // sane defaults rather than trust it to carry valid numbers.
+      const fallbackSec = DEFAULT_FOCUS * 60
+      const phaseTotalSec =
+        typeof snap.phaseTotalSec === 'number' && snap.phaseTotalSec > 0 ? snap.phaseTotalSec : fallbackSec
+      const secondsLeft =
+        typeof snap.secondsLeft === 'number' && snap.secondsLeft >= 0
+          ? Math.min(snap.secondsLeft, phaseTotalSec)
+          : phaseTotalSec
+      return {
+        status: 'paused',
+        phase: snap.phase === 'break' ? 'break' : 'focus',
+        session: snap.session || null,
+        startedAt: snap.startedAt || Date.now(),
+        phaseTotalSec,
+        secondsLeft,
+        focusLocked: true,
+        resumableSession: null,
+      }
+    }),
+
   setMuted: (muted) => set({ muted }),
   toggleMute: () => set((s) => ({ muted: !s.muted })),
 
@@ -96,6 +131,8 @@ export const createFocusSlice = (set) => ({
         phaseTotalSec: startingSeconds,
         startedAt: Date.now(),
         focusLocked: true,
+        // A fresh session supersedes any pending-but-unresolved recovery snapshot.
+        resumableSession: null,
       };
     }),
 

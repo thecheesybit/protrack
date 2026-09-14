@@ -9,6 +9,7 @@ import { snoozeCheckins } from '@/hooks/useCheckIns'
 import { snoozeHabitCue } from '@/hooks/useHabitReminders'
 import { CheckinPromptBody } from './CheckinPromptBody'
 import { RoutinePromptBody } from './RoutinePromptBody'
+import { FocusResumePromptBody } from './FocusResumePromptBody'
 
 /**
  * Screen-center blur overlay for prompts that need an answer — daily check-ins
@@ -24,6 +25,7 @@ import { RoutinePromptBody } from './RoutinePromptBody'
 const BODIES = {
   checkin: CheckinPromptBody,
   routine: RoutinePromptBody,
+  'focus-resume': FocusResumePromptBody,
 }
 
 export function CenterPrompt() {

@@ -1,13 +1,31 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
+import { useTodos } from '@/hooks/useWellness'
 import { playChime, playEventSound, MultiTrackMixer } from '@/lib/audioEngine'
 import { notify, ensureNotificationPermission } from '@/lib/notify'
 import { logFocusSession } from '@/services/focusService'
 import { addLedgerEntry } from '@/services/ledgerService'
-import { updateTodo } from '@/services/todoService'
 import { toggleSlotCompletion } from '@/services/timetableService'
+import { getTasksOnce } from '@/services/subjectService'
 import { ymd } from '@/lib/dates'
+import { computePlantings, summarizePlantings } from '@/lib/plantGrowth'
+import { suggestSessionTopic, listTopicCandidates } from '@/lib/topicMapping'
+import { formatFloraBreakdown } from '@/components/focus/ForestSprites'
+import { saveFocusSnapshot, clearFocusSnapshot } from '@/lib/focusPersistence'
+
+/** Builds the crash-recovery snapshot payload from the live focus state. */
+function snapshotFromState(st) {
+  return {
+    status: st.status,
+    phase: st.phase,
+    session: st.session,
+    startedAt: st.startedAt,
+    phaseTotalSec: st.phaseTotalSec,
+    secondsLeft: st.secondsLeft,
+    customTimerSetting: st.customTimerSetting,
+  }
+}
 
 /**
  * Mounted once (in Dashboard). Owns the 1s tick interval, the ambient sound
@@ -21,8 +39,10 @@ import { ymd } from '@/lib/dates'
  */
 export function useFocusEngine() {
   const { user } = useAuth()
+  const todos = useTodos()
   const status = useStore((s) => s.status)
   const phase = useStore((s) => s.phase)
+  const phaseTotalSec = useStore((s) => s.phaseTotalSec)
   const audioTracks = useStore((s) => s.audioTracks)
   const muted = useStore((s) => s.muted)
   const volume = useStore((s) => s.volume)
@@ -75,45 +95,67 @@ export function useFocusEngine() {
         ? overrideElapsedSec
         : Math.max(0, (st.phaseTotalSec || 0) - (st.secondsLeft || 0))
       const durationMin = Math.max(1, Math.round(elapsedSec / 60))
-      const plantType = durationMin < 10 ? 'flower' : durationMin <= 15 ? 'shrub' : 'tree'
-      const plantLabel = plantType === 'flower' ? 'flower' : plantType === 'shrub' ? 'shrub' : 'tree'
-      const plantEmoji = plantType === 'flower' ? '🌸' : plantType === 'shrub' ? '🌿' : '🌲'
+      const plantings = computePlantings(durationMin)
+      const counts = summarizePlantings(plantings)
+      const floraSummary = formatFloraBreakdown(counts)
 
       st.bumpCompleted()
-      notify(`Focus complete! ${plantEmoji}`, `Congratulations! You completed your ${durationMin}-minute session.`, { category: 'focus' })
+      notify(`Focus complete! 🌳`, `Congratulations! You completed your ${durationMin}-minute session.`, { category: 'focus' })
       st.pushIsland({
         kind: 'success',
         title: '🎉 Focus session complete!',
-        detail: `Planted a ${plantLabel} on today's calendar! (${durationMin} min)`,
+        detail: `Grew ${floraSummary} on today's calendar! (${durationMin} min)`,
         duration: 5000,
       })
+
+      const uid = user?.uid
+      const rawModeId = st.session?.modeId || useStore.getState().activeModeId
+      const resolvedModeId = rawModeId === 'all'
+        ? (useStore.getState().modes[0]?.id || null)
+        : rawModeId
+      const subjectId = st.session?.subjectId || null
+      const todoId = st.session?.todoId || null
+
+      // Deterministic, instant topic suggestion (Section 3) — a one-shot
+      // subject-tasks read only when needed, never a standing listener.
+      let topicSuggestion = null
+      let topicCandidates = []
+      try {
+        const tasks = uid && subjectId && !todoId
+          ? await getTasksOnce(uid, resolvedModeId, subjectId)
+          : []
+        topicSuggestion = suggestSessionTopic({ subjectId, todoId }, { tasks, todos })
+        topicCandidates = listTopicCandidates({ subjectId }, { tasks, todos })
+      } catch (err) {
+        console.error('[focus] topic suggestion lookup failed', err)
+      }
 
       // Congratulate and trigger celebration modal
       useStore.setState({
         congratulations: {
           durationMin,
-          plantType,
+          plantings,
+          counts,
           label: st.session?.label || 'Deep Focus',
           timestamp: Date.now(),
+          modeId: resolvedModeId,
+          subjectId,
+          topicSuggestion,
+          topicCandidates,
         },
       })
 
       try {
-        const uid = user?.uid
         if (!uid) throw new Error('not authenticated')
-        const rawModeId = st.session?.modeId || useStore.getState().activeModeId
-        const resolvedModeId = rawModeId === 'all'
-          ? (useStore.getState().modes[0]?.id || null)
-          : rawModeId
         await logFocusSession(uid, {
           modeId: resolvedModeId,
-          subjectId: st.session?.subjectId || null,
+          subjectId,
           slotId: st.session?.slotId || null,
           targetDate: st.session?.targetDate || null,
           label: st.session?.label || 'Deep focus',
           color: st.session?.color || null,
+          plantings,
           durationMin,
-          plantType,
           startedAt: st.startedAt ? new Date(st.startedAt) : new Date(),
           hourOfDay: (st.startedAt ? new Date(st.startedAt) : new Date()).getHours(),
         })
@@ -127,11 +169,6 @@ export function useFocusEngine() {
           const targetDate = st.session.targetDate || ymd()
           toggleSlotCompletion(uid, resolvedModeId, st.session.slotId, targetDate, true).catch((err) =>
             console.error('[focus] slot mark-done failed', err),
-          )
-        }
-        if (st.session?.todoId) {
-          updateTodo(uid, st.session.todoId, { done: true }).catch((err) =>
-            console.error('[focus] todo mark-done failed', err),
           )
         }
       } catch (err) {
@@ -152,7 +189,7 @@ export function useFocusEngine() {
       st.endToIdle()
     }
     completingRef.current = false
-  }, [user])
+  }, [user, todos])
 
   // Expose completeFocus on store so UI can trigger completion & planting
   useEffect(() => {
@@ -162,19 +199,48 @@ export function useFocusEngine() {
     }
   }, [complete])
 
-  // Tick loop — restarts whenever status flips to running.
+  // Tick loop — restarts whenever status flips to running. Also persists a
+  // crash-recovery snapshot every 60 ticks (minute-by-minute), so a hard
+  // crash/close/auto-update loses at most a minute of progress.
   useEffect(() => {
     clearInterval(intervalRef.current)
     if (status === 'running') {
+      let ticksSinceSnapshot = 0
       intervalRef.current = setInterval(() => {
         const st = useStore.getState()
         if (st.secondsLeft <= 1) complete()
         else st.tick()
+        ticksSinceSnapshot += 1
+        if (ticksSinceSnapshot >= 60) {
+          ticksSinceSnapshot = 0
+          saveFocusSnapshot(snapshotFromState(useStore.getState()))
+        }
       }, 1000)
     }
     return () => clearInterval(intervalRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status])
+
+  // Discrete-transition snapshot: start/pause/resume/phase-change/manual
+  // +-time adjustment. Cleared the moment the session ends.
+  useEffect(() => {
+    if (status === 'idle') {
+      clearFocusSnapshot()
+      return
+    }
+    saveFocusSnapshot(snapshotFromState(useStore.getState()))
+  }, [status, phase, phaseTotalSec])
+
+  // Best-effort final flush so a graceful close (not just a crash) still
+  // lands a snapshot no more than a tick stale.
+  useEffect(() => {
+    const flush = () => {
+      const st = useStore.getState()
+      if (st.status !== 'idle') saveFocusSnapshot(snapshotFromState(st))
+    }
+    window.addEventListener('beforeunload', flush)
+    return () => window.removeEventListener('beforeunload', flush)
+  }, [])
 
   // Ambient soundscape lifecycle (silenced while muted).
   useEffect(() => {

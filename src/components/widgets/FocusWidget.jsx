@@ -557,13 +557,14 @@ export function FocusWidget({ widget, variant }) {
               <GlassStat icon={<TreePine className="h-4 w-4 text-emerald-400" />} label="Forest" value={floraSummary} />
             </div>
 
-            {/* This month's forest — one tree per completed session */}
+            {/* This month's forest — one tree per completed session. The
+                all-time total already shows in the "Forest" stat above, so
+                this heading stays plain rather than repeating that number —
+                MonthlyForest's own pill below shows the count for whichever
+                month is selected. */}
             <div className="mb-2 flex items-center gap-2">
               <Sprout className="h-4 w-4 text-emerald-400" />
               <span className="text-xs font-semibold text-white/70">Your Forest</span>
-              <span className="ml-auto rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-400">
-                {floraSummary}
-              </span>
             </div>
             <MonthlyForest sessions={sessions} />
           </div>

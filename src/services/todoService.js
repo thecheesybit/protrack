@@ -3,6 +3,7 @@ import {
   query,
   orderBy,
   onSnapshot,
+  getDocs,
   addDoc,
   updateDoc,
   deleteDoc,
@@ -36,6 +37,14 @@ export function subscribeToTodos(uid, callback) {
     })
     callback(decrypted)
   })
+}
+
+/** One-shot, decrypted fetch of every todo (mirrors subscribeToTodos) — for one-off recomputes that can't hold a live listener. */
+export async function getTodosOnce(uid) {
+  const snap = await getDocs(query(todosCol(uid), orderBy('createdAt', 'desc')))
+  const rawTodos = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  const key = await getContentKey(uid)
+  return Promise.all(rawTodos.map((t) => decryptObject(t, ENCRYPTED_TODO_FIELDS, key)))
 }
 
 export async function addTodo(

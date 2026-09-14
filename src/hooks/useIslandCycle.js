@@ -15,6 +15,12 @@ import { playSound, chimeForIslandKind } from '@/lib/sound'
  * as a task lands in Done before pushing `progress`. Chiming again would double
  * up. Everything else — sync state, deadlines, hydration, plain info — has no
  * existing sound and is exactly what "notifications should chime" is about.
+ *
+ * During a locked Deep Focus session, everything in this dispatcher is also
+ * muted — only the alarm and hourly temple-bell chime may interrupt a session,
+ * and both already self-chime at their own call site (useAlarmWatcher,
+ * useHourlyChime), so they're structurally untouched by the `focusLocked` gate
+ * below.
  */
 const SELF_CHIMED = new Set(['focus', 'break', 'progress', 'success', 'temple', 'hourly', 'alarm'])
 
@@ -23,6 +29,7 @@ export function useIslandCycle() {
   const activeKind = useStore((s) => s.islandActive?.kind)
   const duration = useStore((s) => s.islandActive?.duration)
   const advanceIsland = useStore((s) => s.advanceIsland)
+  const focusLocked = useStore((s) => s.focusLocked)
 
   const lastSoundedIdRef = useRef(null)
 
@@ -30,10 +37,10 @@ export function useIslandCycle() {
   useEffect(() => {
     if (activeId == null || activeId === lastSoundedIdRef.current) return
     lastSoundedIdRef.current = activeId
-    if (!SELF_CHIMED.has(activeKind)) {
+    if (!SELF_CHIMED.has(activeKind) && !focusLocked) {
       playSound(chimeForIslandKind(activeKind))
     }
-  }, [activeId, activeKind])
+  }, [activeId, activeKind, focusLocked])
 
   useEffect(() => {
     if (activeId == null || duration == null) return undefined

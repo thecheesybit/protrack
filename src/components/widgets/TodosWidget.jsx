@@ -46,6 +46,7 @@ import { WidgetFrame } from './WidgetFrame'
 import { addTodo, updateTodo, deleteTodo, reorderTodos } from '@/services/todoService'
 import { getPriority, nextPriority, PRIORITIES, PRIORITY_ORDER } from '@/lib/priority'
 import { classifyDeadline } from '@/lib/deadlines'
+import { resumableSessionMatches } from '@/lib/focusPersistence'
 import { parseCapture } from '@/lib/nlParse'
 import { ymd } from '@/lib/dates'
 import toast from 'react-hot-toast'
@@ -1028,6 +1029,8 @@ export function TodosWidget({ widget, variant }) {
   const { user } = useAuth()
   const activeModeId = useStore((s) => s.activeModeId)
   const startFocus = useStore((s) => s.startFocus)
+  const resumableSession = useStore((s) => s.resumableSession)
+  const resumeFocusSession = useStore((s) => s.resumeFocusSession)
   const todos = useTodos()
 
   const [text, setText] = useState('')
@@ -1301,6 +1304,10 @@ export function TodosWidget({ widget, variant }) {
 
   const onStartFocus = (t) => {
     setFocusReadyId(null)
+    if (resumableSessionMatches(resumableSession, { todoId: t.id })) {
+      resumeFocusSession()
+      return
+    }
     startFocus({
       label: t.text,
       color: '#f59e0b',

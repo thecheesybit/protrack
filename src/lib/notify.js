@@ -1,5 +1,11 @@
 /** Thin wrapper over the Web Notifications API with graceful fallback and user toggle support. */
 import { formatTime12h } from '@/services/alarmService'
+import { useStore } from '@/store/useStore'
+
+// During a locked Deep Focus session, only the alarm and the session's own
+// completion/break-over notification (category 'focus', fired while
+// `focusLocked` is still true, right before it clears) may interrupt.
+const FOCUS_EXEMPT_CATEGORIES = new Set(['alarms', 'focus'])
 
 export const DESKTOP_NOTIF_STORAGE_KEY = 'protrack:desktop_notifications'
 export const CATEGORY_STORAGE_PREFIX = 'protrack:notif_cat_'
@@ -123,6 +129,9 @@ export function notify(title, body, options = {}) {
   try {
     if (!areNotificationsEnabled()) return null
     if (options.category && !isNotificationCategoryEnabled(options.category)) {
+      return null
+    }
+    if (useStore.getState().focusLocked && !FOCUS_EXEMPT_CATEGORIES.has(options.category)) {
       return null
     }
     const NotifCtor = getNotificationCtor()
