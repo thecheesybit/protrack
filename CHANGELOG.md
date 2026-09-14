@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.10.2 — 2026-09-14
+
+### 🌲 Zen & Desk Clock Mode
+- **Desk Clock Mode now has an ambient scene.** Centering the clock (`Ctrl+T`) raises the same forest/quote backdrop used by the idle screen behind it, and keeps it up (no auto-dismiss) until the clock is un-centered, instead of waiting on the idle timer.
+- **Forest wildlife now visits the Zen idle screen**, not just the in-app forest views — critters and larger animals appear behind the quote based on completed session count.
+
 ## v2.10.1 — 2026-09-14
 
 ### 🐛 Fixes

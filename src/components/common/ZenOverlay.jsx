@@ -8,6 +8,7 @@ import { useTodos } from '@/hooks/useWellness'
 import { useFocusSessions } from '@/hooks/useFocusSessions'
 import { SpriteFoliage, getSessionFoliageSeed, formatFloraBreakdown } from '@/components/focus/ForestSprites'
 import { getPlantType } from '@/components/focus/CalendarForest'
+import { ForestWildlife } from '@/components/focus/AnimalSprites'
 import { speak, stopSpeaking } from '@/lib/tts'
 import { classifyDeadline } from '@/lib/deadlines'
 import { cn } from '@/utils/cn'
@@ -72,6 +73,43 @@ const speakQuote = (quote, voiceEnabled) => {
   speak(quote.text, { voiceEnabled, lang: zenLang(quote), rate: 0.95 })
 }
 
+const DEFAULT_ZEN_CATEGORIES = ['stoic', 'philosophy', 'productivity', 'proverbs', 'hindi_urdu', 'modern']
+
+function readZenHistory() {
+  try {
+    const history = JSON.parse(localStorage.getItem('protrack:zen_history')) || []
+    return history.length > 30 ? history.slice(history.length - 30) : history
+  } catch {
+    return []
+  }
+}
+
+function pushZenHistory(history, newQuote) {
+  history.push({ text: newQuote.text, author: newQuote.author, date: Date.now() })
+  try {
+    localStorage.setItem('protrack:zen_history', JSON.stringify(history))
+  } catch { /* private mode */ }
+}
+
+async function fetchNextQuote(categories, history) {
+  try {
+    const res = await fetch('/zen_quotes.json')
+    const pool = await res.json()
+    const filteredPool = pool.filter((q) => categories.includes(q.category))
+    const finalPool = filteredPool.length > 0 ? filteredPool : pool
+    const available = finalPool.filter((q) => !history.find((h) => h.text === q.text))
+    return available.length
+      ? available[Math.floor(Math.random() * available.length)]
+      : finalPool[Math.floor(Math.random() * finalPool.length)]
+  } catch (err) {
+    console.warn('[zen] fallback to static', err)
+    const available = QUOTES.filter((q) => !history.find((h) => h.text === q.text))
+    return available.length
+      ? available[Math.floor(Math.random() * available.length)]
+      : QUOTES[Math.floor(Math.random() * QUOTES.length)]
+  }
+}
+
 export function ZenOverlay() {
   const { isIdle } = useIdleDetection(180000)
   const [show, setShow] = useState(false)
@@ -107,6 +145,11 @@ export function ZenOverlay() {
   const openFocus = useStore((s) => s.openFocus)
   const focusRunning = useStore((s) => s.status === 'running')
   const focusLocked = useStore((s) => s.focusLocked)
+  const clockCentered = useStore((s) => s.clockCentered)
+  // Tracks whether the currently-shown scene was raised for Desk Clock Mode,
+  // so leaving that mode cleans it up but a manual close while still
+  // centered doesn't immediately pop it back up.
+  const clockSceneShownRef = useRef(false)
   const activePrompt = useStore((s) => s.activePrompt)
   // Never draw a quote over a prompt that needs an answer.
   const promptBlocking = !!activePrompt && activePrompt.type !== 'quote'
@@ -133,45 +176,59 @@ export function ZenOverlay() {
   const nextQuote = useCallback(async () => {
     stopSpeaking({ fade: true })
 
-    let history = []
-    try {
-      history = JSON.parse(localStorage.getItem('protrack:zen_history')) || []
-    } catch { /* private */ }
-    if (history.length > 30) history = history.slice(history.length - 30)
+    const categories = settings?.zenCategories || DEFAULT_ZEN_CATEGORIES
+    const history = readZenHistory()
+    const newQuote = await fetchNextQuote(categories, history)
+    if (!newQuote) return
 
-    let newQuote
-    const categories = settings?.zenCategories || ['stoic', 'philosophy', 'productivity', 'proverbs', 'hindi_urdu', 'modern']
+    pushZenHistory(history, newQuote)
+    setQuote(newQuote)
 
-    try {
-      const res = await fetch('/zen_quotes.json')
-      const pool = await res.json()
-      const filteredPool = pool.filter((q) => categories.includes(q.category))
-      const finalPool = filteredPool.length > 0 ? filteredPool : pool
+    const voiceEnabled = settings?.zenVoiceEnabled !== false
+    speakQuote(newQuote, voiceEnabled)
 
-      const available = finalPool.filter((q) => !history.find((h) => h.text === q.text))
-      newQuote = available.length
-        ? available[Math.floor(Math.random() * available.length)]
-        : finalPool[Math.floor(Math.random() * finalPool.length)]
-    } catch (err) {
-      console.warn('[zen] fallback to static', err)
-      const available = QUOTES.filter((q) => !history.find((h) => h.text === q.text))
-      newQuote = available.length
-        ? available[Math.floor(Math.random() * available.length)]
-        : QUOTES[Math.floor(Math.random() * QUOTES.length)]
+    clearTimeout(autoTimerRef.current)
+    // Desk Clock Mode's ambient scene stays up until the clock is un-centered —
+    // don't schedule an auto-dismiss while cycling quotes inside it.
+    if (!useStore.getState().clockCentered) {
+      const duration = Math.max(MIN_DURATION_MS, zenDuration)
+      autoTimerRef.current = setTimeout(() => {
+        dismiss()
+      }, duration)
     }
+  }, [settings, zenDuration, dismiss])
 
-    if (newQuote) {
-      history.push({ text: newQuote.text, author: newQuote.author, date: Date.now() })
-      try {
-        localStorage.setItem('protrack:zen_history', JSON.stringify(history))
-      } catch { /* private mode */ }
-      setQuote(newQuote)
-      
+  /**
+   * Shows the forest/quote scene. `autoDismiss:false` is used for Desk Clock
+   * Mode, where the scene should stay up behind the enlarged clock until the
+   * user un-centers it, rather than timing out like the idle trigger.
+   */
+  const revealScene = useCallback(async ({ tab, autoDismiss = true } = {}) => {
+    const categories = settings?.zenCategories || DEFAULT_ZEN_CATEGORIES
+    const history = readZenHistory()
+    const newQuote = await fetchNextQuote(categories, history)
+    if (!newQuote) return
+
+    pushZenHistory(history, newQuote)
+    setQuote(newQuote)
+
+    const chosenTab = tab || (Math.random() < 0.5 ? 'forest' : 'quote')
+    setIdleTab(chosenTab)
+    setForestMotivationIdx(Math.floor(Math.random() * FOREST_MOTIVATIONS.length))
+
+    if (quotePromptIdRef.current == null) {
+      quotePromptIdRef.current = useStore.getState().pushPrompt({ type: 'quote', dismissible: true })
+    }
+    setShow(true)
+
+    if (chosenTab === 'quote') {
       const voiceEnabled = settings?.zenVoiceEnabled !== false
       speakQuote(newQuote, voiceEnabled)
+    }
 
+    clearTimeout(autoTimerRef.current)
+    if (autoDismiss) {
       const duration = Math.max(MIN_DURATION_MS, zenDuration)
-      clearTimeout(autoTimerRef.current)
       autoTimerRef.current = setTimeout(() => {
         dismiss()
       }, duration)
@@ -192,84 +249,37 @@ export function ZenOverlay() {
     return () => window.removeEventListener('keydown', onKey)
   }, [show, dismiss, nextQuote])
 
+  // Idle auto-trigger AND Desk Clock Mode (Ctrl+T): centering the clock raises
+  // the same forest/quote scene as an ambient backdrop — it renders behind the
+  // clock (z-50 vs the clock's z-[55]) and stays up (no auto-dismiss) until the
+  // clock is un-centered, instead of waiting on the idle timer.
   useEffect(() => {
-    let active = true
-
     if (isBlocked) {
+      clockSceneShownRef.current = false
       dismiss()
-      return
+      return undefined
+    }
+
+    if (clockCentered) {
+      if (!clockSceneShownRef.current) {
+        clockSceneShownRef.current = true
+        revealScene({ autoDismiss: false })
+      }
+      return () => clearTimeout(autoTimerRef.current)
+    }
+
+    if (clockSceneShownRef.current) {
+      clockSceneShownRef.current = false
+      dismiss()
+      return undefined
     }
 
     if (isIdle) {
-      const run = async () => {
-        let history = []
-        try {
-          history = JSON.parse(localStorage.getItem('protrack:zen_history')) || []
-        } catch { /* private mode */ }
-        if (history.length > 30) history = history.slice(history.length - 30)
-
-        let newQuote
-        const categories = settings?.zenCategories || ['stoic', 'philosophy', 'productivity', 'proverbs', 'hindi_urdu', 'modern']
-
-        try {
-          const res = await fetch('/zen_quotes.json')
-          const pool = await res.json()
-          const filteredPool = pool.filter((q) => categories.includes(q.category))
-          const finalPool = filteredPool.length > 0 ? filteredPool : pool
-
-          const available = finalPool.filter((q) => !history.find((h) => h.text === q.text))
-          newQuote = available.length
-            ? available[Math.floor(Math.random() * available.length)]
-            : finalPool[Math.floor(Math.random() * finalPool.length)]
-        } catch {
-          const available = QUOTES.filter((q) => !history.find((h) => h.text === q.text))
-          newQuote = available.length
-            ? available[Math.floor(Math.random() * available.length)]
-            : QUOTES[Math.floor(Math.random() * QUOTES.length)]
-        }
-
-        if (!active) return
-
-        history.push({ text: newQuote.text, author: newQuote.author, date: Date.now() })
-        try {
-          localStorage.setItem('protrack:zen_history', JSON.stringify(history))
-        } catch { /* private mode */ }
-
-        setQuote(newQuote)
-
-        // 50/50 randomized display between Forest Sanctuary and Zen Wisdom
-        const chosenTab = Math.random() < 0.5 ? 'forest' : 'quote'
-        setIdleTab(chosenTab)
-        setForestMotivationIdx(Math.floor(Math.random() * FOREST_MOTIVATIONS.length))
-
-        // Claim the prompt queue so a due check-in waits until the quote clears.
-        if (quotePromptIdRef.current == null) {
-          quotePromptIdRef.current = useStore
-            .getState()
-            .pushPrompt({ type: 'quote', dismissible: true })
-        }
-        setShow(true)
-
-        // Speak quote audio only if quote tab is selected
-        if (chosenTab === 'quote') {
-          const voiceEnabled = settings?.zenVoiceEnabled !== false
-          speakQuote(newQuote, voiceEnabled)
-        }
-
-        const duration = Math.max(MIN_DURATION_MS, zenDuration)
-        clearTimeout(autoTimerRef.current)
-        autoTimerRef.current = setTimeout(() => {
-          if (active) dismiss()
-        }, duration)
-      }
-      run()
+      revealScene({ autoDismiss: true })
     }
 
-    return () => {
-      active = false
-      clearTimeout(autoTimerRef.current)
-    }
-  }, [isIdle, isBlocked, settings, zenDuration, dismiss])
+    return () => clearTimeout(autoTimerRef.current)
+  }, [isIdle, isBlocked, clockCentered, revealScene, dismiss])
 
   const quoteLines = quote.text.split('\n')
 
@@ -485,6 +495,7 @@ export function ZenOverlay() {
                         </div>
                       )
                     })}
+                    <ForestWildlife count={completedSessions.length} seed={totalMin} />
                   </div>
                 )}
               </div>
