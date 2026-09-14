@@ -8,6 +8,7 @@ import {
   getCenteredPos,
   readInitialPos,
   readInitialScale,
+  clampToViewport,
 } from '../FlipClock'
 
 describe('FlipClock defaults and positioning', () => {
@@ -68,6 +69,30 @@ describe('FlipClock defaults and positioning', () => {
     const pos = readInitialPos(1.25)
     expect(pos.x).toBe(100)
     expect(pos.y).toBe(200)
+  })
+
+  it('clamps an off-screen stored position back into the viewport (the "clock not showing" fix)', () => {
+    // Saved on a bigger window; current window is 1536×825.
+    localStorage.setItem('protrack:clock_pos', JSON.stringify({ x: 5000, y: 5000 }))
+    const pos = readInitialPos(1.25)
+    // maxX = 1536 - 210 = 1326 · maxY = 825 - 110 = 715
+    expect(pos.x).toBe(1326)
+    expect(pos.y).toBe(715)
+  })
+
+  it('clampToViewport keeps an already-visible position unchanged', () => {
+    expect(clampToViewport({ x: 100, y: 200 }, 1.25)).toEqual({ x: 100, y: 200 })
+  })
+
+  it('clampToViewport pulls a negative position back to the top-left edge', () => {
+    expect(clampToViewport({ x: -80, y: -40 }, 1.25)).toEqual({ x: 0, y: 0 })
+  })
+
+  it('clampToViewport is a no-op when window is unavailable (SSR/tests)', () => {
+    const saved = global.window
+    global.window = undefined
+    expect(clampToViewport({ x: 5000, y: 5000 }, 1.25)).toEqual({ x: 5000, y: 5000 })
+    global.window = saved
   })
 
   it('preserves user custom scale when not the legacy default', () => {

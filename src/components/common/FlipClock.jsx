@@ -45,6 +45,25 @@ export function getDefaultPos(currentScale = DEFAULT_SCALE) {
   return { x: defaultX, y: defaultY }
 }
 
+/**
+ * Keep a position fully inside the current viewport. A position saved on a
+ * larger window (or in the dev browser vs. the smaller packaged desktop
+ * window) would otherwise sit off-screen with no way back, since the clock
+ * only re-docks when it has no custom position — this is the "clock not
+ * showing up" bug. Clamps to [0, innerWidth-clockW] × [0, innerHeight-clockH].
+ */
+export function clampToViewport(p, currentScale = DEFAULT_SCALE) {
+  if (typeof window === 'undefined' || !p) return p
+  const clockW = BASE_CLOCK_WIDTH * currentScale
+  const clockH = BASE_CLOCK_HEIGHT * currentScale
+  const maxX = Math.max(0, window.innerWidth - clockW)
+  const maxY = Math.max(0, window.innerHeight - clockH)
+  return {
+    x: Math.min(Math.max(0, p.x), maxX),
+    y: Math.min(Math.max(0, p.y), maxY),
+  }
+}
+
 export const CENTERED_SCALE = 3.5
 
 export function getCenteredPos(currentScale = CENTERED_SCALE) {
@@ -77,7 +96,9 @@ export function readInitialPos(currentScale = DEFAULT_SCALE) {
         if (parsed.x === 12) {
           return getDefaultPos(currentScale)
         }
-        return parsed
+        // Clamp a stored position into the current viewport so a clock saved on
+        // a larger window can never be stranded off-screen.
+        return clampToViewport(parsed, currentScale)
       }
     }
   } catch { /* fallback */ }
@@ -245,6 +266,25 @@ export function FlipClock() {
     }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  // Safety net for a CUSTOM position: never let the clock sit off-screen.
+  // Runs once on mount (when the real window size is known — the packaged
+  // desktop window may be smaller than wherever the position was saved) and
+  // on every resize. Clamping never moves an already-visible clock, so it
+  // doesn't fight normal dragging. This is the core "clock not showing" fix.
+  useEffect(() => {
+    const clampNow = () => {
+      setPos((prev) => {
+        const next = clampToViewport(prev, scaleRef.current)
+        if (next.x === prev.x && next.y === prev.y) return prev
+        posRef.current = next
+        return next
+      })
+    }
+    clampNow()
+    window.addEventListener('resize', clampNow)
+    return () => window.removeEventListener('resize', clampNow)
   }, [])
 
   // Prevent scroll-wheel from propagating to page (for scale-on-wheel)
