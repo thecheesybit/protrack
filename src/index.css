@@ -95,6 +95,15 @@ input, textarea, select, button {
   --color-canvas: #f0ece4;
   --color-island: #1c1c22;
 
+  /* Single overlay scrim (DESIGN_SYSTEM §10.1) — RGB triplet so the `.scrim`
+     utility can set its own alpha. Near-black in both themes: a modal dim
+     should read the same regardless of light/dark. Replaces the ad-hoc
+     bg-black/40…/95 + bg-slate-950/xx backdrops. */
+  --scrim: 7 8 12;
+  /* Text on intentional dark-island surfaces (lock screen, PiP, Zen, forest
+     soil, ambient). Theme-independent — islands are always dark. */
+  --text-inverse: 245 243 239;
+
   /* Typography scale */
   --text-hero: clamp(2rem, 5vw, 3.5rem);
   --text-display: 1.5rem;
@@ -322,7 +331,15 @@ input, textarea, select, button {
   /* Dark island card — high-contrast surface used for calendar, stats panels */
   .island-dark {
     background: var(--color-island);
-    color: #f5f3ef;
+    color: rgb(var(--text-inverse));
+  }
+
+  /* Canonical modal/overlay backdrop — one dim + blur for the whole app.
+     Adopt on every scrim (replaces bg-black/40…/95, bg-slate-950/xx). */
+  .scrim {
+    background: rgb(var(--scrim) / 0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
   }
 
   .text-gradient {

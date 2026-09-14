@@ -1,5 +1,30 @@
 # Changelog
 
+## v2.10.1 — 2026-09-14
+
+### 🐛 Fixes
+- **Clock not showing up:** the floating flip-clock could be stranded off-screen when the window was smaller than wherever its position was last saved (e.g. the packaged desktop window vs. a larger dev window), with no way to bring it back. Its position is now always clamped into the visible viewport on load and on every resize.
+
+### 🎨 Design system
+- Groundwork for a consistency pass: a single overlay-scrim token and a named dark-island text token (additive — no visual change yet). Full audit and phased plan captured in `docs/UI_AUDIT.md` and `docs/DESIGN_SYSTEM.md`.
+
+## v2.10.0 — 2026-09-14
+
+### 🌳 Deep Focus — crash-proof, longer sessions, smarter mapping
+- **Sessions survive a crash, close, or auto-update.** Focus session state is now saved locally on every start/pause/resume and once a minute while running, so an interrupted session is no longer lost. On next launch a prompt offers to **Resume** exactly where you left off or **Discard** it; the same interrupted session also resumes when you click its calendar slot or to-do.
+- **Longer sessions grow a real grove.** Instead of a single plant per session, a session now grows **one tree per full 25 minutes** plus a shrub/flower for the remainder — so a 3-hour session plants a small forest, shown across every forest view and the completion card.
+- **Smart session → topic mapping.** When a subject-linked session ends, the completion card suggests the next pending topic (in order) with a confirm/edit tick-box that marks it done and moves the subject's progress. An optional once-a-day background AI pass re-orders a subject's topic queue when it drifts from the class flow (only if an AI key is configured; the everyday path stays instant and offline).
+- **Forest wildlife.** As your grove grows, animals begin to visit — small critters first, then larger ones — using a set of illustrated sprites, purely as a reward layer.
+
+### 📋 Subjects — unified topic board
+- A subject's Kanban board now shows **both** its own topics **and** any general to-do you've linked to that subject, in one place. Completing either moves the same subject progress bar. Merged to-dos are marked with a small icon and drag between columns like any card.
+
+### 🔕 Focus session quiet mode
+- During a locked Deep Focus session, only **alarms** and the **hourly chime** can interrupt — every other notification and sound is held back until the session ends.
+
+### 🐛 Fixes
+- **`FIRESTORE INTERNAL ASSERTION FAILED: Unexpected state`:** a fast unmount/remount (switching subjects, minimizing/maximizing a widget) tore down and instantly recreated the same Firestore listener — a known trigger for this SDK crash. Shared listeners now linger for a short grace period so a quick remount reuses them. Also hardened the shared cache so one misbehaving consumer can't break subscriptions for the rest.
+
 ## v2.9.0 — 2026-09-12
 
 ### 🔔 Notification System Overhaul & User Controls

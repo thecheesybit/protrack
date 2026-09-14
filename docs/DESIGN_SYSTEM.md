@@ -186,3 +186,86 @@ in `SettingsPanel`) to test all 7 slots without waiting for the clock.
 - [ ] `prefers-reduced-motion` disables transitions
 - [ ] Build gates green: `npm run build`, `ELECTRON=true vite build`, `npm test`, `npm run lint`;
       emoji guard clean
+
+---
+
+## 10. v2.1 — Consistency & Polish Pass (token discipline)
+
+The v2 foundation (§0–§9) largely landed. The 2026-09 audit ([`UI_AUDIT.md`](./UI_AUDIT.md))
+found the remaining problem is **uneven application** of this system — 434 hardcoded palette
+colors across 90 files, 72 raw OS form controls, and 22 ad-hoc modal overlays bypassing the
+existing `Modal`. This pass **enforces** the system and closes gaps; it does **not** introduce
+a new one. No business logic, IPC, or state changes — visual/props only.
+
+### 10.1 New/clarified tokens
+
+- **Do NOT register `amber`/`rose`/`violet`/`sky`/`sage` as top-level Tailwind colors.**
+  (An earlier draft of §2 suggested this — it's wrong: those names already exist as
+  Tailwind's built-in scales, and overriding them with single values would break every
+  `amber-400`/`rose-500`/`sky-400` in the app.) The semantic accents are already used
+  consistently via Tailwind's defaults; leave them. The real drift is **neutral**
+  (`slate/white/black`), not accent hex — that's what §11 P2 converts to tokens.
+- **Scrim token** — one overlay backdrop for the whole app. Add `--scrim` (e.g.
+  `rgb(7 8 12 / 0.55)` light-aware) + a `.scrim` utility (`bg` + `backdrop-blur-sm`).
+  Every modal/overlay uses it — replaces the ≥7 current `bg-black/40…/95` variants.
+- **Radius source of truth** — reconcile the mismatch (token `--radius-2xl: 28px` vs
+  Tailwind `rounded-2xl: 18px`). Decision: **Tailwind `rounded-*` is canonical**; delete the
+  duplicate `--radius-*` CSS vars from `index.css` (they're referenced nowhere in components).
+  Card = `rounded-2xl`, control = `rounded-xl`, pill = `rounded-full`, popover = `rounded-3xl`.
+- **Inverse/island text tokens** — for legitimately-dark surfaces (lock screen, PiP, Zen,
+  ambient), use `island` bg + an `--text-inverse` token instead of raw `text-white`.
+
+### 10.2 Component contracts (adopt existing primitives everywhere)
+
+- **`ui/Button`** is the only button for actions. Sweep hand-rolled `<button>`s that are
+  real actions (submit/save/primary/secondary/danger) onto it. Icon-only affordances
+  (drag handles, card ✕, tab chips) stay bespoke but must use token colors.
+- **`ui/Modal`** is the only centered dialog. Migrate the 22 ad-hoc `fixed inset-0`
+  overlays that are truly modal (editors, confirms, detail views) to it. Genuinely
+  non-modal full-screen surfaces (FocusLockScreen, AppLockOverlay, ZenOverlay, ambient
+  layers, the CenterPrompt blocking queue) keep their own shell but adopt the `.scrim`
+  token and the same radius/close-button treatment.
+- **New `ui/Field` layer** — styled wrappers so no raw OS control ships:
+  `ui/Select.jsx` (token-styled, chevron, matches inputs), `ui/NumberField.jsx`
+  (−/＋ steppers, replaces `input[type=number]`), `ui/DateTimeField.jsx` (token trigger
+  over the native picker), `ui/Checkbox.jsx`, `ui/Slider.jsx` (token track/thumb — the
+  Focus volume slider already hand-styles this; promote it). Editors (Scorecard, Slot,
+  Subject, Exam, Habit) and Settings tabs adopt these.
+- **New `ui/EmptyState.jsx`** — icon + one-line invitation + optional action; standardize
+  across empty scorecard/timetable/subject boards.
+
+### 10.3 Copy voice
+
+Plain, active, consistent: "Save changes" not "Submit"; a "Publish" button → a "Published"
+toast. One themed `react-hot-toast` config (position, `rounded-xl`, token colors, Lucide
+icons) — no default white toasts.
+
+---
+
+## 11. v2.1 migration phases (this initiative)
+
+Ordered by leverage (from the audit). Each phase is independently shippable and ends on the
+§9 QA checklist + all four build gates green.
+
+- **P1 — Safe token groundwork:** add the `.scrim` + `--text-inverse` tokens (10.1),
+  reconcile the radius source-of-truth. Additive only; no existing render changes. (The
+  shell is already tokenized — there is no shell-detokenization step; see UI_AUDIT C1.)
+- **P2 — Token sweep (biggest visible win), per-surface with light+dark verification:**
+  convert **drift-case** hardcoded `slate/white/black-*` → `surface/ink/muted/line` across
+  theme-adaptive widgets, editors, modals, prompts. **Preserve** intentional dark-island
+  surfaces (lock screen, PiP, Zen, forest soil, ambient) — at most rename their raw
+  white/black to `island`/`--text-inverse` with no visual change. Because the app is
+  Google-auth-gated (an agent can't self-verify visuals), each surface is confirmed in
+  both themes by a signed-in reviewer before moving on — not shipped as one blind diff.
+- **P3 — Form-control layer:** build the `ui/Field` set (10.2); adopt in the editor modals
+  and Settings tabs; delete raw `<select>`/`input[type=number|range|date]` chrome.
+- **P4 — Modal + scrim unification:** add the `.scrim` token; migrate ad-hoc modal overlays
+  to `ui/Modal`; align non-modal overlays' scrim/radius/close.
+- **P5 — Button adoption + radius source-of-truth:** sweep action buttons onto `ui/Button`;
+  collapse the double radius system (10.1).
+- **P6 — Polish:** font-family consolidation (justify or drop Outfit/Inter/Playfair/Cinzel/
+  Rozha), scrollbar policy (thin styled bar on scrollable panes), spacing-rhythm pass on
+  analogous rows, `EmptyState` rollout, themed toasts.
+
+**Review gate:** per the initiative brief, confirm this audit + plan before starting P1.
+
