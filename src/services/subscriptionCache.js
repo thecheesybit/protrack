@@ -11,6 +11,15 @@
 
 const registry = new Map()
 
+// A fast unmount/remount of the last subscriber (switching between subjects,
+// a widget minimize/maximize, React StrictMode's dev double-invoke) would
+// otherwise tear down and immediately recreate the same underlying Firestore
+// `onSnapshot` listener. That rapid listen/unlisten cycle is a known trigger
+// for the Firestore Web SDK's "INTERNAL ASSERTION FAILED: Unexpected state"
+// crash. Holding the real listener open for a short grace period after the
+// last subscriber leaves lets a quick remount reuse it instead.
+const TEARDOWN_GRACE_MS = 3000
+
 /**
  * Subscribes to a shared data source identified by a unique cache key.
  *
@@ -22,12 +31,18 @@ const registry = new Map()
 export function subscribeWithCache(key, subscribeFn, onData) {
   let entry = registry.get(key)
 
+  if (entry?.teardownTimer) {
+    clearTimeout(entry.teardownTimer)
+    entry.teardownTimer = null
+  }
+
   if (!entry) {
     entry = {
       value: undefined,
       hasValue: false,
       listeners: new Set(),
       unsubscribe: null,
+      teardownTimer: null,
     }
     registry.set(key, entry)
 
@@ -46,18 +61,29 @@ export function subscribeWithCache(key, subscribeFn, onData) {
 
   entry.listeners.add(onData)
 
-  // Synchronously deliver the latest cached value if already available
+  // Synchronously deliver the latest cached value if already available. Same
+  // try/catch protection as the live-update dispatch below — a consumer's
+  // callback throwing here (e.g. a bad setState) must not propagate out of
+  // subscribeWithCache and break subscription setup for every other consumer.
   if (entry.hasValue) {
-    onData(entry.value)
+    try {
+      onData(entry.value)
+    } catch (err) {
+      console.error(`[subscriptionCache] Error delivering cached value for ${key}:`, err)
+    }
   }
 
   return () => {
     entry.listeners.delete(onData)
     if (entry.listeners.size === 0) {
-      if (typeof entry.unsubscribe === 'function') {
-        entry.unsubscribe()
-      }
-      registry.delete(key)
+      entry.teardownTimer = setTimeout(() => {
+        if (entry.listeners.size === 0) {
+          if (typeof entry.unsubscribe === 'function') {
+            entry.unsubscribe()
+          }
+          registry.delete(key)
+        }
+      }, TEARDOWN_GRACE_MS)
     }
   }
 }
