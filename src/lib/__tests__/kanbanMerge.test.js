@@ -19,8 +19,13 @@ describe('todoToCard', () => {
       priority: 'medium',
       notes: '',
       dueAt: null,
+      topicId: null,
       order: 0,
     })
+  })
+
+  it('surfaces subjectTopicId as topicId so topic grouping treats todos like tasks', () => {
+    expect(todoToCard({ id: 'd5', text: 'x', done: false, subjectTopicId: 'topic-1' }).topicId).toBe('topic-1')
   })
 
   it('derives the done column from `done: true` when subjectColumn is unset', () => {

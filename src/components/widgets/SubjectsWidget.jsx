@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Plus, Layers, ChevronLeft, Pencil } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { useSubjects } from '@/hooks/useSubjects'
@@ -8,18 +8,33 @@ import { SubjectDetail } from '@/components/subjects/SubjectDetail'
 import { SubjectEditorModal } from '@/components/subjects/SubjectEditorModal'
 import { cn } from '@/utils/cn'
 
-export function SubjectsWidget({ widget, variant }) {
+export function SubjectsWidget({ widget, variant, context = null }) {
   const activeModeId = useStore((s) => s.activeModeId)
-  const maximizeWidget = useStore((s) => s.maximizeWidget)
+  const openModule = useStore((s) => s.openModule)
   const { subjects } = useSubjects(activeModeId)
 
-  const [selectedId, setSelectedId] = useState(null)
+  // Seed the selection from any incoming nav-bus context (e.g. a compact-list
+  // click that deep-links to a specific subject) so the maximized view opens on
+  // the subject the user picked — not always the first one. Grid and hero are
+  // separate component instances with independent state; without threading the
+  // choice through the nav bus, the hero mounts fresh and falls back to
+  // subjects[0]. (This was the "always opens Finance" bug.)
+  const [selectedId, setSelectedId] = useState(() => context?.subjectId || null)
   const [railCollapsed, setRailCollapsed] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingSubject, setEditingSubject] = useState(null)
 
   const isHero = variant === 'hero'
   const selected = subjects.find((s) => s.id === selectedId) || subjects[0] || null
+
+  // React to a NEW subject context (each openModule bumps `seq`) even while this
+  // instance stays mounted, so re-opening on a different subject re-selects it.
+  const lastCtxSeq = useRef(null)
+  useEffect(() => {
+    if (!context || context.seq === lastCtxSeq.current) return
+    lastCtxSeq.current = context.seq
+    if (context.subjectId) setSelectedId(context.subjectId)
+  }, [context])
 
   useEffect(() => {
     if (!selectedId && subjects.length) setSelectedId(subjects[0].id)
@@ -37,7 +52,9 @@ export function SubjectsWidget({ widget, variant }) {
 
   const pickCompact = (subject) => {
     setSelectedId(subject.id)
-    maximizeWidget('subjects')
+    // Deep-link through the nav bus: this maximizes the Subjects widget AND
+    // hands the chosen subjectId to the freshly-mounted hero instance.
+    openModule('subjects', { subjectId: subject.id })
   }
 
   return (
@@ -162,8 +179,9 @@ export function SubjectsWidget({ widget, variant }) {
               </div>
             </div>
 
-            {/* Expanded SubjectDetail on the right */}
-            <div className="min-w-0 flex-1 border-l border-line/50 pl-4 overflow-y-auto">
+            {/* Expanded SubjectDetail on the right — the detail component owns
+                its own internal scroll so the Kanban board fills the height. */}
+            <div className="min-w-0 flex-1 border-l border-line/50 pl-4 overflow-hidden">
               {selected ? (
                 <SubjectDetail
                   modeId={selected._modeId || activeModeId}

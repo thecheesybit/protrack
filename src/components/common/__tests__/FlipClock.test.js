@@ -34,34 +34,34 @@ describe('FlipClock defaults and positioning', () => {
     store = {}
   })
 
-  it('provides default scale of 1.25 matching bottom row card proportions', () => {
-    expect(DEFAULT_SCALE).toBe(1.25)
-    expect(readInitialScale()).toBe(1.25)
+  it('provides an enlarged default scale of 1.5 for a legible desk clock', () => {
+    expect(DEFAULT_SCALE).toBe(1.5)
+    expect(readInitialScale()).toBe(1.5)
   })
 
-  it('calculates default position anchored in bottom-left', () => {
+  it('calculates default position anchored in bottom-left with a symmetric margin', () => {
     const pos = getDefaultPos(1.25)
-    expect(pos.x).toBe(24) // Aligned with sidebar rail
-    // Height = 88 * 1.25 = 110. 825 - 110 - 28 = 687
-    expect(pos.y).toBe(687)
+    expect(pos.x).toBe(24) // CLOCK_MARGIN, matches the bottom gutter
+    // Height = 88 * 1.25 = 110. 825 - 110 - 24 (CLOCK_MARGIN) = 691
+    expect(pos.y).toBe(691)
   })
 
   it('reads initial pos fallback when localStorage is empty', () => {
     const pos = readInitialPos(1.25)
     expect(pos.x).toBe(24)
-    expect(pos.y).toBe(687)
+    expect(pos.y).toBe(691)
   })
 
   it('migrates legacy hardcoded x: 12 to new default position', () => {
     localStorage.setItem('protrack:clock_pos', JSON.stringify({ x: 12, y: 705 }))
     const pos = readInitialPos(1.25)
     expect(pos.x).toBe(24)
-    expect(pos.y).toBe(687)
+    expect(pos.y).toBe(691)
   })
 
-  it('migrates legacy scale: 1 to new DEFAULT_SCALE (1.25)', () => {
+  it('migrates legacy scale: 1 to new DEFAULT_SCALE (1.5)', () => {
     localStorage.setItem('protrack:clock_scale', '1')
-    expect(readInitialScale()).toBe(1.25)
+    expect(readInitialScale()).toBe(1.5)
   })
 
   it('preserves user custom saved position when not the legacy default', () => {
@@ -103,8 +103,8 @@ describe('FlipClock defaults and positioning', () => {
   it('calculates correct dimensions at DEFAULT_SCALE', () => {
     const scaledWidth = BASE_CLOCK_WIDTH * DEFAULT_SCALE
     const scaledHeight = BASE_CLOCK_HEIGHT * DEFAULT_SCALE
-    expect(scaledWidth).toBe(210)
-    expect(scaledHeight).toBe(110)
+    expect(scaledWidth).toBe(252)
+    expect(scaledHeight).toBe(132)
   })
 
   it('calculates exact centered position and scale for Ctrl+T zen desk clock mode', () => {

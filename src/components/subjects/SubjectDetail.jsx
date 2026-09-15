@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Pencil, Plus, ExternalLink, X, Flag, Minus, Play, CalendarClock } from 'lucide-react'
+import { Pencil, Plus, ExternalLink, X, Flag, Minus, Play, CalendarClock, ChevronDown } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
 import { ProgressBar } from '@/components/ui/ProgressBar'
@@ -21,6 +21,26 @@ export function SubjectDetail({ modeId, subject, onEdit }) {
   const openFocus = useStore((s) => s.openFocus)
   const [linkForm, setLinkForm] = useState(null) // {label,url} | null
   const [flagText, setFlagText] = useState(null) // string | null
+  // The "details" block (links · notes · class schedule) is collapsible so the
+  // Kanban board below can take the freed vertical space — the board is the
+  // primary work surface. Preference persists across sessions.
+  const [detailsOpen, setDetailsOpen] = useState(() => {
+    try {
+      return localStorage.getItem('protrack:subject_details_open') !== '0'
+    } catch {
+      return true
+    }
+  })
+  const toggleDetails = () =>
+    setDetailsOpen((v) => {
+      const next = !v
+      try {
+        localStorage.setItem('protrack:subject_details_open', next ? '1' : '0')
+      } catch {
+        /* private mode */
+      }
+      return next
+    })
 
   const links = subject.links || []
   const flags = subject.flags || []
@@ -61,7 +81,7 @@ export function SubjectDetail({ modeId, subject, onEdit }) {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center gap-2.5">
+      <div className="flex shrink-0 items-center gap-2.5">
         <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: subject.color }} />
         <h3 className="min-w-0 flex-1 truncate text-lg font-bold">{subject.name}</h3>
         <button
@@ -87,7 +107,7 @@ export function SubjectDetail({ modeId, subject, onEdit }) {
       </div>
 
       {/* Progress */}
-      <div className="mt-4">
+      <div className="mt-4 shrink-0">
         <div className="mb-1.5 flex items-center justify-between text-xs">
           <span className="text-muted">Progress</span>
           <span className="font-semibold">{progress}%</span>
@@ -111,8 +131,30 @@ export function SubjectDetail({ modeId, subject, onEdit }) {
         </div>
       </div>
 
-      {/* Links + Flags */}
-      <div className="mt-4 grid grid-cols-2 gap-3">
+      {/* Details — links · pending notes · class schedule. Collapsible so the
+          Kanban board below can claim the space; bounded + scrollable when open. */}
+      <div className="mt-3 shrink-0">
+        <button
+          type="button"
+          onClick={toggleDetails}
+          aria-expanded={detailsOpen}
+          className="flex w-full items-center gap-1.5 rounded-lg px-1 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted transition-colors hover:text-ink"
+        >
+          <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', !detailsOpen && '-rotate-90')} />
+          <span>Overview</span>
+          <span className="ml-auto flex items-center gap-2 text-[10px] font-normal normal-case tracking-normal text-muted/70">
+            {links.length > 0 && <span>{links.length} link{links.length === 1 ? '' : 's'}</span>}
+            {flags.length > 0 && <span className="text-amber-400/80">{flags.length} pending</span>}
+            {classSlots.length > 0 && (
+              <span>{classSlots.length} class{classSlots.length === 1 ? '' : 'es'}</span>
+            )}
+          </span>
+        </button>
+
+        {detailsOpen && (
+          <div className="mt-2 max-h-[34vh] space-y-3 overflow-y-auto pr-0.5">
+            {/* Links + Flags */}
+            <div className="grid grid-cols-2 gap-3">
         {/* Links */}
         <div className="rounded-xl border border-line/50 bg-surface-2/30 p-2.5">
           <div className="mb-1.5 flex items-center justify-between">
@@ -203,7 +245,7 @@ export function SubjectDetail({ modeId, subject, onEdit }) {
       <button
         type="button"
         onClick={onEdit}
-        className="group/cs mt-4 w-full rounded-xl border border-line/50 bg-surface-2/30 p-2.5 text-left transition-colors hover:border-accent/40"
+        className="group/cs w-full rounded-xl border border-line/50 bg-surface-2/30 p-2.5 text-left transition-colors hover:border-accent/40"
       >
         <div className="mb-1.5 flex items-center justify-between">
           <span className="flex items-center gap-1.5 text-xs font-medium text-muted">
@@ -232,9 +274,12 @@ export function SubjectDetail({ modeId, subject, onEdit }) {
           )}
         </div>
       </button>
+          </div>
+        )}
+      </div>
 
-      {/* Kanban */}
-      <div className={cn('mt-4 flex min-h-0 flex-1 flex-col')}>
+      {/* Kanban — primary work surface, fills the remaining height */}
+      <div className={cn('mt-3 flex min-h-0 flex-1 flex-col')}>
         <span className="mb-2 text-xs font-medium text-muted">Tasks</span>
         <SubjectQuickAdd
           uid={user?.uid}
@@ -243,7 +288,12 @@ export function SubjectDetail({ modeId, subject, onEdit }) {
           subjectName={subject.name}
         />
         <div className="min-h-0 flex-1">
-          <MicroKanban modeId={targetModeId} subjectId={subject.id} subjectName={subject.name} />
+          <MicroKanban
+            modeId={targetModeId}
+            subjectId={subject.id}
+            subjectName={subject.name}
+            color={subject.color}
+          />
         </div>
       </div>
     </div>

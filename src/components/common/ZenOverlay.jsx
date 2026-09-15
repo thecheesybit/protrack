@@ -146,14 +146,15 @@ export function ZenOverlay() {
   const focusRunning = useStore((s) => s.status === 'running')
   const focusLocked = useStore((s) => s.focusLocked)
   const clockCentered = useStore((s) => s.clockCentered)
-  // Tracks whether the currently-shown scene was raised for Desk Clock Mode,
-  // so leaving that mode cleans it up but a manual close while still
-  // centered doesn't immediately pop it back up.
-  const clockSceneShownRef = useRef(false)
+  // A manually-opened scene (Ctrl+F) is "sticky": it stays up until dismissed,
+  // unlike the idle scene which auto-times-out.
+  const stickyRef = useRef(false)
   const activePrompt = useStore((s) => s.activePrompt)
   // Never draw a quote over a prompt that needs an answer.
   const promptBlocking = !!activePrompt && activePrompt.type !== 'quote'
-  const isBlocked = focusRunning || focusLocked || !zenEnabled || promptBlocking
+  // Desk Clock Mode (Ctrl+T) is a pure enlarged clock — the Zen/Forest scene is
+  // explicitly NOT shown while it's active, so clockCentered blocks the overlay.
+  const isBlocked = focusRunning || focusLocked || !zenEnabled || promptBlocking || clockCentered
 
   const { subjects } = useSubjects(activeModeId)
   const todos = useTodos()
@@ -188,9 +189,9 @@ export function ZenOverlay() {
     speakQuote(newQuote, voiceEnabled)
 
     clearTimeout(autoTimerRef.current)
-    // Desk Clock Mode's ambient scene stays up until the clock is un-centered —
-    // don't schedule an auto-dismiss while cycling quotes inside it.
-    if (!useStore.getState().clockCentered) {
+    // A manually-opened (Ctrl+F) scene is sticky — don't schedule auto-dismiss
+    // while cycling quotes inside it; the idle scene still times out.
+    if (!stickyRef.current) {
       const duration = Math.max(MIN_DURATION_MS, zenDuration)
       autoTimerRef.current = setTimeout(() => {
         dismiss()
@@ -227,6 +228,7 @@ export function ZenOverlay() {
     }
 
     clearTimeout(autoTimerRef.current)
+    stickyRef.current = !autoDismiss
     if (autoDismiss) {
       const duration = Math.max(MIN_DURATION_MS, zenDuration)
       autoTimerRef.current = setTimeout(() => {
@@ -249,37 +251,32 @@ export function ZenOverlay() {
     return () => window.removeEventListener('keydown', onKey)
   }, [show, dismiss, nextQuote])
 
-  // Idle auto-trigger AND Desk Clock Mode (Ctrl+T): centering the clock raises
-  // the same forest/quote scene as an ambient backdrop — it renders behind the
-  // clock (z-50 vs the clock's z-[55]) and stays up (no auto-dismiss) until the
-  // clock is un-centered, instead of waiting on the idle timer.
+  // Idle auto-trigger only. Desk Clock Mode (Ctrl+T) is a pure enlarged clock —
+  // the Zen/Forest scene is explicitly NOT raised there (clockCentered is part
+  // of isBlocked). The scene opens on idle, or on demand via Ctrl+F (handled by
+  // the 'protrack:open-zen' listener below).
   useEffect(() => {
     if (isBlocked) {
-      clockSceneShownRef.current = false
       dismiss()
       return undefined
     }
-
-    if (clockCentered) {
-      if (!clockSceneShownRef.current) {
-        clockSceneShownRef.current = true
-        revealScene({ autoDismiss: false })
-      }
-      return () => clearTimeout(autoTimerRef.current)
-    }
-
-    if (clockSceneShownRef.current) {
-      clockSceneShownRef.current = false
-      dismiss()
-      return undefined
-    }
-
     if (isIdle) {
       revealScene({ autoDismiss: true })
     }
-
     return () => clearTimeout(autoTimerRef.current)
-  }, [isIdle, isBlocked, clockCentered, revealScene, dismiss])
+  }, [isIdle, isBlocked, revealScene, dismiss])
+
+  // On-demand open via Ctrl+F (dispatched from the Dashboard keydown handler).
+  // Opens a sticky Forest Sanctuary scene that stays until Esc / close.
+  useEffect(() => {
+    const onOpen = (e) => {
+      const st = useStore.getState()
+      if (st.status === 'running' || st.focusLocked || st.clockCentered) return
+      revealScene({ tab: e.detail?.tab || 'forest', autoDismiss: false })
+    }
+    window.addEventListener('protrack:open-zen', onOpen)
+    return () => window.removeEventListener('protrack:open-zen', onOpen)
+  }, [revealScene])
 
   const quoteLines = quote.text.split('\n')
 

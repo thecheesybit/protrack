@@ -83,7 +83,8 @@ users/{uid}
   profile, settings { theme, activeModeId, hydrationIntervalMin, gcalInboxModeId, gcalAutoSync, onboarding{...} }, statsAggregate
   modes/{modeId}                      { name, icon, accentColor, order }
     subjects/{subjectId}              { name, color, progressPct, links[], flags[] }
-      tasks/{taskId}                  { title, column, order }   ← Kanban
+      tasks/{taskId}                  { title, column, order, topicId? }   ← Kanban; topicId groups lessons
+      topics/{topicId}                { title, color?, order }   ← per-subject grouping layer (topicService)
     timetableSlots/{slotId}           { dayOfWeek, startMin, endMin, label, color, googleEventId?, source? }
     goals/{goalId}
     exams/{examId}                    { name, category, targetScore?, targetAccuracy?, color, order, deletedAt? }  ← soft-delete, 15-day restore (examService)
@@ -98,8 +99,13 @@ users/{uid}
 
 **Updated field shapes (v1.2):**
 ```
-tasks/{taskId}   { title, column, order, priority, notes, dueAt, createdAt }
-todos/{todoId}   { text, done, modeId, dueAt, subjectId, type?, eventDate?, eventStartMin?, eventEndMin?, googleEventId?, source? }
+tasks/{taskId}   { title, column, order, priority, notes, dueAt, createdAt, topicId? }
+                 ← topicId (nullable) links a lesson to a subjects/{id}/topics/{topicId} doc;
+                   the subject board's Topics view (MicroKanban ⇄ TopicBoard, lib/topics.js)
+                   groups tasks AND subject-linked to-dos (todo.subjectTopicId) under collapsible
+                   topics + "complete topic" (completeTopicCards)
+todos/{todoId}   { text, done, modeId, dueAt, subjectId, subjectColumn?, subjectTopicId?, type?, eventDate?, eventStartMin?, eventEndMin?, googleEventId?, source? }
+                 ← subjectColumn = lane on the subject board; subjectTopicId = topic grouping for a subject-linked todo
                  ← `type:'event'` + eventDate/eventStartMin/eventEndMin for one-time calendar events;
                    googleEventId/source:'gcal' set when the item is mirrored to Google Calendar (P2)
   devices/{fingerprint}               { label, platform, boundAt, lastSeen }

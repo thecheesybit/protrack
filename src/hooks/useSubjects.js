@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
 import { subscribeToSubjects, subscribeToTasks } from '@/services/subjectService'
+import { subscribeToTopics } from '@/services/topicService'
 
 /** Realtime subjects for a mode, or aggregated if modeId === 'all' */
 export function useSubjects(modeId) {
@@ -75,4 +76,21 @@ export function useTasks(modeId, subjectId) {
   }, [user, modeId, subjectId])
 
   return tasks
+}
+
+/** Realtime topic groups for one subject (one bounded per-subject listener). */
+export function useTopics(modeId, subjectId) {
+  const { user } = useAuth()
+  const [topics, setTopics] = useState([])
+
+  useEffect(() => {
+    if (!user || !modeId || !subjectId) {
+      setTopics([])
+      return undefined
+    }
+    const unsub = subscribeToTopics(user.uid, modeId, subjectId, setTopics)
+    return unsub
+  }, [user, modeId, subjectId])
+
+  return topics
 }

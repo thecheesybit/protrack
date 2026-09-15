@@ -1,5 +1,29 @@
 # Changelog
 
+## v2.12.0 — 2026-09-15
+
+### 📋 Subjects — topics, cleaner panel, correct selection
+- **Group lessons into topics.** The subject board has a new **Topics** view (toggle top-right of the board). Bundle lessons under collapsible topics ("Lessons 1–5 → Kinematics"), each showing its own progress. **Complete a topic** in one click and every lesson in it is marked done and the subject's progress updates.
+- **Drag to organise.** Drag a lesson by its grip to move it to another topic or reorder it within one; an **Ungrouped** bucket lets you pull items back out. Recolour, rename, or delete a topic from its header (deleting keeps the lessons, just ungroups them).
+- **To-dos belong in topics too.** General to-dos linked to a subject now appear in the Topics view and can be assigned to a topic (existing ones from the row menu, new ones added straight in) — "Complete topic" finishes tasks and to-dos alike.
+- **Fixed: the subject panel always opened on the first subject (Finance).** Clicking a subject now opens the maximized view on *that* subject, carried through the cross-module nav bus.
+- **Collapsible overview.** Links · pending notes · class schedule now live in a bounded, collapsible "Overview" section so the Kanban board gets priority space (the details panel shrinks instead of squeezing the board).
+
+### 🌳 Deep Focus → subject board
+- When a focus session's mapped to-do is completed from the session card, it now **moves to the subject board's Done lane** (not just marked done in the background) and the subject's progress updates — previously a merged to-do could be completed but stay in its old lane.
+
+### 🕐 Desk Clock & Forest Sanctuary
+- **`Ctrl+T` is now a pure Desk Clock** — the Forest/Zen scene no longer appears behind it.
+- **New `Ctrl+F` opens the Forest Sanctuary** on demand (sticky until Esc/close).
+- **The floating clock is larger and squarer to the corner** — equal left/bottom margins, and it now keeps a comfortable gap from the calendar. It stays **fixed in normal mode** and is **draggable/resizable only inside a Deep Focus session**, snapping back to its dock when you leave focus or centered mode.
+
+### ⌨️ Shortcuts
+- **`H`** opens Habits. (Full list under the `?` sheet.)
+
+### 🎨 Readability
+- **Timetable time-axis** hour labels are larger and higher-contrast — much easier to read.
+- **Notes & Scorecard** widgets get a readability/hierarchy pass: cleaner controls, larger type, and real report-card-sized KPI numbers on the scorecard.
+
 ## v2.10.2 — 2026-09-14
 
 ### 🌲 Zen & Desk Clock Mode

@@ -967,7 +967,7 @@ export function TimetableGrid({
             {hours.map((m) => (
               <div
                 key={m}
-                className="absolute right-0 -translate-y-1/2 pr-2 text-right text-[10px] text-muted"
+                className="absolute right-0 -translate-y-1/2 pr-2 text-right text-xs font-semibold tabular-nums text-ink/75"
                 style={{ top: (m - DAY_START_MIN) * ppm }}
               >
                 {minutesToAxis(m)}

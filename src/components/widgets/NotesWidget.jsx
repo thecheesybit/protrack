@@ -424,13 +424,13 @@ export function NotesWidget({ widget, variant }) {
                       playPop()
                     }}
                     className={cn(
-                      'flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium transition-all',
+                      'flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all',
                       active
-                        ? 'bg-accent text-white shadow-sm'
+                        ? 'bg-accent text-white shadow-sm ring-1 ring-accent/30'
                         : 'text-muted hover:bg-surface-2 hover:text-ink',
                     )}
                   >
-                    <Icon className="h-3 w-3" />
+                    <Icon className="h-3.5 w-3.5" />
                     <span>{t.label}</span>
                   </button>
                 )
@@ -576,7 +576,7 @@ export function NotesWidget({ widget, variant }) {
                       ? 'Capture a memory or recollection you want to come back to...'
                       : 'Drop a random note, idea, scratchpad text, or paste a link...'
                   }
-                  className="flex-1 resize-none rounded-xl border border-line/60 bg-surface px-3 py-1.5 text-xs outline-none focus:border-accent leading-relaxed"
+                  className="flex-1 resize-none rounded-xl border border-line/60 bg-surface px-3 py-2 text-sm outline-none focus:border-accent leading-relaxed"
                 />
                 <button
                   type="submit"
@@ -654,7 +654,7 @@ export function NotesWidget({ widget, variant }) {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search recollections, voice notes, links..."
-              className="w-full rounded-xl border border-line/50 bg-surface-2/30 pl-8 pr-7 py-1 text-xs outline-none focus:border-accent"
+              className="w-full rounded-xl border border-line/50 bg-surface-2/30 pl-8 pr-7 py-1.5 text-sm outline-none focus:border-accent"
             />
             {searchQuery && (
               <button
@@ -675,10 +675,10 @@ export function NotesWidget({ widget, variant }) {
                   key={k}
                   onClick={() => setFilterType(k)}
                   className={cn(
-                    'rounded-lg px-2 py-0.5 text-[10px] font-semibold transition-all',
+                    'rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-all',
                     active
-                      ? 'bg-ink/15 text-ink border border-line font-bold'
-                      : 'text-muted hover:text-ink',
+                      ? 'border-accent bg-accent/15 text-accent'
+                      : 'border-transparent text-muted hover:bg-surface-2 hover:text-ink',
                   )}
                 >
                   {cfg.label}
@@ -757,7 +757,7 @@ export function NotesWidget({ widget, variant }) {
                       >
                         <Icon className="h-3 w-3" />
                       </span>
-                      <h4 className="truncate text-xs font-semibold text-ink">
+                      <h4 className="truncate text-sm font-semibold text-ink">
                         {n.title || cfg.label}
                       </h4>
                       {n.pinned && (
@@ -766,7 +766,7 @@ export function NotesWidget({ widget, variant }) {
                     </div>
 
                     <div className="flex items-center gap-1 shrink-0">
-                      <span className="text-[9px] text-muted font-mono">
+                      <span className="text-[10px] text-muted font-mono">
                         {n.createdAt?.toDate
                           ? n.createdAt.toDate().toLocaleDateString(undefined, {
                               month: 'short',

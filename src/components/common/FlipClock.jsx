@@ -31,17 +31,19 @@ const SCALE_KEY = 'protrack:clock_scale'
 export const BASE_CLOCK_WIDTH  = 168
 export const BASE_CLOCK_HEIGHT = 88
 
-// Default scale of 1.25 gives ~210px width, matching the bottom row cards and screenshot proportions.
-export const DEFAULT_SCALE = 1.25
+// Default scale — a larger, more legible desk clock (~252px wide at 1.5×).
+export const DEFAULT_SCALE = 1.5
+
+// Equal left + bottom margin so the docked clock sits with symmetric gutters.
+export const CLOCK_MARGIN = 24
 
 export function getDefaultPos(currentScale = DEFAULT_SCALE) {
   const scaledHeight = BASE_CLOCK_HEIGHT * currentScale
-  // Sit ~28px above the bottom of the window (clear of taskbar / screen edge)
+  // Symmetric bottom gutter — same as the left margin — clear of the taskbar.
   const defaultY = typeof window !== 'undefined'
-    ? Math.max(0, window.innerHeight - scaledHeight - 28)
+    ? Math.max(0, window.innerHeight - scaledHeight - CLOCK_MARGIN)
     : 680
-  // Aligned with the sidebar icons rail (left-6 = 24px)
-  const defaultX = 24
+  const defaultX = CLOCK_MARGIN
   return { x: defaultX, y: defaultY }
 }
 
@@ -225,9 +227,23 @@ export function FlipClock() {
   const centeredX = Math.max(0, (winSize.w - baseW * CENTERED_SCALE) / 2)
   const centeredY = Math.max(0, (winSize.h - baseH * CENTERED_SCALE) / 2)
 
-  const targetX = clockCentered ? centeredX : pos.x
-  const targetY = clockCentered ? centeredY : pos.y
-  const targetScale = clockCentered ? CENTERED_SCALE : scale
+  // The clock is only free to move/resize inside a Deep Focus session. In the
+  // normal dashboard it stays pinned to its bottom-left dock at the default
+  // scale (the `pos`/`scale` custom values apply to focus mode only), and in
+  // centered "desk clock" mode it snaps to screen-centre. Leaving focus (or
+  // centered mode) therefore returns it to the exact docked spot every time.
+  const interactive = focusLocked && !clockCentered
+  const dockPos = getDefaultPos(DEFAULT_SCALE)
+  // The "ALARM" tab hangs ~14px (unscaled) below the clock box, so at the docked
+  // scale it eats into the bottom gutter and the bottom gap ends up much smaller
+  // than the left one. Lift the docked clock by that (scaled) overhang so the
+  // tab's bottom edge keeps the same CLOCK_MARGIN gap as the left edge — the
+  // "equal gap on all edges" the design calls for.
+  const ALARM_TAB_OVERHANG = 14
+  const dockY = Math.max(0, dockPos.y - ALARM_TAB_OVERHANG * DEFAULT_SCALE)
+  const targetX = clockCentered ? centeredX : interactive ? pos.x : dockPos.x
+  const targetY = clockCentered ? centeredY : interactive ? pos.y : dockY
+  const targetScale = clockCentered ? CENTERED_SCALE : interactive ? scale : DEFAULT_SCALE
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -247,25 +263,6 @@ export function FlipClock() {
       })
     }, 1000)
     return () => clearInterval(id)
-  }, [])
-
-  // Responsive default docking: if user hasn't manually moved the clock,
-  // keep it docked at bottom-left on window resize or maximize.
-  useEffect(() => {
-    let hasCustomPos = false
-    try {
-      const stored = localStorage.getItem(POS_KEY)
-      hasCustomPos = Boolean(stored) && JSON.parse(stored)?.x !== 12
-    } catch { /* fallback */ }
-    if (hasCustomPos) return
-
-    const onResize = () => {
-      const nextPos = getDefaultPos(scaleRef.current)
-      posRef.current = nextPos
-      setPos(nextPos)
-    }
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
   }, [])
 
   // Safety net for a CUSTOM position: never let the clock sit off-screen.
@@ -299,7 +296,7 @@ export function FlipClock() {
   /* ── Body drag (move) ──────────────────────────────── */
 
   const handlePointerDown = useCallback((e) => {
-    if (clockCentered) return
+    if (!interactive) return
     if (e.button !== 0) return
     // Don't start a body drag if the grip is initiating a resize
     if (resizing.current) return
@@ -307,7 +304,7 @@ export function FlipClock() {
     dragStart.current = { px: e.clientX, py: e.clientY, ox: posRef.current.x, oy: posRef.current.y, pressed: true }
     const el = clockRef.current
     if (el) el.setPointerCapture(e.pointerId)
-  }, [clockCentered])
+  }, [interactive])
 
   const handlePointerMove = useCallback((e) => {
     const ds = dragStart.current
@@ -339,7 +336,7 @@ export function FlipClock() {
   /* ── Grip resize (scale) ───────────────────────────── */
 
   const handleGripPointerDown = useCallback((e) => {
-    if (clockCentered) return
+    if (!interactive) return
     if (e.button !== 0) return
     e.stopPropagation() // prevent body drag from starting
     resizing.current = true
@@ -351,7 +348,7 @@ export function FlipClock() {
     }
     const el = gripRef.current
     if (el) el.setPointerCapture(e.pointerId)
-  }, [clockCentered])
+  }, [interactive])
 
   const handleGripPointerMove = useCallback((e) => {
     const rs = resizeStart.current
@@ -377,7 +374,7 @@ export function FlipClock() {
   /* ── Wheel resize ──────────────────────────── */
 
   const handleWheel = useCallback((e) => {
-    if (clockCentered) return
+    if (!interactive) return
     setScale((prev) => {
       // Flipped: scroll down (deltaY > 0) zooms in, scroll up (deltaY < 0) zooms out
       const ds = e.deltaY > 0 ? 0.05 : -0.05
@@ -386,7 +383,7 @@ export function FlipClock() {
       try { localStorage.setItem(SCALE_KEY, next.toString()) } catch { /* private mode */ }
       return next
     })
-  }, [clockCentered])
+  }, [interactive])
 
   /* ── Double-click: toggle pin / auto-hide or return from centered ─── */
 
@@ -446,15 +443,19 @@ export function FlipClock() {
           title={
             clockCentered
               ? 'Desk Clock Mode · Press Ctrl+T, Esc, or double-click to return'
+              : interactive
+              ? 'Deep Focus · Drag to move · Scroll or grip to resize'
               : mode === 'pinned'
-              ? 'Double-click to enable auto-hide · Drag to move · Scroll/grip to resize · Ctrl+T to center'
-              : 'Double-click to pin clock · Drag to move · Scroll/grip to resize · Ctrl+T to center'
+              ? 'Pinned to the dock · Double-click for auto-hide · Ctrl+T for Desk Clock · draggable in Deep Focus'
+              : 'Auto-hides in focus/fullscreen · Double-click to pin · Ctrl+T for Desk Clock · draggable in Deep Focus'
           }
           className={cn(
             "fixed z-[55] flex w-[180px] select-none flex-col items-center gap-2 rounded-2xl border bg-surface/80 px-3 py-3 shadow-glass backdrop-blur-xl transition-colors touch-none group",
             clockCentered
               ? "cursor-default border-accent/40 shadow-glow ring-1 ring-accent/25"
-              : "cursor-grab border-line/50 hover:border-accent/40 active:cursor-grabbing"
+              : interactive
+              ? "cursor-grab border-line/50 hover:border-accent/40 active:cursor-grabbing"
+              : "cursor-default border-line/50"
           )}
           style={{
             transformOrigin: 'top left',
@@ -514,8 +515,9 @@ export function FlipClock() {
             />
           )}
 
-          {/* Bottom-right resize grip — visible on hover when not centered */}
-          {!clockCentered && (
+          {/* Bottom-right resize grip — only in Deep Focus, where the clock is
+              free to move/resize (fixed to the dock in normal mode). */}
+          {interactive && (
             <div
               ref={gripRef}
               onPointerDown={handleGripPointerDown}

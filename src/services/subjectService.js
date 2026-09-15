@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { addLedgerEntry } from '@/services/ledgerService'
-import { getTodosOnce, updateTodo } from '@/services/todoService'
+import { getTodosOnce, updateTodo, bulkCompleteTodos } from '@/services/todoService'
 
 const subjectsCol = (uid, modeId) =>
   collection(db, 'users', uid, 'modes', modeId, 'subjects')
@@ -153,7 +153,11 @@ export async function completeTaskAndRecomputeProgress(uid, modeId, subjectId, t
  * confirmed mapping target is a todo rather than a Kanban task.
  */
 export async function completeTodoAndRecomputeProgress(uid, modeId, subjectId, todoId) {
-  await updateTodo(uid, todoId, { done: true })
+  // Also pin `subjectColumn: 'done'` so the card visibly moves to the subject
+  // board's Done lane. The merged Kanban (lib/kanbanMerge) derives a todo's lane
+  // from `subjectColumn` first, so setting only `done` would mark it complete
+  // for progress/deadlines but leave the card sitting in its old lane.
+  await updateTodo(uid, todoId, { done: true, subjectColumn: 'done' })
   if (!modeId || !subjectId) return
   const pct = await computeSubjectProgressPct(uid, modeId, subjectId)
   await setSubjectProgress(uid, modeId, subjectId, pct)
@@ -169,16 +173,43 @@ export async function setMappingNeedsReview(uid, modeId, subjectId, needsReview 
   return updateSubject(uid, modeId, subjectId, { mappingNeedsReview: needsReview })
 }
 
-export async function addTask(uid, modeId, subjectId, { title, column, priority, notes, dueAt }) {
+export async function addTask(uid, modeId, subjectId, { title, column, priority, notes, dueAt, topicId }) {
   return addDoc(tasksCol(uid, modeId, subjectId), {
     title,
     column: column || 'todo',
     priority: priority || 'medium', // 'low' | 'medium' | 'high' | 'urgent'
     notes: notes || '',
     dueAt: dueAt || null,
+    topicId: topicId || null, // optional grouping (see lib/topics.js, topicService.js)
     order: Date.now(),
     createdAt: serverTimestamp(),
   })
+}
+
+/**
+ * Marks a whole topic's cards done in one pass, then recomputes the subject's
+ * progress once. Handles both native Kanban tasks and merged general to-dos
+ * (each batched into its own collection). Powers the grouped board's "Complete
+ * topic". `taskIds` / `todoIds` are the topic's not-yet-done ids of each kind.
+ */
+export async function completeTopicCards(uid, modeId, subjectId, { taskIds = [], todoIds = [] } = {}) {
+  if (!uid || !modeId || !subjectId) return
+  if (!taskIds.length && !todoIds.length) return
+
+  if (taskIds.length) {
+    const batch = writeBatch(db)
+    const baseOrder = Date.now()
+    taskIds.forEach((id, i) => {
+      batch.update(doc(tasksCol(uid, modeId, subjectId), id), { column: 'done', order: baseOrder + i })
+    })
+    await batch.commit()
+  }
+  if (todoIds.length) {
+    await bulkCompleteTodos(uid, todoIds)
+  }
+
+  const pct = await computeSubjectProgressPct(uid, modeId, subjectId)
+  await setSubjectProgress(uid, modeId, subjectId, pct)
 }
 
 /**
@@ -232,6 +263,7 @@ export async function addTasksBulk(uid, modeId, subjectId, titles, opts = {}) {
         priority,
         notes: opts.notes || '',
         dueAt: opts.dueAt || null,
+        topicId: opts.topicId || null,
         order: baseOrder + (i + idx) * 10,
         createdAt: serverTimestamp(),
       })

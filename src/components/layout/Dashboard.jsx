@@ -268,6 +268,14 @@ export function Dashboard() {
         return
       }
 
+      // ── Ctrl / Cmd + F : Open the Forest Sanctuary (Zen scene) ──
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
+        if (isTyping) return
+        e.preventDefault()
+        window.dispatchEvent(new CustomEvent('protrack:open-zen', { detail: { tab: 'forest' } }))
+        return
+      }
+
       // Single-letter or Alt-prefixed shortcuts (suppressed while typing)
       if (isTyping && !e.altKey) return
       if (e.metaKey || e.ctrlKey) return
@@ -329,6 +337,13 @@ export function Dashboard() {
       if (k === 's') {
         e.preventDefault()
         st.toggleWidget('subjects')
+        return
+      }
+
+      // ── H : Habits ──
+      if (k === 'h') {
+        e.preventDefault()
+        st.toggleWidget('habits')
         return
       }
 
@@ -410,7 +425,11 @@ export function Dashboard() {
             {/* Main workspace containers A (Timetable, To-dos, Bottom Dock) — disappears on Ctrl+T */}
             <main
               className={cn(
-                "min-h-0 flex-1 pl-16 sm:pl-64 lg:pl-[272px] pr-8 sm:pr-14 lg:pr-[6%] transition-all duration-500 ease-out",
+                // Left gutter clears the enlarged floating clock (bottom-left) so
+                // the timetable/calendar container keeps a comfortable gap from it
+                // — same padding in normal and fullscreen, so the gap is identical
+                // in both modes.
+                "min-h-0 flex-1 pl-16 sm:pl-72 lg:pl-[300px] pr-8 sm:pr-14 lg:pr-[6%] transition-all duration-500 ease-out",
                 clockCentered && "pointer-events-none opacity-0 scale-[0.97]"
               )}
             >

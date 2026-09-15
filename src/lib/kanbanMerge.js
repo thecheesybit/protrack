@@ -28,6 +28,10 @@ export function todoToCard(todo) {
     priority: todo.priority || 'medium',
     notes: todo.notes || '',
     dueAt: todo.dueAt || null,
+    // Merged todos join a subject's topic groups via their own `subjectTopicId`
+    // (kept separate from any Kanban-task topicId), surfaced here as topicId so
+    // lib/topics grouping treats tasks and todos uniformly.
+    topicId: todo.subjectTopicId || null,
     order: todo.order ?? 0,
   }
 }

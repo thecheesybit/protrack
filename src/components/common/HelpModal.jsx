@@ -16,6 +16,7 @@ const NAVIGATION = [
   ['D', 'Open Deep Focus'],
   ['N', 'Open Notes'],
   ['S', 'Open Subjects'],
+  ['H', 'Open Habits'],
   ['E / X', 'Open Scorecard (exams & mocks)'],
   ['M / Double-click', 'Maximize / restore widget'],
 ]
@@ -28,7 +29,8 @@ const IN_APP = [
   ['Ctrl / Cmd + M', 'Mute / unmute ambient audio'],
   ['Ctrl / Cmd + B', 'Toggle Workspaces bottom dock'],
   ['Ctrl / Cmd + K', 'Open the AI companion'],
-  ['Ctrl / Cmd + T', 'Center the clock (Zen)'],
+  ['Ctrl / Cmd + F', 'Open the Forest Sanctuary'],
+  ['Ctrl / Cmd + T', 'Desk Clock Mode (enlarged clock, centered)'],
   ['Alt + A', 'Set Alarm / Reminder (Flip Clock)'],
   ['F', 'Toggle fullscreen (when idle or already fullscreen)'],
   ['Esc', 'Close the top overlay — panel, modal, maximized widget, then fullscreen'],

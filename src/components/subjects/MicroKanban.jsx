@@ -19,10 +19,10 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Plus, X, GripVertical, Flag, StickyNote, ChevronDown, Calendar, Pencil, Copy, ListTodo } from 'lucide-react'
+import { Plus, X, GripVertical, Flag, StickyNote, ChevronDown, Calendar, Pencil, Copy, ListTodo, LayoutGrid, ListTree } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
-import { useTasks } from '@/hooks/useSubjects'
+import { useTasks, useTopics } from '@/hooks/useSubjects'
 import { useTodos } from '@/hooks/useWellness'
 import {
   addTask,
@@ -30,15 +30,20 @@ import {
   deleteTask,
   setSubjectProgress,
   reorderTasks,
+  completeTopicCards,
 } from '@/services/subjectService'
+import { addTopic, updateTopic, deleteTopic } from '@/services/topicService'
 import { updateTodo, deleteTodo, reorderTodos } from '@/services/todoService'
 import { mergeSubjectCards } from '@/lib/kanbanMerge'
 import { addLedgerEntry } from '@/services/ledgerService'
 import { getPriority, nextPriority, PRIORITIES } from '@/lib/priority'
 import { classifyDeadline } from '@/lib/deadlines'
 import { PriorityLegend } from '@/components/common/PriorityLegend'
+import { TopicBoard } from './TopicBoard'
 import { playPop, playSuccess } from '@/lib/audioFX'
 import { cn } from '@/utils/cn'
+
+const VIEW_KEY = 'protrack:subject_board_view'
 
 function toDTLocal(dueAt) {
   if (!dueAt) return ''
@@ -358,11 +363,29 @@ function Column({ col, tasks, onAdd, onDelete, onUpdate, onDuplicate }) {
   )
 }
 
-export function MicroKanban({ modeId, subjectId, subjectName }) {
+export function MicroKanban({ modeId, subjectId, subjectName, color }) {
   const { user } = useAuth()
   const tasks = useTasks(modeId, subjectId)
+  const topics = useTopics(modeId, subjectId)
   const todos = useTodos()
   const [activeId, setActiveId] = useState(null)
+
+  // 'flat' (3-column Kanban) or 'topics' (lessons grouped under topic headers).
+  const [view, setView] = useState(() => {
+    try {
+      return localStorage.getItem(VIEW_KEY) === 'topics' ? 'topics' : 'flat'
+    } catch {
+      return 'flat'
+    }
+  })
+  const setBoardView = (next) => {
+    setView(next)
+    try {
+      localStorage.setItem(VIEW_KEY, next)
+    } catch {
+      /* private mode */
+    }
+  }
 
   // Unified board: this subject's own Kanban tasks + any general todo linked
   // to it (todo.subjectId === subjectId) — see lib/kanbanMerge.js.
@@ -406,6 +429,100 @@ export function MicroKanban({ modeId, subjectId, subjectName }) {
     return updateTask(user.uid, modeId, subjectId, cardId, patch)
   }
 
+  /**
+   * Move one card to a target Kanban column, keeping subject progress, the
+   * Island pulse and the ledger in sync. Shared by drag-drop (flat view) and
+   * the grouped view's done checkbox so both behave identically.
+   */
+  const moveCardToColumn = (card, targetCol) => {
+    if (!card || card.column === targetCol) return
+    if (targetCol === 'done') playSuccess()
+
+    if (card._kind === 'todo') {
+      updateTodo(user.uid, card.id, { subjectColumn: targetCol, done: targetCol === 'done' })
+    } else {
+      updateTask(user.uid, modeId, subjectId, card.id, { column: targetCol, order: Date.now() })
+    }
+
+    const crossesDone = targetCol === 'done' || card.column === 'done'
+    if (!crossesDone) return
+
+    const total = cards.length
+    const doneAfter =
+      cards.filter((c) => c.id !== card.id && c.column === 'done').length +
+      (targetCol === 'done' ? 1 : 0)
+    const pct = total ? Math.round((doneAfter / total) * 100) : 0
+    setSubjectProgress(user.uid, modeId, subjectId, pct)
+
+    if (targetCol === 'done') {
+      const label = subjectName ? `${subjectName} · ${pct}% complete` : `${pct}% of board complete`
+      useStore.getState().pushIsland({
+        kind: 'progress',
+        title: 'Task completed',
+        detail: label,
+        progress: pct,
+        duration: 4200,
+      })
+      addLedgerEntry(user.uid, {
+        kind: 'task',
+        title: card.title,
+        detail: subjectName ? `Completed in ${subjectName}` : 'Task completed',
+        modeId,
+      })
+    }
+  }
+
+  // ── Topic (grouped view) handlers — operate on native subject tasks ───────
+  const toggleTaskDone = (taskId) => {
+    const card = cards.find((c) => c.id === taskId)
+    if (!card) return
+    moveCardToColumn(card, card.column === 'done' ? 'todo' : 'done')
+  }
+  // Route topic assignment by card kind: native tasks store `topicId`, merged
+  // general to-dos store `subjectTopicId` (surfaced as topicId by kanbanMerge).
+  const assignTaskTopic = (cardId, topicId) => {
+    const card = cards.find((c) => c.id === cardId)
+    if (!card) return
+    if (card._kind === 'todo') {
+      return updateTodo(user.uid, cardId, { subjectTopicId: topicId || null })
+    }
+    return updateTask(user.uid, modeId, subjectId, cardId, { topicId: topicId || null })
+  }
+  const addTaskToTopic = (title, topicId) =>
+    addTask(user.uid, modeId, subjectId, {
+      title,
+      column: 'todo',
+      priority: 'medium',
+      topicId: topicId || null,
+    })
+  const completeTopic = async (topic, groupCards) => {
+    const notDone = (groupCards || []).filter((c) => c.column !== 'done')
+    if (!notDone.length) return
+    const taskIds = notDone.filter((c) => c._kind !== 'todo').map((c) => c.id)
+    const todoIds = notDone.filter((c) => c._kind === 'todo').map((c) => c.id)
+    await completeTopicCards(user.uid, modeId, subjectId, { taskIds, todoIds })
+    useStore.getState().pushIsland({
+      kind: 'progress',
+      title: 'Topic completed',
+      detail: subjectName ? `${topic.title} · ${subjectName}` : topic.title,
+      duration: 4200,
+    })
+    addLedgerEntry(user.uid, {
+      kind: 'task',
+      title: `Completed topic: ${topic.title}`,
+      detail: subjectName ? `All items done in ${subjectName}` : 'All items done',
+      modeId,
+    }).catch(() => {})
+  }
+  const createTopic = (title) => addTopic(user.uid, modeId, subjectId, { title })
+  const renameTopic = (topicId, title) => updateTopic(user.uid, modeId, subjectId, topicId, { title })
+  const recolorTopic = (topicId, color) => updateTopic(user.uid, modeId, subjectId, topicId, { color })
+  const removeTopic = (topicId) => deleteTopic(user.uid, modeId, subjectId, topicId)
+  // Reorder within a topic — tasks and todos live in separate collections with
+  // independent `order` sequences, so each kind's subset is re-numbered.
+  const reorderTaskIds = (ids) => ids?.length && reorderTasks(user.uid, modeId, subjectId, ids)
+  const reorderTodoIds = (ids) => ids?.length && reorderTodos(user.uid, ids)
+
   /** Find which column a draggable id belongs to (card id OR column id). */
   const findColumnFor = (id) => {
     if (COLUMNS.some((c) => c.id === id)) return id
@@ -425,45 +542,7 @@ export function MicroKanban({ modeId, subjectId, subjectName }) {
 
     // Case 1: dropping on a different column → move + recompute progress.
     if (task.column !== targetCol) {
-      if (targetCol === 'done') playSuccess()
-
-      if (task._kind === 'todo') {
-        updateTodo(user.uid, task.id, { subjectColumn: targetCol, done: targetCol === 'done' })
-      } else {
-        updateTask(user.uid, modeId, subjectId, task.id, {
-          column: targetCol,
-          order: Date.now(),
-        })
-      }
-
-      const crossesDone = targetCol === 'done' || task.column === 'done'
-      if (crossesDone) {
-        const total = cards.length
-        const doneAfter =
-          cards.filter((c) => c.id !== task.id && c.column === 'done').length +
-          (targetCol === 'done' ? 1 : 0)
-        const pct = total ? Math.round((doneAfter / total) * 100) : 0
-        setSubjectProgress(user.uid, modeId, subjectId, pct)
-
-        if (targetCol === 'done') {
-          const label = subjectName
-            ? `${subjectName} · ${pct}% complete`
-            : `${pct}% of board complete`
-          useStore.getState().pushIsland({
-            kind: 'progress',
-            title: 'Task completed',
-            detail: label,
-            progress: pct,
-            duration: 4200,
-          })
-          addLedgerEntry(user.uid, {
-            kind: 'task',
-            title: task.title,
-            detail: subjectName ? `Completed in ${subjectName}` : 'Task completed',
-            modeId,
-          })
-        }
-      }
+      moveCardToColumn(task, targetCol)
       return
     }
 
@@ -486,6 +565,67 @@ export function MicroKanban({ modeId, subjectId, subjectName }) {
 
   const activeTask = cards.find((c) => c.id === activeId)
 
+  const toolbar = (
+    <div className="flex items-center justify-between gap-2 px-1">
+      <PriorityLegend />
+      <div
+        className="flex shrink-0 items-center gap-0.5 rounded-lg border border-line/60 bg-surface-2/40 p-0.5"
+        role="group"
+        aria-label="Board view"
+      >
+        <button
+          type="button"
+          onClick={() => setBoardView('flat')}
+          title="Board view (To do · Doing · Done)"
+          aria-pressed={view === 'flat'}
+          className={cn(
+            'flex h-6 w-6 items-center justify-center rounded-md transition-colors',
+            view === 'flat' ? 'bg-accent/20 text-accent' : 'text-muted hover:text-ink',
+          )}
+        >
+          <LayoutGrid className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setBoardView('topics')}
+          title="Topics view (group lessons under topics)"
+          aria-pressed={view === 'topics'}
+          className={cn(
+            'flex h-6 w-6 items-center justify-center rounded-md transition-colors',
+            view === 'topics' ? 'bg-accent/20 text-accent' : 'text-muted hover:text-ink',
+          )}
+        >
+          <ListTree className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  )
+
+  if (view === 'topics') {
+    return (
+      <div className="flex h-full flex-col gap-2">
+        {toolbar}
+        <TopicBoard
+          tasks={cards}
+          topics={topics}
+          color={color}
+          onToggleTask={toggleTaskDone}
+          onDeleteTask={del}
+          onUpdateTask={upd}
+          onAddTask={addTaskToTopic}
+          onAssignTopic={assignTaskTopic}
+          onCompleteTopic={completeTopic}
+          onAddTopic={createTopic}
+          onRenameTopic={renameTopic}
+          onRecolorTopic={recolorTopic}
+          onDeleteTopic={removeTopic}
+          onReorderTasks={reorderTaskIds}
+          onReorderTodos={reorderTodoIds}
+        />
+      </div>
+    )
+  }
+
   return (
     <DndContext
       sensors={sensors}
@@ -495,7 +635,7 @@ export function MicroKanban({ modeId, subjectId, subjectName }) {
       onDragCancel={() => setActiveId(null)}
     >
       <div className="flex h-full flex-col gap-2">
-        <PriorityLegend className="px-1" />
+        {toolbar}
         <div className="flex min-h-0 flex-1 gap-2">
           {COLUMNS.map((col) => (
             <Column

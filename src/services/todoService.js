@@ -79,6 +79,20 @@ export async function deleteTodo(uid, todoId) {
   return deleteDoc(doc(todosCol(uid), todoId))
 }
 
+/**
+ * Batch-mark a set of todos done and drop them into a subject board's Done lane
+ * (`subjectColumn`). Neither field is encrypted, so a plain batch is safe.
+ * Used by the subject board's "Complete topic" for topic-grouped todos.
+ */
+export async function bulkCompleteTodos(uid, todoIds) {
+  if (!todoIds?.length) return
+  const batch = writeBatch(db)
+  todoIds.forEach((id) => {
+    batch.update(doc(todosCol(uid), id), { done: true, subjectColumn: 'done' })
+  })
+  return batch.commit()
+}
+
 /** Atomic batch update of the `order` field across a re-arranged list. */
 export async function reorderTodos(uid, orderedIds) {
   if (!orderedIds?.length) return

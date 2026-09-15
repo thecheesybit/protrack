@@ -482,27 +482,27 @@ export function ScorecardWidget({ widget, variant }) {
 
                 {/* KPI Metrics Strip */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 pt-3 border-t border-line/30 text-center">
-                  <div className="rounded-xl bg-surface/60 p-2">
+                  <div className="rounded-xl bg-surface/60 p-2.5">
                     <span className="block text-[10px] text-muted font-medium">Attempts Logged</span>
-                    <span className="text-sm font-extrabold text-ink">{scorecards.length}</span>
+                    <span className="mt-0.5 block text-2xl font-extrabold tabular-nums text-ink">{scorecards.length}</span>
                   </div>
-                  <div className="rounded-xl bg-surface/60 p-2">
+                  <div className="rounded-xl bg-surface/60 p-2.5">
                     <span className="block text-[10px] text-muted font-medium">
                       Avg Score {selectedExam?.targetScore ? `/ Target ${selectedExam.targetScore}` : ''}
                     </span>
-                    <span className="text-sm font-extrabold text-accent">{stats.avgScore}</span>
+                    <span className="mt-0.5 block text-2xl font-extrabold tabular-nums text-accent">{stats.avgScore}</span>
                   </div>
-                  <div className="rounded-xl bg-surface/60 p-2">
+                  <div className="rounded-xl bg-surface/60 p-2.5">
                     <span className="block text-[10px] text-muted font-medium">
                       Avg Accuracy {selectedExam?.targetAccuracy ? `(Tgt ${selectedExam.targetAccuracy}%)` : ''}
                     </span>
-                    <span className="text-sm font-extrabold text-emerald-400">{stats.avgAccuracy}%</span>
+                    <span className="mt-0.5 block text-2xl font-extrabold tabular-nums text-emerald-400">{stats.avgAccuracy}%</span>
                   </div>
-                  <div className="rounded-xl bg-surface/60 p-2">
+                  <div className="rounded-xl bg-surface/60 p-2.5">
                     <span className="block text-[10px] text-muted font-medium">
                       Avg Percentile {selectedExam?.targetPercentile ? `(Tgt ${selectedExam.targetPercentile}%)` : ''}
                     </span>
-                    <span className="text-sm font-extrabold text-indigo-400">{stats.avgPercentile}%</span>
+                    <span className="mt-0.5 block text-2xl font-extrabold tabular-nums text-indigo-400">{stats.avgPercentile}%</span>
                   </div>
                 </div>
               </div>
@@ -879,18 +879,18 @@ export function ScorecardWidget({ widget, variant }) {
             </div>
 
             {/* Quick summary strip */}
-            <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-line/60 bg-surface-2/30 p-2 text-center text-xs">
+            <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-line/60 bg-surface-2/30 p-2.5 text-center">
               <div>
                 <span className="block text-[10px] text-muted">Attempts</span>
-                <span className="font-extrabold text-ink">{scorecards.length}</span>
+                <span className="text-lg font-extrabold tabular-nums text-ink">{scorecards.length}</span>
               </div>
               <div>
                 <span className="block text-[10px] text-muted">Avg Score</span>
-                <span className="font-extrabold text-accent">{stats.avgScore}</span>
+                <span className="text-lg font-extrabold tabular-nums text-accent">{stats.avgScore}</span>
               </div>
               <div>
                 <span className="block text-[10px] text-muted">Avg Acc</span>
-                <span className="font-extrabold text-emerald-400">{stats.avgAccuracy}%</span>
+                <span className="text-lg font-extrabold tabular-nums text-emerald-400">{stats.avgAccuracy}%</span>
               </div>
             </div>
 
