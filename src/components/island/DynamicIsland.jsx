@@ -29,7 +29,7 @@ const KIND = {
   info: { Icon: Info, tone: 'text-accent' },
   deadline: { Icon: Clock, tone: 'text-amber-400' },
   'update-downloading': { Icon: Download, tone: 'text-accent animate-pulse' },
-  'update-ready': { Icon: RefreshCw, tone: 'text-emerald-400 animate-spin' },
+  'update-ready': { Icon: RefreshCw, tone: 'text-emerald-400' },
 }
 
 const spring = { type: 'spring', stiffness: 420, damping: 34, mass: 0.7 }
@@ -47,6 +47,11 @@ export function DynamicIsland() {
 
   const meta = active ? KIND[active.kind] || KIND.info : null
   const Icon = meta?.Icon
+  // The update-ready card is not tap-to-dismiss: it carries an explicit
+  // "Restart" action button instead, so the whole pill isn't a click target.
+  const isUpdateReady = active?.kind === 'update-ready'
+
+  const dismiss = () => active && dismissIsland(active.id)
 
   return (
     <div
@@ -55,23 +60,30 @@ export function DynamicIsland() {
     >
       <AnimatePresence>
         {active && (
-          <motion.button
+          <motion.div
             key="island"
-            type="button"
             layout
-            onClick={() => {
-              if (active.kind === 'update-ready') {
-                desktopBridge?.update?.install?.()
-              } else {
-                dismissIsland(active.id)
-              }
-            }}
+            role={isUpdateReady ? undefined : 'button'}
+            tabIndex={isUpdateReady ? undefined : 0}
+            onClick={isUpdateReady ? undefined : dismiss}
+            onKeyDown={
+              isUpdateReady
+                ? undefined
+                : (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      dismiss()
+                    }
+                  }
+            }
             initial={{ y: -28, opacity: 0, scale: 0.85 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: -18, opacity: 0, scale: 0.92 }}
             transition={spring}
             aria-live="polite"
-            className="edge-light pointer-events-auto flex max-w-[min(92vw,30rem)] items-center gap-3 rounded-full border border-line/70 bg-surface/70 px-4 py-2.5 text-left shadow-glass-lg backdrop-blur-2xl"
+            className={`edge-light pointer-events-auto flex max-w-[min(92vw,32rem)] items-center gap-3 rounded-full border border-line/70 bg-surface/70 px-4 py-2.5 text-left shadow-glass-lg backdrop-blur-2xl ${
+              isUpdateReady ? '' : 'cursor-pointer'
+            }`}
           >
             <span
               className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/5 ${meta.tone}`}
@@ -97,7 +109,7 @@ export function DynamicIsland() {
               </motion.span>
             </AnimatePresence>
 
-            {typeof active.progress === 'number' && (
+            {typeof active.progress === 'number' && !isUpdateReady && (
               <span className="ml-1 flex shrink-0 items-center gap-2">
                 <span className="h-1.5 w-16 overflow-hidden rounded-full bg-white/10">
                   <motion.span
@@ -112,7 +124,21 @@ export function DynamicIsland() {
                 </span>
               </span>
             )}
-          </motion.button>
+
+            {isUpdateReady && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  desktopBridge?.update?.install?.()
+                }}
+                className="ml-1 inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Restart
+              </button>
+            )}
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

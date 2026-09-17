@@ -146,10 +146,20 @@ export function AuthProvider({ children }) {
 
   const signOut = useCallback(async () => {
     clearSessionCrypto()
+    // Clear the workspace store BEFORE flipping the user to null. Otherwise the
+    // Dashboard subtree lingers through the routing exit animation still bound to
+    // a now-null user; a Firestore-dependent child then throws mid-exit, framer's
+    // AnimatePresence(mode="wait") never completes the exit, and the login screen
+    // never mounts — the app appears blank. With userDoc cleared, `settings`
+    // becomes null so the Workspace gate falls back to the harmless AppLoader
+    // during that brief window, and the transition to the login screen completes.
+    const store = useStore.getState()
+    store.setUserDoc?.(null)
+    store.setModes?.([])
+    store.unlockApp?.()
+    store.setSettingsOpen?.(false)
+    store.setSupportOpen?.(false)
     setUser(null)
-    useStore.getState().unlockApp?.()
-    useStore.getState().setSettingsOpen?.(false)
-    useStore.getState().setSupportOpen?.(false)
     if (typeof window !== 'undefined' && window.location.pathname !== '/') {
       window.history.replaceState(null, '', '/')
     }

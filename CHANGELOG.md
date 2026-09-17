@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.13.1 — 2026-09-17
+
+### 🔄 More reliable auto-update
+- **Fixed updates that downloaded but relaunched the old version.** Applying an update now tears the app down cleanly first (destroys the tray, drops the minimize-to-tray guard so the window truly closes) so the installer can replace the running files instead of silently aborting and reopening the previous build.
+- **Explicit "Restart" button.** Once an update finishes downloading, the Dynamic Island now shows a clear **Restart** button — one click applies the update and relaunches into the new version.
+- Updates never roll a user **backwards** (`allowDowngrade` off) and always relaunch straight into the new build.
+- Update activity is now written to a small `logs/update.log` in the app's data folder, so any lingering "stuck on the old version" reports can actually be diagnosed.
+
+### 🔑 Smoother sign-out
+- **Logging out no longer flashes a blank screen.** Signing out now takes you straight to the login screen instead of occasionally getting stuck on an empty view during the transition.
+
 ## v2.13.0 — 2026-09-17
 
 ### 🌲 Living Forest Ecosystem

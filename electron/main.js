@@ -45,6 +45,9 @@ const ICON = path.join(__dirname, '../build/icon.png')
 let win = null
 let tray = null
 let isQuitting = false
+// Set once electron-updater has a verified update on disk, ready to install.
+// Guards the "restart to apply" flow and lets us know an install is pending.
+let updateReady = false
 
 // ── Local static server (production) ───────────────────────────────────────
 // The packaged renderer is served over http://localhost instead of file://.
@@ -287,6 +290,84 @@ function isTransientUpdateError(err) {
 }
 
 /**
+ * Minimal file logger for electron-updater. Silent auto-update failures are
+ * otherwise invisible in the field — this leaves a breadcrumb trail in
+ * userData/logs/update.log so "downloaded but restarted into the old version"
+ * reports can actually be diagnosed. Best-effort: never throws.
+ */
+function createUpdateLogger() {
+  let logPath = null
+  try {
+    const dir = path.join(app.getPath('userData'), 'logs')
+    fs.mkdirSync(dir, { recursive: true })
+    logPath = path.join(dir, 'update.log')
+    // Trim if it grows past ~256 KB so it can't balloon on a long-lived install.
+    try {
+      if (fs.statSync(logPath).size > 256 * 1024) fs.rmSync(logPath)
+    } catch {
+      /* file may not exist yet */
+    }
+  } catch {
+    logPath = null
+  }
+  const write = (level, args) => {
+    const line = `${new Date().toISOString()} [${level}] ${args
+      .map((a) => (a instanceof Error ? a.stack || a.message : String(a)))
+      .join(' ')}`
+    if (level === 'error') console.error('[autoUpdate]', line)
+    else console.log('[autoUpdate]', line)
+    if (!logPath) return
+    try {
+      fs.appendFileSync(logPath, line + '\n')
+    } catch {
+      /* disk full / permissions — don't let logging break updates */
+    }
+  }
+  return {
+    info: (...a) => write('info', a),
+    warn: (...a) => write('warn', a),
+    error: (...a) => write('error', a),
+    debug: (...a) => write('debug', a),
+  }
+}
+
+/**
+ * Apply a downloaded update and relaunch into the NEW build. The classic
+ * "restarted, still on the old version" bug is a failed file swap: the NSIS
+ * installer can't overwrite the running exe/asar while the app is still holding
+ * them, so it aborts and isForceRunAfter relaunches the OLD binary. To make the
+ * swap reliable we first tear the process down cleanly:
+ *   - isQuitting = true  → win.on('close') actually closes instead of hiding to
+ *     tray (the minimize-to-tray guard would otherwise keep the process — and
+ *     its file locks — alive).
+ *   - destroy the tray    → drops the last reference keeping the app resident.
+ * Then quitAndInstall(isSilent=true, isForceRunAfter=true) hands off to the
+ * one-click installer and relaunches the fresh build with no wizard UI.
+ */
+function quitAndInstallUpdate() {
+  if (isStoreBuild) return
+  try {
+    isQuitting = true
+    try {
+      tray?.destroy()
+    } catch {
+      /* tray may already be gone */
+    }
+    tray = null
+    autoUpdater.quitAndInstall(true, true)
+  } catch (err) {
+    console.error('[update:install]', err)
+    // Last resort: a full quit lets autoInstallOnAppQuit apply the staged update
+    // on exit even if the explicit install call threw.
+    try {
+      app.quit()
+    } catch {
+      /* nothing more we can do */
+    }
+  }
+}
+
+/**
  * Over-the-air updates from the GitHub release feed. Older clients download the
  * new build automatically; the renderer surfaces progress + a one-click restart
  * via the Dynamic Island (see useAutoUpdate). Only runs in packaged builds.
@@ -311,6 +392,13 @@ function initAutoUpdate() {
   // makes the install itself wizard-free.
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
+  // Never let a bad/older feed entry roll a user backwards, and always relaunch
+  // the freshly installed build so the user lands on the NEW version.
+  autoUpdater.allowDowngrade = false
+  autoUpdater.autoRunAppAfterInstall = true
+  // File logger so field failures ("restarted, still old version") are
+  // diagnosable — writes to userData/logs/update.log alongside the app data.
+  autoUpdater.logger = createUpdateLogger()
 
   const send = (channel, payload) => win?.webContents.send(channel, payload)
   let lastCheckAt = 0
@@ -325,9 +413,10 @@ function initAutoUpdate() {
   autoUpdater.on('download-progress', (p) =>
     send('update:progress', { percent: Math.round(p?.percent || 0) }),
   )
-  autoUpdater.on('update-downloaded', (info) =>
-    send('update:downloaded', { version: info?.version }),
-  )
+  autoUpdater.on('update-downloaded', (info) => {
+    updateReady = true
+    send('update:downloaded', { version: info?.version })
+  })
   autoUpdater.on('error', (err) => {
     // checkForUpdates() emits 'error' AND rejects; this handler owns what the
     // UI sees, the check() wrapper below owns the quiet backoff retries.
@@ -913,13 +1002,10 @@ ipcMain.handle('device:fingerprint', () => ({
 
 /* ── IPC: apply downloaded update ───────────────────────── */
 ipcMain.handle('update:install', () => {
-  try {
-    // isSilent=true  → no NSIS wizard (pairs with the one-click target)
-    // isForceRunAfter=true → relaunch straight into the new version
-    autoUpdater.quitAndInstall(true, true)
-  } catch (err) {
-    console.error('[update:install]', err)
-  }
+  // Clean shutdown + silent one-click install + relaunch into the new build.
+  // See quitAndInstallUpdate() for why the tray/close teardown matters.
+  quitAndInstallUpdate()
+  return { ok: true, ready: updateReady }
 })
 
 /* ── IPC: manual update check (triggered from Settings) ─── */
