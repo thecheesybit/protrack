@@ -1,0 +1,21 @@
+[
+  {
+    "name": "App JS — all chunks (gzip)",
+    "path": "dist/assets/*.js",
+    "gzip": true,
+    "limit": "820 kB"
+  },
+  {
+    "name": "CSS (gzip)",
+    "path": "dist/assets/*.css",
+    "gzip": true,
+    "limit": "40 kB"
+  },
+  {
+    "name": "Total dist — shipped bytes (raw)",
+    "path": "dist/**/*",
+    "gzip": false,
+    "brotli": false,
+    "limit": "30 MB"
+  }
+]

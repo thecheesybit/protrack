@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import electron from 'vite-plugin-electron/simple'
 import path from 'node:path'
 import { readFileSync } from 'node:fs'
+import { visualizer } from 'rollup-plugin-visualizer'
 
 // Single source of truth for the app version: package.json. Baked in at build
 // time as __APP_VERSION__ so the renderer (web AND desktop) can always show the
@@ -14,6 +15,11 @@ const pkgVersion = JSON.parse(
 // Build the Electron layer only when explicitly targeting desktop, so the
 // normal `vite build` for Netlify stays a pure web build.
 const withElectron = process.env.ELECTRON === 'true'
+
+// Opt-in bundle analysis: `ANALYZE=true vite build` emits a treemap to
+// stats.html at the repo root (gitignored). Gated so normal/CI builds never
+// pay the cost or risk shipping the report inside dist.
+const analyze = process.env.ANALYZE === 'true'
 
 // The app document's Content-Security-Policy, injected as a <meta> tag at
 // BUILD time only (the dev server needs ws://localhost + inline HMR, so dev
@@ -87,6 +93,16 @@ export default defineConfig({
   plugins: [
     react(),
     injectCspPlugin(),
+    ...(analyze
+      ? [
+          visualizer({
+            filename: 'stats.html',
+            gzipSize: true,
+            brotliSize: true,
+            open: false,
+          }),
+        ]
+      : []),
     ...(withElectron
       ? [
           electron({
@@ -165,8 +181,11 @@ export default defineConfig({
             if (id.includes('lucide-react')) {
               return 'vendor-icons'
             }
-            if (id.includes('@google/generative-ai') || id.includes('openai') || id.includes('@anthropic-ai')) {
+            if (id.includes('@google/generative-ai')) {
               return 'vendor-ai'
+            }
+            if (id.includes('html-to-image')) {
+              return 'vendor-export'
             }
           }
         },

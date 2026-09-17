@@ -68,6 +68,11 @@ jobs:
           VITE_WEB_URL: ${{ secrets.VITE_WEB_URL }}
         run: npm run build
 
+      - name: Bundle size budget
+        # Fails the PR if JS/CSS or total shipped bytes exceed .size-limit.json.
+        # Guards the asset/bundle cleanup from silently regressing.
+        run: npm run size
+
       - name: Build Electron main + preload
         run: npx cross-env ELECTRON=true vite build
 

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "src/main.jsx!",
+    "electron/main.js!",
+    "electron/preload.js!",
+    "src/**/__tests__/**/*.test.js"
+  ],
+  "project": [
+    "src/**/*.{js,jsx}",
+    "electron/**/*.js"
+  ],
+  "ignore": [
+    "functions/**",
+    "dist/**",
+    "dist-electron/**",
+    "release/**"
+  ],
+  "ignoreBinaries": [
+    "electron-builder"
+  ]
+}
