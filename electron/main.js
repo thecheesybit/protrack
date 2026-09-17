@@ -290,6 +290,29 @@ function isTransientUpdateError(err) {
 }
 
 /**
+ * The update feed (latest.yml / latest-mac.yml / latest-linux.yml) is missing
+ * from the newest release. This is almost always a release still mid-upload:
+ * the CI publishes the GitHub Release shell first, then attaches each platform's
+ * installer + *.yml a few minutes later (and, if a platform's build leg failed,
+ * that *.yml may be absent for longer). electron-updater surfaces it as a hard
+ * `Cannot find latest.yml … HttpError: 404`. To the user this is NOT a failure —
+ * there is simply nothing to install yet — so we treat it exactly like a
+ * transient error: swallow it from the UI and let the scheduled re-checks pick
+ * the update up once the asset lands. Never show a scary 404 for this.
+ */
+const MISSING_UPDATE_METADATA =
+  /(cannot find[\s\S]*\.yml|\.yml[\s\S]*\b404\b|\b404\b[\s\S]*\.yml|No published versions on GitHub)/i
+function isMissingUpdateMetadata(err) {
+  return MISSING_UPDATE_METADATA.test(String(err?.message || err || ''))
+}
+
+// Quiet = don't alarm the user, retry on the normal cadence. Covers both flaky
+// networks/CDN and a release whose update feed hasn't finished uploading yet.
+function isQuietUpdateError(err) {
+  return isTransientUpdateError(err) || isMissingUpdateMetadata(err)
+}
+
+/**
  * Minimal file logger for electron-updater. Silent auto-update failures are
  * otherwise invisible in the field — this leaves a breadcrumb trail in
  * userData/logs/update.log so "downloaded but restarted into the old version"
@@ -420,8 +443,10 @@ function initAutoUpdate() {
   autoUpdater.on('error', (err) => {
     // checkForUpdates() emits 'error' AND rejects; this handler owns what the
     // UI sees, the check() wrapper below owns the quiet backoff retries.
-    if (isTransientUpdateError(err)) {
-      console.warn('[autoUpdate] transient error:', String(err?.message || err).split('\n')[0])
+    // Flaky networks AND a release whose latest.yml hasn't uploaded yet are
+    // both quiet: the user sees nothing and the next scheduled check recovers.
+    if (isQuietUpdateError(err)) {
+      console.warn('[autoUpdate] quiet error:', String(err?.message || err).split('\n')[0])
       return
     }
     console.error('[autoUpdate] error', err)
@@ -431,9 +456,9 @@ function initAutoUpdate() {
   const check = (attempt = 0) => {
     lastCheckAt = Date.now()
     autoUpdater.checkForUpdates().catch((err) => {
-      if (isTransientUpdateError(err) && attempt < 3) {
+      if (isQuietUpdateError(err) && attempt < 3) {
         const delay = [30, 90, 180][attempt] * 1000
-        console.warn(`[autoUpdate] transient check failure; retrying in ${delay / 1000}s`)
+        console.warn(`[autoUpdate] quiet check failure; retrying in ${delay / 1000}s`)
         setTimeout(() => check(attempt + 1), delay)
       }
     })
@@ -1022,14 +1047,18 @@ ipcMain.handle('update:check', async () => {
     }
   } catch (err) {
     const transient = isTransientUpdateError(err)
+    const pendingRelease = isMissingUpdateMetadata(err)
     return {
       ok: false,
-      transient,
-      // Don't dump a raw 504 HTML/headers blob into a toast — give a calm,
-      // actionable message for the common "GitHub is briefly down" case.
-      error: transient
-        ? 'GitHub is temporarily unavailable. Please try again in a moment.'
-        : String(err?.message || err),
+      // Both classes are "try again shortly", so the UI can treat them alike.
+      transient: transient || pendingRelease,
+      // Don't dump a raw 504 HTML/headers blob or a 404 stack into a toast —
+      // give a calm, actionable message for each common case.
+      error: pendingRelease
+        ? 'A new release is still being published. Please check again in a few minutes.'
+        : transient
+          ? 'GitHub is temporarily unavailable. Please try again in a moment.'
+          : String(err?.message || err),
     }
   }
 })

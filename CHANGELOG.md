@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.13.2 — 2026-09-17
+
+### 🔄 Auto-update resilience
+- **No more "Update failed" during a fresh release.** When a new version is still uploading (or a platform's build is briefly incomplete), the update check no longer shows an error — it stays quiet and retries automatically, so you're never alarmed by a transient `latest.yml` 404. A manual check in Settings now reads "A new release is still being published" instead of a raw error.
+- **Releases no longer go public before they're installable.** Behind the scenes, a release is now held as a draft until its update files are attached, so the app never sees a half-published release to fail on.
+
 ## v2.13.1 — 2026-09-17
 
 ### 🔄 More reliable auto-update

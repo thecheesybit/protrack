@@ -120,6 +120,14 @@ jobs:
   # blocks the other two from shipping. This replaces the old single
   # `finalize` gate that needed ALL THREE matrix legs to succeed before ANY
   # installer was published.
+  #
+  # The shell is created as a DRAFT. electron-updater only ever considers
+  # PUBLISHED releases, so while it's a draft, no client can see (or 404 on) a
+  # release whose latest.yml hasn't been uploaded yet. The `finalize-release`
+  # job below flips it to published once the update feeds are attached. This is
+  # the fix for "Cannot find latest.yml … HttpError: 404": previously the shell
+  # went public immediately and clients polling in the upload window (or after a
+  # failed Windows leg) hit a permanent/transient 404.
   create-release:
     name: Create release shell
     needs: prepare
@@ -157,6 +165,9 @@ jobs:
           tag_name: ${{ needs.prepare.outputs.tag }}
           name: PRO TRACK ${{ needs.prepare.outputs.tag }}
           body_path: release-notes.md
+          # Stay a draft (invisible to electron-updater) until finalize-release
+          # confirms the update feeds are attached.
+          draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -167,6 +178,7 @@ jobs:
           tag_name: ${{ needs.prepare.outputs.tag }}
           name: PRO TRACK ${{ needs.prepare.outputs.tag }}
           generate_release_notes: true
+          draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -325,3 +337,35 @@ jobs:
             gh release upload "${{ needs.prepare.outputs.tag }}" "${files[@]}" --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Flips the draft release to PUBLISHED — but only once at least one platform's
+  # update feed (latest*.yml) is actually attached. `if: always()` so a single
+  # failed OS leg still ships the platforms that succeeded (preserving the
+  # independent-shipping design), while a build where NOTHING uploaded stays a
+  # draft instead of going public and 404-ing every client's update check.
+  finalize-release:
+    name: Publish release
+    needs: [prepare, build-electron]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Publish only when an update feed is present
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          assets=$(gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name' 2>/dev/null || true)
+          echo "Assets currently on $TAG:"
+          echo "$assets"
+          if echo "$assets" | grep -qiE '^latest.*\.yml$'; then
+            gh release edit "$TAG" --repo "$REPO" --draft=false
+            echo "Published $TAG (update feed present)."
+          else
+            echo "::error::No latest*.yml attached to $TAG — leaving it as a DRAFT so clients never see a release that 404s on update. Re-run the Electron build to attach installers, then this job republishes it."
+            exit 1
+          fi
