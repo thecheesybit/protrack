@@ -2,6 +2,7 @@ import {
   collection,
   query,
   orderBy,
+  limit,
   onSnapshot,
   addDoc,
   updateDoc,
@@ -12,14 +13,20 @@ import {
 import { db } from '@/lib/firebase'
 import { callAIProvider } from '@/services/geminiService'
 
+// Bound the live read so a heavy user's ever-growing mock history can't balloon
+// per-listener reads (free-tier discipline, §5.4). 200 most-recent attempts is
+// years of prep and covers all realistic usage; the widget can raise it if it
+// ever adds a "load older" affordance. Results are still re-sorted client-side.
+const SCORECARD_LIMIT = 200
+
 const scorecardsCol = (uid, modeId) =>
   collection(db, 'users', uid, 'modes', modeId, 'scorecards')
 
 /**
  * Real-time subscription to exam scorecards within a specific mode.
  */
-export function subscribeToScorecards(uid, modeId, callback) {
-  const q = query(scorecardsCol(uid, modeId), orderBy('createdAt', 'desc'))
+export function subscribeToScorecards(uid, modeId, callback, max = SCORECARD_LIMIT) {
+  const q = query(scorecardsCol(uid, modeId), orderBy('createdAt', 'desc'), limit(max))
   return onSnapshot(
     q,
     (snap) => {
