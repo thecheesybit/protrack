@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.14.0 — 2026-09-18
+
+### ⚡ Faster to load, lighter to ship
+- **The app is roughly half the size.** The bundled download dropped from ~29 MB to ~12 MB with no visible change in quality — the big animated graphics (the AI orb, the app-lock animation) are now efficient muted video instead of huge GIFs, the forest's ~90 plant and animal sprites are WebP, and a handful of unused images that were quietly shipping have been removed.
+- **Nothing looks different** — every image and animation renders the same (or sharper: the AI orb is now true-colour instead of a 256-colour GIF), it just weighs a fraction as much and loads faster.
+
+### 🖥️ A workspace that uses the whole window
+- **Your widgets get the space, not the margins.** As the window narrows, the icon rail and the floating clock quietly step aside so the timetable and task board fill the majority of the width instead of leaving a big empty gutter on the left. Widen the window and the clock and full branding return.
+
+### 🔋 A calmer, cooler forest
+- **The forest world map no longer runs when you're not looking at it.** Its animation now pauses the moment it scrolls off-screen or the window is hidden or minimized, and resumes instantly when it's back in view — noticeably less CPU/GPU use, heat, and battery drain, especially with the map left open.
+
+### 🔒 Safer key storage
+- **Your AI API keys are no longer written in plain text on desktop.** They now live only in the operating system's encrypted store; any plaintext copy left by an earlier version is migrated into it and wiped. Nothing changes in how you add or use a key.
+
 ## v2.13.2 — 2026-09-17
 
 ### 🔄 Auto-update resilience
