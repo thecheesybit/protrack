@@ -3,9 +3,11 @@ import { TOOL_DECLARATIONS, executeTool } from '@/services/geminiTools'
 import { secureStorage } from '@/services/cryptoService'
 
 /**
- * Gemini integration. The user's API key is stored persistently in localStorage
- * and synced with OS keychain / DPAPI via Electron's secureStore on desktop.
- * It is NEVER cleared automatically unless manually removed by the user.
+ * Gemini integration. On desktop the user's API keys live in the OS-encrypted
+ * store (DPAPI / keychain) via Electron's secureStore and are held in an
+ * in-memory cache for the session — never written to plaintext localStorage. On
+ * web (no OS keychain) they persist in localStorage. Keys are NEVER cleared
+ * automatically unless manually removed by the user.
  */
 // Current, non-retired models, fastest → most-capable. Concrete ids only — the
 // `-latest` aliases can silently point at a heavily-loaded model, and the 1.5
@@ -29,36 +31,53 @@ const getDesktopStore = () => {
   return null
 }
 
-// Background sync from desktop DPAPI store
+// Parse the desktop key store: a JSON map { provider: key }, or a bare Gemini
+// key string (legacy) recognised by its "AIza" prefix.
+function parseDesktopKeys(raw) {
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object') return parsed
+  } catch {
+    if (raw.startsWith('AIza')) return { gemini: raw }
+  }
+  return {}
+}
+
+// Hydrate the in-memory key cache from the desktop's encrypted DPAPI store — the
+// durable, lock-surviving source of truth on desktop — and scrub any plaintext
+// keys from localStorage. The encrypted OS store now backs the keys; keeping a
+// plaintext mirror at rest was a security gap (an unencrypted API key on disk).
+// Keys entered before this change are migrated into the encrypted store first,
+// so nothing is lost.
 async function syncDesktopKeys() {
   const store = getDesktopStore()
   if (!store?.get) return
   try {
     const raw = await store.get()
-    if (!raw) return
+    const keys = parseDesktopKeys(raw)
+    Object.entries(keys).forEach(([provider, val]) => {
+      if (val && typeof val === 'string') persistentKeyCache.set(provider, val)
+    })
+
+    // Migrate + scrub any legacy plaintext `protrack:persistent_*_key` entries.
     try {
-      const parsed = JSON.parse(raw)
-      if (parsed && typeof parsed === 'object') {
-        Object.entries(parsed).forEach(([provider, val]) => {
-          if (val && typeof val === 'string') {
-            persistentKeyCache.set(provider, val)
-            try {
-              localStorage.setItem(`protrack:persistent_${provider}_key`, val)
-            } catch {
-              /* ignore */
-            }
-          }
-        })
+      const stale = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i)
+        const m = k && k.match(/^protrack:persistent_(.+)_key$/)
+        if (m) stale.push({ key: k, provider: m[1] })
+      }
+      for (const { key, provider } of stale) {
+        const val = localStorage.getItem(key)
+        if (val && !keys[provider]) {
+          persistentKeyCache.set(provider, val)
+          await saveKeyToDesktop(provider, val)
+        }
+        localStorage.removeItem(key)
       }
     } catch {
-      if (raw.startsWith('AIza')) {
-        persistentKeyCache.set('gemini', raw)
-        try {
-          localStorage.setItem('protrack:persistent_gemini_key', raw)
-        } catch {
-          /* ignore */
-        }
-      }
+      /* ignore */
     }
   } catch (err) {
     console.warn('[geminiService] desktop key sync failed', err)
@@ -129,24 +148,30 @@ export function hasApiKey(provider) {
 
 export function setApiKey(provider, value) {
   const clean = value ? String(value).trim() : ''
+  // On desktop the encrypted DPAPI store is the source of truth, so we never
+  // write the key to plaintext localStorage there. On web (no OS keychain) the
+  // persistent localStorage entry is the only durable option.
+  const onDesktop = Boolean(getDesktopStore()?.set)
   if (clean) {
     persistentKeyCache.set(provider, clean)
-    try {
-      localStorage.setItem(`protrack:persistent_${provider}_key`, clean)
-    } catch {
-      /* ignore */
-    }
     saveKeyToDesktop(provider, clean)
     secureStorage.setItem(`protrack:${provider}_key`, clean)
+    if (!onDesktop) {
+      try {
+        localStorage.setItem(`protrack:persistent_${provider}_key`, clean)
+      } catch {
+        /* ignore */
+      }
+    }
   } else {
     persistentKeyCache.delete(provider)
+    saveKeyToDesktop(provider, '')
+    secureStorage.removeItem(`protrack:${provider}_key`)
     try {
       localStorage.removeItem(`protrack:persistent_${provider}_key`)
     } catch {
       /* ignore */
     }
-    saveKeyToDesktop(provider, '')
-    secureStorage.removeItem(`protrack:${provider}_key`)
   }
 }
 
