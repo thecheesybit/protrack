@@ -1,7 +1,7 @@
 import { useEffect, useState, lazy, Suspense, useMemo } from 'react'
 import {
   Settings, Sun, Volume2, Film, Quote, KeyRound,
-  RefreshCw, AlertTriangle, ShieldCheck, Lock, X, Loader2, Bell
+  RefreshCw, AlertTriangle, ShieldCheck, Lock, X, Loader2, Bell, Tablet
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '@/hooks/useAuth'
@@ -23,6 +23,7 @@ const IntegrationsTab = lazy(() => import('./tabs/IntegrationsTab').then(m => ({
 const UpdatesTab = lazy(() => import('./tabs/UpdatesTab').then(m => ({ default: m.UpdatesTab })))
 const SystemTab = lazy(() => import('./tabs/SystemTab').then(m => ({ default: m.SystemTab })))
 const PrivacyTab = lazy(() => import('./tabs/PrivacyTab').then(m => ({ default: m.PrivacyTab })))
+const CompanionTab = lazy(() => import('./tabs/CompanionTab').then(m => ({ default: m.CompanionTab })))
 
 const TAB_GROUPS = [
   {
@@ -47,6 +48,7 @@ const TAB_GROUPS = [
     items: [
       { id: 'security', label: 'Security & Lock', icon: Lock },
       { id: 'updates', label: 'Updates & Releases', icon: RefreshCw },
+      { id: 'companion', label: 'Tablet Companion', icon: Tablet },
       { id: 'system', label: 'System & Shortcuts', icon: AlertTriangle },
       { id: 'legal', label: 'Privacy & Terms', icon: ShieldCheck },
     ],
@@ -295,6 +297,7 @@ export function SettingsPanel() {
                       setWhatsNewOpen={setWhatsNewOpen}
                     />
                   )}
+                  {activeTab === 'companion' && <CompanionTab />}
                   {activeTab === 'system' && (
                     <SystemTab
                       user={user}
