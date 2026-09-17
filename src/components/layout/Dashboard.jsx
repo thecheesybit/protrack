@@ -404,9 +404,14 @@ export function Dashboard() {
             )}>
               <div className="flex items-center gap-3">
                 <Logo className="h-10 w-10 shrink-0 drop-shadow-sm" />
-                <DynamicBranding firstName={firstName} displayName={user?.displayName} />
+                {/* Text label + version compact away below 1180px so the left
+                    gutter can shrink and the content widgets gain width. The
+                    icon rail below still switches scope. */}
+                <div className="hidden min-[1180px]:block">
+                  <DynamicBranding firstName={firstName} displayName={user?.displayName} />
+                </div>
               </div>
-              <div className="pl-[52px]">
+              <div className="hidden min-[1180px]:block pl-[52px]">
                 <SelectedScopeIndicator />
               </div>
             </div>
@@ -423,11 +428,12 @@ export function Dashboard() {
             {/* Main workspace containers A (Timetable, To-dos, Bottom Dock) — disappears on Ctrl+T */}
             <main
               className={cn(
-                // Left gutter clears the enlarged floating clock (bottom-left) so
-                // the timetable/calendar container keeps a comfortable gap from it
-                // — same padding in normal and fullscreen, so the gap is identical
-                // in both modes.
-                "min-h-0 flex-1 pl-16 sm:pl-72 lg:pl-[300px] pr-8 sm:pr-14 lg:pr-[6%] transition-all duration-500 ease-out",
+                // Responsive left gutter. At >=1180px it stays wide enough to
+                // clear the floating clock + branding (content ~78-80% of width);
+                // below 1180px the clock hides (see FlipClock) and the branding
+                // compacts, so the gutter collapses and the content widgets take
+                // ~85%+ — the board (B) gains room as width shrinks, sidebar first.
+                "min-h-0 flex-1 pl-24 pr-6 min-[1180px]:pl-[236px] min-[1180px]:pr-[3.5%] transition-all duration-500 ease-out",
                 clockCentered && "pointer-events-none opacity-0 scale-[0.97]"
               )}
             >

@@ -423,7 +423,14 @@ export function FlipClock() {
 
   // Safe space is available in area (C) below the legend (which has 2cm extra bottom clearance),
   // so the clock remains visible when legends expand.
-  const isHidden = hiddenByAuto || hiddenByOverlay
+  //
+  // When the workspace is too narrow to spare the left gutter (the content
+  // widgets take priority — see Dashboard's responsive `<main>` padding, which
+  // shrinks below the same 1180px), the floating dock clock hides so it never
+  // overlaps the widened board. Desk-clock mode (Ctrl+T) is exempt: that's a
+  // full-screen clock the user explicitly opened.
+  const hiddenByNarrow = !clockCentered && winSize.w < 1180
+  const isHidden = hiddenByAuto || hiddenByOverlay || hiddenByNarrow
 
   return (
     <>
