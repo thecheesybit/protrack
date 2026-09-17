@@ -10,10 +10,12 @@ import {
   Bell,
   BellOff,
   Send,
+  Tablet,
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import toast from 'react-hot-toast'
-import { isDesktop } from '@/desktop/isDesktop'
+import { isDesktop, isAndroid } from '@/desktop/isDesktop'
+import { LinkTabletModal } from '@/components/auth/LinkTabletModal'
 import { clearCalToken } from '@/services/calendarService'
 import { updateSettings } from '@/services/userService'
 import {
@@ -66,6 +68,7 @@ const WINDOW_CONTROLS = [
 
 export function SystemTab({ user, deleteAccount, setSettingsOpen, appInfo }) {
   const [searchQuery, setSearchQuery] = useState('')
+  const [linkTabletOpen, setLinkTabletOpen] = useState(false)
   const [deleteStage, setDeleteStage] = useState(0)
   const [deleteInput, setDeleteInput] = useState('')
   const [notifEnabled, setNotifEnabled] = useState(() => areNotificationsEnabled())
@@ -418,6 +421,44 @@ export function SystemTab({ user, deleteAccount, setSettingsOpen, appInfo }) {
         </SettingsCard>
       </SettingsSection>
 
+      {/* ── Tablet Companion Pairing ──────────────────────────────── */}
+      {!isAndroid && (
+        <SettingsSection
+          title="Companion Devices & Tablet Display"
+          description="Pair an Android tablet as a secondary desk display for your timetable, focus timer, and tasks."
+        >
+          <SettingsCard className="p-5 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
+                  <Tablet className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-display text-sm font-semibold text-ink">
+                      Android Tablet Companion
+                    </span>
+                    <SettingsBadge variant="cyan">Instant Pairing</SettingsBadge>
+                  </div>
+                  <p className="mt-1 text-xs text-muted leading-relaxed">
+                    Generate an encrypted, single-use QR pairing session to instantly link your Android tablet companion without typing passwords.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setLinkTabletOpen(true)}
+                className="flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-xs font-semibold text-white shadow-glow-sm hover:brightness-110 transition-all cursor-pointer shrink-0 self-start sm:self-center"
+              >
+                <Tablet className="h-4 w-4" />
+                <span>Link Companion Tablet</span>
+              </button>
+            </div>
+          </SettingsCard>
+        </SettingsSection>
+      )}
+
       {/* ── Danger Zone & Account Purge ─────────────────────────────── */}
       <SettingsSection
         title="Danger Zone & Account Purge"
@@ -518,6 +559,8 @@ export function SystemTab({ user, deleteAccount, setSettingsOpen, appInfo }) {
           </div>
         </div>
       </SettingsSection>
+
+      <LinkTabletModal open={linkTabletOpen} onClose={() => setLinkTabletOpen(false)} />
     </div>
   )
 }

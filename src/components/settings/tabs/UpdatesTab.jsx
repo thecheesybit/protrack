@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
-import { RefreshCw, Github, ExternalLink, Sparkles, Play, Pause } from 'lucide-react'
+import { RefreshCw, Github, ExternalLink, Sparkles, Play, Pause, Download } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/utils/cn'
-import { isDesktop, desktopBridge } from '@/desktop/isDesktop'
+import { isDesktop, isAndroid, desktopBridge } from '@/desktop/isDesktop'
+import { checkForAndroidUpdate, installAndroidUpdate } from '@/services/androidUpdateService'
 import { CHANGELOG } from '@/content/changelog'
 import { CREATOR } from '@/lib/constants'
 import { APP_VERSION } from '@/lib/version'
@@ -127,6 +128,39 @@ export function UpdatesTab({
     }
   }
 
+  const [androidUpdate, setAndroidUpdate] = useState(null)
+  const [androidChecking, setAndroidChecking] = useState(false)
+
+  const handleAndroidCheck = async () => {
+    setAndroidChecking(true)
+    try {
+      const res = await checkForAndroidUpdate()
+      setAndroidUpdate(res)
+      if (res?.available) {
+        toast.success(`Update available: v${res.latestVersion}`)
+      } else if (!res?.error) {
+        toast.success(`You're on the latest version (v${APP_VERSION}).`)
+      } else {
+        toast.error('Could not reach GitHub release server.')
+      }
+    } catch {
+      toast.error('Update check failed.')
+    } finally {
+      setAndroidChecking(false)
+    }
+  }
+
+  const handleAndroidInstall = async () => {
+    if (!androidUpdate?.downloadUrl) return
+    try {
+      toast.loading('Launching package installer…', { id: 'android-install' })
+      await installAndroidUpdate(androidUpdate.downloadUrl)
+      toast.success('Installer opened', { id: 'android-install' })
+    } catch (err) {
+      toast.error(err.message || 'Failed to install update', { id: 'android-install' })
+    }
+  }
+
   return (
     <div className="space-y-8 pb-4">
       {/* ── App Updates & Deployment ─────────────────────────────────── */}
@@ -236,6 +270,76 @@ export function UpdatesTab({
               )}
             </SettingsCard>
           </div>
+        </SettingsSection>
+      )}
+
+      {/* ── Android Sideload Updates ───────────────────────────────── */}
+      {isAndroid && (
+        <SettingsSection
+          title="App Updates & Releases"
+          description="Sideloaded release updates synchronized directly with official GitHub Releases."
+        >
+          <SettingsCard className="p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-line/40">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-display text-sm font-semibold text-ink">
+                    Android Companion Updates
+                  </span>
+                  <SettingsBadge variant={androidUpdate?.available ? 'emerald' : 'cyan'}>
+                    {androidUpdate?.available
+                      ? `v${androidUpdate.latestVersion} Available`
+                      : `v${APP_VERSION} Installed`}
+                  </SettingsBadge>
+                </div>
+                <p className="mt-1 text-xs text-muted leading-relaxed">
+                  Direct GitHub Release delivery for tablet devices. Downloads APK files securely and prompts the Android package installer.
+                </p>
+              </div>
+            </div>
+
+            {androidUpdate?.available ? (
+              <div className="space-y-3">
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 text-xs text-emerald-300 space-y-1">
+                  <p className="font-semibold text-emerald-200">
+                    New Version Ready: v{androidUpdate.latestVersion}
+                  </p>
+                  <p className="text-emerald-300/90 leading-relaxed text-[calc(0.6875rem*var(--text-scale,1))]">
+                    An updated tablet package is available for download ({androidUpdate.fileName}).
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleAndroidInstall}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-xs font-semibold text-white shadow-glow-sm hover:bg-emerald-500 transition-all cursor-pointer"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>Download & Install v{androidUpdate.latestVersion}</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleAndroidCheck}
+                disabled={androidChecking}
+                className="flex w-full items-center justify-between rounded-xl border border-line/60 bg-surface-2/30 px-4 py-3 text-xs transition-colors hover:border-accent/40 disabled:opacity-60 cursor-pointer"
+              >
+                <span className="flex items-center gap-2.5 font-semibold text-ink">
+                  <RefreshCw
+                    className={cn(
+                      'h-4 w-4 text-accent',
+                      androidChecking && 'animate-spin'
+                    )}
+                  />
+                  <span>Check for updates</span>
+                </span>
+                <span className="text-xs text-muted font-mono font-semibold">
+                  {androidChecking ? 'Checking…' : `v${APP_VERSION}`}
+                </span>
+              </button>
+            )}
+          </SettingsCard>
         </SettingsSection>
       )}
 

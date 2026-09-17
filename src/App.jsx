@@ -6,10 +6,11 @@ import { AppLoader } from '@/components/common/AppLoader'
 import { FirestoreSyncProvider } from '@/providers/FirestoreSyncProvider'
 import { SetupRequired } from '@/components/common/SetupRequired'
 import { useAutoUpdate } from '@/hooks/useAutoUpdate'
+import { useAndroidAutoUpdate } from '@/hooks/useAndroidAutoUpdate'
 import { useFontScale } from '@/hooks/useFontScale'
 import { useMinLoadTime } from '@/hooks/useMinLoadTime'
 import { TitleBar } from '@/desktop/TitleBar'
-import { isDesktop, isWorkspaceHost } from '@/desktop/isDesktop'
+import { isDesktop, isAndroid, isWorkspaceHost } from '@/desktop/isDesktop'
 import { AppLockOverlay } from '@/components/lock/AppLockOverlay'
 import { useAppLock } from '@/hooks/useAppLock'
 import { useStore } from '@/store/useStore'
@@ -18,14 +19,18 @@ import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 
 const loadLandingPage = () => import('@/components/marketing/LandingPage').then((m) => ({ default: m.LandingPage }))
 const loadQrLoginScreen = () => import('@/components/auth/QrLoginScreen').then((m) => ({ default: m.QrLoginScreen }))
+const loadTabletLoginScreen = () => import('@/components/auth/TabletLoginScreen').then((m) => ({ default: m.TabletLoginScreen }))
 const loadLinkDevicePage = () => import('@/components/auth/LinkDevicePage').then((m) => ({ default: m.LinkDevicePage }))
+const loadPairLandingPage = () => import('@/components/marketing/PairLandingPage').then((m) => ({ default: m.PairLandingPage }))
 const loadLinkGcalPage = () => import('@/components/auth/LinkGcalPage').then((m) => ({ default: m.LinkGcalPage }))
 const loadPatreonApprovePage = () => import('@/components/patreon/PatreonApprovePage').then((m) => ({ default: m.PatreonApprovePage }))
 const loadWorkspace = () => import('@/components/layout/Workspace').then((m) => ({ default: m.Workspace }))
 
 const LandingPage = lazy(loadLandingPage)
 const QrLoginScreen = lazy(loadQrLoginScreen)
+const TabletLoginScreen = lazy(loadTabletLoginScreen)
 const LinkDevicePage = lazy(loadLinkDevicePage)
+const PairLandingPage = lazy(loadPairLandingPage)
 const LinkGcalPage = lazy(loadLinkGcalPage)
 const PatreonApprovePage = lazy(loadPatreonApprovePage)
 const Workspace = lazy(loadWorkspace)
@@ -34,7 +39,11 @@ const ForestPreview = lazy(() => import('@/components/focus/ForestPreview').then
 // Eagerly prefetch workspace and auth chunks during the initial load window
 if (typeof window !== 'undefined') {
   loadWorkspace()
-  loadQrLoginScreen()
+  if (isAndroid) {
+    loadTabletLoginScreen()
+  } else {
+    loadQrLoginScreen()
+  }
 }
 
 function Routes() {
@@ -75,6 +84,15 @@ function Routes() {
     return (
       <Suspense fallback={null}>
         <LinkDevicePage key="link" />
+      </Suspense>
+    )
+  }
+
+  // Tablet companion gateway: /pair?s=<sessionId> — web download & deep link fallback
+  if (pathname.startsWith('/pair')) {
+    return (
+      <Suspense fallback={null}>
+        <PairLandingPage key="pair" />
       </Suspense>
     )
   }
@@ -122,7 +140,7 @@ function Routes() {
         </motion.div>
       ) : (
         <motion.div
-          key="qr"
+          key={isAndroid ? 'tablet-login' : 'qr'}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -131,7 +149,7 @@ function Routes() {
         >
           <ErrorBoundary>
             <Suspense fallback={null}>
-              <QrLoginScreen />
+              {isAndroid ? <TabletLoginScreen /> : <QrLoginScreen />}
             </Suspense>
           </ErrorBoundary>
         </motion.div>
@@ -143,6 +161,7 @@ function Routes() {
 export default function App() {
   useChronoTheme() // time-of-day palette & celestial slot sync across all screens
   useAutoUpdate() // desktop-only: bridges Electron autoUpdater → Dynamic Island
+  useAndroidAutoUpdate() // android-only: checks GitHub release APK for sideload updates
   useFontScale() // mirrors uiSlice.fontScale → <html data-font-scale>
   useAppLock() // manages app lock triggers (cold start, minimize, close, storage sync)
   const isLocked = useStore((s) => s.isLocked)

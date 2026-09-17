@@ -49,6 +49,19 @@ service cloud.firestore {
         && resource.data.desktopUid == request.auth.uid;
     }
 
+    // Tablet companion reverse-handshake (Direction A).
+    // The authenticated desktop publishes a 2-minute ephemeral doc with a single-use
+    // Google ID token. The scanning tablet reads it to sign in with credential,
+    // then immediately deletes the handshake doc.
+    match /companionHandshakes/{sessionId} {
+      allow create: if isSignedIn()
+        && request.resource.data.creatorUid == request.auth.uid
+        && request.resource.data.status == 'available'
+        && 'token' in request.resource.data;
+      allow get, delete: if true;
+      allow update: if false;
+    }
+
     // Support Corner — contribution intake. A signed-in user may CREATE their
     // own owner-stamped pending packet, but can never read/list/modify the
     // queue. Only the admin reads, verifies, and clears it.

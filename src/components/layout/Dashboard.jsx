@@ -68,6 +68,7 @@ const SupportModal = React.lazy(() =>
 import aiVideo from '@/assets/ai.mp4'
 import { APP_VERSION } from '@/lib/version'
 import { exitPip } from '@/lib/pip'
+import { isDesktop } from '@/desktop/isDesktop'
 import { cn } from '@/utils/cn'
 
 /**
@@ -371,7 +372,7 @@ export function Dashboard() {
   // Render only the dedicated PiP view + the scene-audio player.
   // The scene <iframe> lives in <FocusSceneVideo/> at the workspace root — it
   // stays mounted through this branch, so entering/leaving PiP never reloads it.
-  if (typeof window !== 'undefined' && window.protrack?.isDesktop && pipActive) {
+  if (isDesktop && pipActive) {
     return (
       <div className="relative h-screen w-screen overflow-hidden select-none bg-slate-950 font-sans text-white antialiased">
         <PipAppView />
@@ -567,7 +568,7 @@ export function Dashboard() {
           aria-label="Open shortcuts and commands"
           className={cn(
             'fixed right-3.5 z-30 flex h-8 w-8 items-center justify-center rounded-full border border-line/50 bg-surface/40 text-muted backdrop-blur-md transition-colors hover:border-accent/50 hover:text-ink',
-            typeof window !== 'undefined' && window.protrack?.isDesktop && !fullscreen ? 'top-12' : 'top-4',
+            isDesktop && !fullscreen ? 'top-12' : 'top-4',
           )}
         >
           <HelpCircle className="h-4 w-4" />

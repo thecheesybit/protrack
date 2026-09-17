@@ -5,6 +5,7 @@ import { useTheme } from '@/hooks/useTheme'
 import { useStore } from '@/store/useStore'
 import { Logo } from '@/components/common/Logo'
 import { ConfirmLogoutModal } from '@/components/auth/ConfirmLogoutModal'
+import { isDesktop, isTablet } from '@/desktop/isDesktop'
 import { cn } from '@/utils/cn'
 
 function IconButton({ label, onClick, children, className }) {
@@ -14,7 +15,8 @@ function IconButton({ label, onClick, children, className }) {
       title={label}
       aria-label={label}
       className={cn(
-        'flex h-10 w-10 items-center justify-center rounded-xl border border-line/70 bg-surface/50 text-muted backdrop-blur-xl transition-colors hover:text-ink',
+        'flex items-center justify-center rounded-xl border border-line/70 bg-surface/50 text-muted backdrop-blur-xl transition-colors hover:text-ink cursor-pointer',
+        isTablet ? 'h-11 w-11' : 'h-10 w-10',
         className,
       )}
     >
@@ -52,7 +54,7 @@ export function TopBar() {
       </div>
 
       <div className="flex items-center gap-2">
-        {fullscreen && (
+        {fullscreen && isDesktop && (
           <IconButton
             label="Exit Full Screen"
             onClick={() => window.protrack?.window?.toggleFullScreen?.()}

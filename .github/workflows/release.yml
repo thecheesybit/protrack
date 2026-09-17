@@ -338,6 +338,89 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  build-android:
+    name: Android APK
+    needs: [prepare, create-release]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web bundle for Capacitor
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_WEB_URL: ${{ secrets.VITE_WEB_URL }}
+        run: cross-env CAPACITOR=true npm run build
+
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: Decode Keystore (if secret provided)
+        id: keystore
+        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
+          echo "keystore_path=release.keystore" >> "$GITHUB_OUTPUT"
+
+      - name: Build Android Release APK
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ steps.keystore.outputs.keystore_path }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Publish APK to Release
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 5
+          max_attempts: 3
+          retry_wait_seconds: 20
+          shell: bash
+          command: |
+            shopt -s nullglob
+            apks=(android/app/build/outputs/apk/release/*.apk)
+            if [ ${#apks[@]} -gt 0 ]; then
+              gh release upload "${{ needs.prepare.outputs.tag }}" "${apks[@]}" --clobber
+            else
+              echo "::warning::No APK file found in android/app/build/outputs/apk/release/"
+            fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   # Flips the draft release to PUBLISHED — but only once at least one platform's
   # update feed (latest*.yml) is actually attached. `if: always()` so a single
   # failed OS leg still ships the platforms that succeeded (preserving the
@@ -345,7 +428,7 @@ jobs:
   # draft instead of going public and 404-ing every client's update check.
   finalize-release:
     name: Publish release
-    needs: [prepare, build-electron]
+    needs: [prepare, build-electron, build-android]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 10

@@ -6,6 +6,7 @@ import { getIcon } from '@/lib/icons'
 import { WIDGETS } from '@/components/widgets/widgetRegistry'
 import { getWidgetComponent } from '@/components/widgets/widgetComponents'
 import { getWidgetVideo } from '@/lib/videoPacks'
+import { isTablet } from '@/desktop/isDesktop'
 import { cn } from '@/utils/cn'
 
 // ── Layout config ─────────────────────────────────────────────────────────────
@@ -264,7 +265,7 @@ export function BoardCanvas() {
   }, [])
 
   const handleMouseEnterSlot = useCallback((slot) => {
-    if (isDraggingDivider.current) return
+    if (isTablet || isDraggingDivider.current) return
     if (leaveTimerRef.current) {
       clearTimeout(leaveTimerRef.current)
       leaveTimerRef.current = null
@@ -278,6 +279,7 @@ export function BoardCanvas() {
   }, [])
 
   const handleMouseLeaveSlot = useCallback((slot) => {
+    if (isTablet) return
     if (hoverTimerRef.current) {
       clearTimeout(hoverTimerRef.current)
       hoverTimerRef.current = null
@@ -361,6 +363,7 @@ export function BoardCanvas() {
   }, [setIsBottomDockOpen])
 
   const handleBottomAreaMouseLeave = useCallback(() => {
+    if (isTablet) return
     if (bottomDockTimerRef.current) {
       clearTimeout(bottomDockTimerRef.current)
     }
@@ -495,7 +498,10 @@ export function BoardCanvas() {
           onPointerCancel={handleDividerPointerUp}
           onDoubleClick={resetSplit}
           title="Drag or use Left/Right arrow keys to adjust split · Double-click or Home to reset"
-          className="group relative flex w-3.5 shrink-0 cursor-col-resize items-center justify-center -mx-1.5 z-20 select-none touch-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 rounded"
+          className={cn(
+            "group relative flex shrink-0 cursor-col-resize items-center justify-center z-20 select-none touch-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 rounded",
+            isTablet ? "w-6 -mx-3" : "w-3.5 -mx-1.5"
+          )}
         >
           {/* Ambient hairline */}
           <div className="h-full w-[1px] bg-white/[0.06] transition-colors group-hover:bg-accent/40" />

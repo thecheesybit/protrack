@@ -1,4 +1,4 @@
-/* global __IS_ELECTRON__ */
+/* global __IS_ELECTRON__, __IS_ANDROID__ */
 
 /**
  * True when running inside the Electron shell.
@@ -26,14 +26,39 @@ export const isDesktop = compileTimeElectron || runtimeElectron
 /** Safe accessor for the preload bridge. */
 export const desktopBridge = typeof window !== 'undefined' ? window.protrack : undefined
 
-// DEV-only escape hatch: preview the functional workspace in a browser via
-// `?desktop=1`. `import.meta.env.DEV` is false in a production web build, so the
-// deployed Netlify gateway can NEVER render the dashboard — it stays landing +
-// mobile-auth only, exactly as the architecture requires.
-const devWorkspacePreview =
+/**
+ * True when running inside the Capacitor Android shell.
+ * Follows the exact same compile-time define + runtime Capacitor bridge pattern.
+ */
+const compileTimeAndroid =
+  typeof __IS_ANDROID__ !== 'undefined' && __IS_ANDROID__
+
+const runtimeAndroid =
+  typeof window !== 'undefined' &&
+  (window.Capacitor?.getPlatform?.() === 'android' ||
+    (Boolean(window.Capacitor?.isNativePlatform?.()) && window.Capacitor?.getPlatform?.() === 'android'))
+
+export const isAndroid = Boolean(compileTimeAndroid || runtimeAndroid)
+
+// DEV-only escape hatches: preview the functional workspace in a browser via
+// `?desktop=1` or `?android=1`. `import.meta.env.DEV` is false in a production web
+// build, so the deployed Netlify gateway can NEVER render the dashboard — it stays
+// landing + mobile-auth only, exactly as the architecture requires.
+const devDesktopPreview =
   import.meta.env.DEV &&
   typeof window !== 'undefined' &&
   new URLSearchParams(window.location.search).get('desktop') === '1'
 
-/** Hosts permitted to render the functional workspace: Electron app (+ dev preview). */
-export const isWorkspaceHost = isDesktop || devWorkspacePreview
+const devAndroidPreview =
+  import.meta.env.DEV &&
+  typeof window !== 'undefined' &&
+  new URLSearchParams(window.location.search).get('android') === '1'
+
+/** Layout gating for tablet surface (Android native + dev preview). */
+export const isTablet = isAndroid || devAndroidPreview
+
+export const devWorkspacePreview = devDesktopPreview || devAndroidPreview
+
+/** Hosts permitted to render the functional workspace: Electron app, Android app (+ dev preview). */
+export const isWorkspaceHost = isDesktop || isAndroid || devWorkspacePreview
+

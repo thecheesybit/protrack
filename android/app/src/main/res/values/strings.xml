@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">PRO TRACK</string>
+    <string name="title_activity_main">PRO TRACK</string>
+    <string name="package_name">com.protrack.app</string>
+    <string name="custom_url_scheme">com.protrack.app</string>
+</resources>

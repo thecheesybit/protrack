@@ -15,6 +15,7 @@ const pkgVersion = JSON.parse(
 // Build the Electron layer only when explicitly targeting desktop, so the
 // normal `vite build` for Netlify stays a pure web build.
 const withElectron = process.env.ELECTRON === 'true'
+const withCapacitor = process.env.CAPACITOR === 'true' || process.env.ANDROID === 'true'
 
 // Opt-in bundle analysis: `ANALYZE=true vite build` emits a treemap to
 // stats.html at the repo root (gitignored). Gated so normal/CI builds never
@@ -140,6 +141,7 @@ export default defineConfig({
   // marketing LandingPage from ever flashing inside the desktop app.
   define: {
     __IS_ELECTRON__: JSON.stringify(withElectron),
+    __IS_ANDROID__: JSON.stringify(withCapacitor),
     __APP_VERSION__: JSON.stringify(pkgVersion),
   },
   resolve: {
