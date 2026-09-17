@@ -12,7 +12,7 @@ import { stopSpeaking } from '@/lib/tts'
 import toast from 'react-hot-toast'
 import { cn } from '@/utils/cn'
 
-import aiGif from '@/assets/ai.gif'
+import aiVideo from '@/assets/ai.mp4'
 
 /**
  * The in-panel, full-screen Hands-Free experience. Unlike the ambient loop it
@@ -118,7 +118,7 @@ export function HandsFreeTab() {
             status === 'thinking' ? 'border-accent/30 animate-pulse scale-98' :
             status === 'speaking' ? 'border-accent shadow-glow scale-105' : 'border-line/80 scale-100',
           )}>
-            <img src={aiGif} alt="AI voice assistant" className="h-full w-full object-cover select-none pointer-events-none" />
+            <video src={aiVideo} autoPlay muted loop playsInline aria-label="AI voice assistant" className="h-full w-full object-cover select-none pointer-events-none" />
           </div>
         </div>
 

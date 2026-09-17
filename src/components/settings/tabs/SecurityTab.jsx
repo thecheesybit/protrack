@@ -10,7 +10,7 @@ import {
   isValidPin,
 } from '@/services/lockService'
 import { deriveUniqueCode, initSessionFromAccount } from '@/services/cryptoService'
-import lockImg from '@/assets/lock.gif'
+import lockVideo from '@/assets/lock.mp4'
 import { AnimatePresence, motion } from 'framer-motion'
 import { SettingsSection, SettingsCard, SettingsBadge, SettingsToggleRow } from '../SettingsUI'
 
@@ -148,13 +148,14 @@ export function SecurityTab({
           <div className="flex flex-col sm:flex-row items-center gap-6">
             <div className="relative shrink-0">
               <div className="relative h-20 w-20 overflow-hidden rounded-2xl border border-amber-500/40 shadow-[0_0_25px_rgba(251,191,36,0.2)]">
-                <img
-                  src={lockImg}
-                  alt="App Lock"
+                <video
+                  src={lockVideo}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  aria-label="App Lock"
                   className="h-full w-full object-cover"
-                  onError={(e) => {
-                    e.target.src = '/lock.gif'
-                  }}
                 />
               </div>
               <div className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-surface bg-amber-500 text-black shadow-xs">

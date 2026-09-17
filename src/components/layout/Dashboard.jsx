@@ -65,7 +65,7 @@ const BackgroundHandsFree = React.lazy(() =>
 const SupportModal = React.lazy(() =>
   import('@/components/support/SupportModal').then((m) => ({ default: m.SupportModal }))
 )
-import aiGif from '@/assets/ai.gif'
+import aiVideo from '@/assets/ai.mp4'
 import { APP_VERSION } from '@/lib/version'
 import { exitPip } from '@/lib/pip'
 import { cn } from '@/utils/cn'
@@ -464,9 +464,13 @@ export function Dashboard() {
             aria-label={handsFreeActive ? "Hands-free loop running" : "Open AI companion"}
           >
             {handsFreeActive ? (
-              <img
-                src={aiGif}
-                alt="Hands-Free Active"
+              <video
+                src={aiVideo}
+                autoPlay
+                muted
+                loop
+                playsInline
+                aria-hidden="true"
                 className="h-full w-full object-cover select-none pointer-events-none rounded-full"
               />
             ) : (

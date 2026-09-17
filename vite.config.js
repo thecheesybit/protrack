@@ -155,6 +155,11 @@ export default defineConfig({
   },
   build: {
     chunkSizeWarningLimit: 700,
+    // Keep assets as separate hashed files instead of base64-inlining small
+    // ones into JS. The forest uses ~90 small WebP sprites; inlining them would
+    // bloat the JS chunks (base64 is ~33% larger) and hurt caching. Nothing
+    // here benefits from inlining (no tiny SVGs), so disable it outright.
+    assetsInlineLimit: 0,
     rollupOptions: {
       output: {
         // Split heavy vendors so the app shell loads fast and caches well.

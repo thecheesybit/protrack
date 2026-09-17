@@ -16,6 +16,6 @@
     "path": "dist/**/*",
     "gzip": false,
     "brotli": false,
-    "limit": "30 MB"
+    "limit": "14 MB"
   }
 ]

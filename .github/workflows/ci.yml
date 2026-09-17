@@ -54,6 +54,10 @@ jobs:
             echo "No 'lint' script defined — skipping."
           fi
 
+      - name: Video audio guard
+        # Fails if any shipped decorative video regained an audio track.
+        run: npm run check:videos
+
       - name: Build web bundle
         # Firebase config is baked into the bundle at build time via Vite's
         # import.meta.env. If the secrets aren't set, the app boots into the

@@ -11,7 +11,7 @@ import {
 import { desktopBridge } from '@/desktop/isDesktop'
 import { auth } from '@/lib/firebase'
 import { deriveUniqueCode, initSessionFromAccount } from '@/services/cryptoService'
-import lockImg from '@/assets/lock.gif'
+import lockVideo from '@/assets/lock.mp4'
 
 /**
  * Format remaining lockout seconds into MM:SS or H:MM:SS format.
@@ -282,13 +282,14 @@ export function AppLockOverlay() {
                   : 'border-amber-500/30 shadow-[0_0_35px_rgba(251,191,36,0.25)]'
               }`}
             >
-              <img
-                src={lockImg}
-                alt="Workspace Lock"
+              <video
+                src={lockVideo}
+                autoPlay
+                muted
+                loop
+                playsInline
+                aria-label="Workspace Lock"
                 className="h-full w-full object-cover"
-                onError={(e) => {
-                  e.target.src = '/lock.gif'
-                }}
               />
               {/* Overlay shimmer */}
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
