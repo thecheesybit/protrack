@@ -2,10 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Play, Pause, PictureInPicture2 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { enterPip } from '@/lib/pip'
-
-function mmss(sec) {
-  return `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`
-}
+import { formatFocusClock as mmss } from '@/lib/focusClock'
 
 function MiniRing({ progress, color }) {
   const size = 34

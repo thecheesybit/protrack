@@ -1,8 +1,9 @@
-import { memo, useState, useMemo } from 'react'
+import { memo, useMemo, useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Clock, TreePine } from 'lucide-react'
 import { ymd } from '@/lib/dates'
 import { cn } from '@/utils/cn'
-import { SpriteFoliage, getSessionFoliageSeed } from './ForestSprites'
+import { ForestTerrain, sessionsToForestItems } from './ForestTerrain'
 
 export { SpriteTree, SpriteFoliage, getSessionFoliageSeed, formatFloraBreakdown } from './ForestSprites'
 
@@ -368,171 +369,362 @@ export function filterSuccessfulSessions(sessions = [], dateStr) {
 /**
  * Renders the organic forest grove for a single calendar day column,
  * placed directly at the bottom baseline of the calendar grid.
- * The number of planted trees dynamically matches the exact count of
- * successful focus sessions completed on that day.
+ *
+ * Interactivity:
+ * - Magnifies smoothly on hover (scale 1.65x with spring physics) so trees,
+ *   foliage, and stratified soil are clearly visible.
+ * - Displays an Executive Status Briefing card rather than micro ball-by-ball commentary.
  */
 export function DayGrove({
   sessions = [],
   dateStr,
-  dayIndex: _dayIndex,
-  isToday: _isToday = false,
+  dayIndex = 0,
+  isToday = false,
   className,
+  variant = 'compact',
 }) {
-  const [hoveredTree, setHoveredTree] = useState(null)
-  const [hoveredIdx, setHoveredIdx] = useState(null)
+  const [isHovered, setIsHovered] = useState(false)
+  const hoverTimerRef = useRef(null)
 
-  // Filter completed & successful sessions for this specific day, ordered chronologically
-  const daySessions = useMemo(() => {
-    return filterSuccessfulSessions(sessions, dateStr)
-  }, [sessions, dateStr])
+  const handleMouseEnter = () => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current)
+      hoverTimerRef.current = null
+    }
+    setIsHovered(true)
+  }
 
-  const count = daySessions.length
-  const _totalMin = useMemo(
-    () => daySessions.reduce((acc, s) => acc + (s.durationMin || 0), 0),
-    [daySessions],
-  )
+  const handleMouseLeave = () => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
+    hoverTimerRef.current = setTimeout(() => {
+      setIsHovered(false)
+    }, 120) // 120ms hysteresis prevents edge flutter
+  }
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
+    }
+  }, [])
+
+  const daySessions = useMemo(() => filterSuccessfulSessions(sessions, dateStr), [sessions, dateStr])
+  const items = useMemo(() => sessionsToForestItems(daySessions), [daySessions])
+  const count = items.length
+
+  const executiveMetrics = useMemo(() => {
+    const totalMinutes = daySessions.reduce((sum, s) => sum + (Number(s.durationMin) || 0), 0)
+    const hours = Math.floor(totalMinutes / 60)
+    const mins = totalMinutes % 60
+    const timeFormatted = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
+
+    let trees = 0
+    let shrubs = 0
+    let flowers = 0
+    for (const item of items) {
+      if (item.type === 'tree') trees++
+      else if (item.type === 'shrub') shrubs++
+      else if (item.type === 'flower') flowers++
+    }
+
+    let rank
+    if (totalMinutes >= 180) {
+      rank = { tierName: 'Peak Canopy', badgeColor: '#10b981', tagline: 'Mastery tier daily focus' }
+    } else if (totalMinutes >= 120) {
+      rank = { tierName: 'Thriving Grove', badgeColor: '#34d399', tagline: 'Deep consistent flow state' }
+    } else if (totalMinutes >= 60) {
+      rank = { tierName: 'Woodland', badgeColor: '#38bdf8', tagline: 'Solid structured daily progress' }
+    } else if (totalMinutes >= 25) {
+      rank = { tierName: 'Pioneer Saplings', badgeColor: '#fbbf24', tagline: 'Good foundation established' }
+    } else {
+      rank = { tierName: 'Early Roots', badgeColor: '#a78bfa', tagline: 'Daily habit initiated' }
+    }
+
+    const longest = [...daySessions].sort((a, b) => (Number(b.durationMin) || 0) - (Number(a.durationMin) || 0))[0]
+    const longestDur = Number(longest?.durationMin) || 0
+    const longestLabel = longest?.label || longest?.title || null
+
+    let takeaway
+    if (longestDur >= 40 && longestLabel) {
+      takeaway = `Longest sprint: ${longestDur}m on ${longestLabel}.`
+    } else {
+      takeaway = `${count} completed session${count > 1 ? 's' : ''} powering today's grove.`
+    }
+
+    let dateLabel = dateStr || ''
+    try {
+      if (dateStr) {
+        const [y, m, d] = dateStr.split('-').map(Number)
+        const dObj = new Date(y, m - 1, d)
+        dateLabel = dObj.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
+      }
+    } catch {
+      dateLabel = dateStr || ''
+    }
+
+    return {
+      totalMin: totalMinutes,
+      timeFormatted,
+      floraCounts: { trees, shrubs, flowers },
+      rank,
+      takeaway,
+      dateLabel,
+    }
+  }, [daySessions, items, count, dateStr])
+
+  // Large Hero Variant for Single-Day Timetable Agenda
+  if (variant === 'hero') {
+    if (count === 0) {
+      return (
+        <div
+          className={cn(
+            'relative w-full rounded-2xl border border-emerald-500/20 bg-slate-950/60 backdrop-blur-md shadow-glass overflow-hidden flex flex-col select-none',
+            className,
+          )}
+        >
+          <div className="flex items-center justify-between px-3.5 py-2 border-b border-white/10 bg-black/40">
+            <div className="flex items-center gap-2">
+              <TreePine className="h-4 w-4 text-emerald-400/60" />
+              <h4 className="text-xs font-bold text-white/80 tracking-tight">
+                {executiveMetrics?.dateLabel || dateStr}'s Forest Grove
+              </h4>
+              {isToday && (
+                <span className="rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-extrabold text-emerald-400">
+                  TODAY
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] text-white/40 font-mono">Pristine Ground</span>
+          </div>
+          <div className="relative h-[260px] sm:h-[300px] w-full flex flex-col items-center justify-center p-6 text-center">
+            <ForestTerrain
+              items={[]}
+              compact={false}
+              isHex={false}
+              showWildlife={false}
+              minHeightClass="h-full w-full"
+              className="h-full w-full rounded-none border-0 bg-transparent"
+              emptyState={
+                <div className="flex flex-col items-center gap-2">
+                  <TreePine className="h-8 w-8 text-emerald-500/40" />
+                  <p className="text-xs font-semibold text-white/80">No specimens rooted yet for this day</p>
+                  <p className="text-[11px] text-white/45 max-w-xs">
+                    Complete a focus session to cultivate a flourishing grove of trees, shrubs, and flowers.
+                  </p>
+                </div>
+              }
+            />
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div
+        className={cn(
+          'relative w-full rounded-2xl border border-emerald-500/25 bg-slate-950/80 backdrop-blur-md shadow-glass overflow-hidden flex flex-col select-none',
+          className,
+        )}
+      >
+        {/* Hero Header */}
+        <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-white/10 bg-black/50">
+          <div className="flex items-center gap-2">
+            <TreePine className="h-4 w-4 text-emerald-400" />
+            <h4 className="text-xs font-bold text-white tracking-tight">
+              {executiveMetrics.dateLabel}'s Forest Grove
+            </h4>
+            {isToday && (
+              <span className="rounded-full bg-emerald-500/25 px-1.5 py-0.5 text-[9px] font-extrabold text-emerald-400">
+                TODAY
+              </span>
+            )}
+            {executiveMetrics.rank && (
+              <span
+                className="rounded-full px-2 py-0.5 text-[9px] font-bold shadow-sm"
+                style={{
+                  backgroundColor: `${executiveMetrics.rank.badgeColor}22`,
+                  color: executiveMetrics.rank.badgeColor,
+                  border: `1px solid ${executiveMetrics.rank.badgeColor}44`,
+                }}
+              >
+                {executiveMetrics.rank.tierName}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] font-mono font-bold text-white/95">
+              {executiveMetrics.timeFormatted}
+            </span>
+            <span className="text-[11px] font-mono text-emerald-300">
+              {executiveMetrics.floraCounts.trees} 🌲 · {executiveMetrics.floraCounts.shrubs} 🌿 · {executiveMetrics.floraCounts.flowers} 🌸
+            </span>
+          </div>
+        </div>
+
+        {/* Large Rotatable 2.5D Isometric Diorama Canvas */}
+        <div className="relative h-[290px] sm:h-[330px] w-full">
+          <ForestTerrain
+            items={items}
+            compact={false}
+            isHex={false}
+            showWildlife={true}
+            disableTooltips={false}
+            minHeightClass="h-full w-full"
+            className="h-full w-full rounded-none border-0"
+          />
+        </div>
+
+        {/* Executive Takeaway Footer */}
+        <div className="px-3.5 py-2 bg-black/40 border-t border-white/5 flex items-center justify-between text-[10px] text-white/65">
+          <span className="italic truncate max-w-[70%]">"{executiveMetrics.takeaway}"</span>
+          <span className="text-[9px] text-white/40 uppercase tracking-wider shrink-0 font-medium">
+            Drag to rotate 360° · Scroll to zoom
+          </span>
+        </div>
+      </div>
+    )
+  }
+
+  // Default Compact Variant (For Week Calendar Columns)
+  if (count === 0 || !executiveMetrics) {
+    return null
+  }
+
+  // Prevent horizontal clipping on outer columns (Monday or Sunday)
+  const popupAlignClass =
+    dayIndex === 0
+      ? 'left-0 translate-x-0'
+      : dayIndex === 6
+      ? 'right-0 translate-x-0'
+      : 'left-1/2 -translate-x-1/2'
 
   return (
     <div
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       className={cn(
-        'pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col items-center justify-end overflow-visible select-none',
-        count === 0 && 'min-h-0',
+        'pointer-events-auto absolute inset-x-0 bottom-0 flex w-full flex-col items-center justify-end overflow-visible select-none',
+        isHovered ? 'z-[70]' : 'z-20',
         className,
       )}
-      style={{ minHeight: count === 0 ? 0 : 90 }}
+      style={{ height: '74px' }}
     >
-      {/* ── Hover Tooltip Card ────────────────────────────────────── */}
+      {/* Expanded invisible hit-test canopy area when hovered to prevent mouseleave boundary jitter */}
+      {isHovered && (
+        <div
+          className="absolute -top-24 inset-x-0 bottom-0 pointer-events-auto z-0"
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        />
+      )}
+
+      {/* ── Scaled-Up Interactive Diorama on Hover (Silky 60FPS Hardware Accelerated) ── */}
+      <motion.div
+        animate={{
+          scale: isHovered ? 1.6 : 1,
+          y: isHovered ? -14 : 0,
+        }}
+        transition={{
+          duration: 0.24,
+          ease: [0.16, 1, 0.3, 1], // Fluid deceleration curve: zero oscillation, zero jitter, instantaneous response
+        }}
+        style={{
+          willChange: 'transform',
+          filter: isHovered ? 'drop-shadow(0 12px 24px rgba(0,0,0,0.85))' : 'none',
+          transition: 'filter 0.22s ease',
+        }}
+        className="origin-bottom cursor-pointer relative flex flex-col items-center justify-end w-full h-full transform-gpu"
+      >
+        <ForestTerrain
+          items={items}
+          compact={true}
+          disableTooltips={true}
+          showWildlife={false}
+          minHeightClass="h-full w-full"
+        />
+      </motion.div>
+
+      {/* ── Executive Status Briefing Card (No Ball-by-Ball Commentary) ── */}
       <AnimatePresence>
-        {hoveredTree && (
+        {isHovered && (
           <motion.div
-            initial={{ opacity: 0, y: 6, scale: 0.92 }}
-            animate={{ opacity: 1, y: -4, scale: 1 }}
-            exit={{ opacity: 0, y: 4, scale: 0.92 }}
-            transition={{ duration: 0.15 }}
-            className="absolute bottom-full mb-1 z-50 pointer-events-none whitespace-nowrap rounded-xl border border-white/20 bg-slate-950/90 px-2.5 py-1.5 shadow-2xl backdrop-blur-xl text-center"
+            initial={{ opacity: 0, y: 10, scale: 0.92 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 6, scale: 0.94 }}
+            transition={{ duration: 0.16, ease: 'easeOut' }}
+            className={cn(
+              'pointer-events-none absolute bottom-[104px] z-[80] w-[260px] select-none rounded-2xl border border-emerald-500/35 bg-slate-950/95 p-3 text-white shadow-[0_20px_48px_rgba(0,0,0,0.95)] backdrop-blur-2xl',
+              popupAlignClass,
+            )}
           >
-            <p className="text-[11px] font-bold text-emerald-400 leading-tight">
-              {hoveredTree.title}
-            </p>
-            <p className="text-[9px] text-white/70 mt-0.5">
-              {hoveredTree.detail}
-            </p>
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-2">
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <h4 className="text-xs font-bold text-white tracking-tight">{executiveMetrics.dateLabel}</h4>
+                  {isToday && (
+                    <span className="rounded-full bg-emerald-500/25 px-1.5 py-0.2 text-[9px] font-extrabold text-emerald-400">
+                      TODAY
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10px] text-white/50">{executiveMetrics.rank?.tagline}</p>
+              </div>
+              {executiveMetrics.rank && (
+                <span
+                  className="rounded-full px-2 py-0.5 text-[10px] font-bold shadow-sm shrink-0"
+                  style={{
+                    backgroundColor: `${executiveMetrics.rank.badgeColor}22`,
+                    color: executiveMetrics.rank.badgeColor,
+                    border: `1px solid ${executiveMetrics.rank.badgeColor}44`,
+                  }}
+                >
+                  {executiveMetrics.rank.tierName}
+                </span>
+              )}
+            </div>
+
+            {/* Executive KPI Row */}
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <div className="rounded-xl border border-white/5 bg-white/[0.04] p-2">
+                <div className="flex items-center gap-1 text-[9.5px] text-white/50">
+                  <Clock className="h-3 w-3 text-sky-400" />
+                  <span>Total Focus</span>
+                </div>
+                <div className="text-sm font-extrabold text-white mt-0.5 tracking-tight font-mono">
+                  {executiveMetrics.timeFormatted}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-white/5 bg-white/[0.04] p-2">
+                <div className="flex items-center gap-1 text-[9.5px] text-white/50">
+                  <TreePine className="h-3 w-3 text-emerald-400" />
+                  <span>Canopy Grown</span>
+                </div>
+                <div className="text-sm font-extrabold text-emerald-300 mt-0.5 tracking-tight font-mono">
+                  {count} {count === 1 ? 'Plant' : 'Plants'}
+                </div>
+              </div>
+            </div>
+
+            {/* Flora Breakdown & Executive Takeaway */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 text-[10px]">
+                <span className="text-emerald-300/80 font-medium">Flora Breakdown</span>
+                <span className="font-bold text-emerald-300 font-mono">
+                  {executiveMetrics.floraCounts.trees} 🌲 · {executiveMetrics.floraCounts.shrubs} 🌿 · {executiveMetrics.floraCounts.flowers} 🌸
+                </span>
+              </div>
+
+              {executiveMetrics.takeaway && (
+                <p className="text-[10px] leading-relaxed text-white/70 italic px-0.5">
+                  "{executiveMetrics.takeaway}"
+                </p>
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* ── Raster focus trees — one per successful session, none on an empty day ── */}
-      <div
-        className="pointer-events-auto relative flex w-full items-end justify-center px-1 pb-1 transition-opacity duration-200"
-        onMouseLeave={() => {
-          setHoveredTree(null)
-          setHoveredIdx(null)
-        }}
-      >
-        {count === 0 ? (
-          /* Empty day: nothing on the baseline (owner: no sapling placeholders). */
-          null
-        ) : count === 1 ? (
-          /* 1 Session: Centered flower, shrub, or tree */
-          (() => {
-            const s = daySessions[0]
-            const pType = getPlantType(s)
-            const h = pType === 'flower' ? 34 : pType === 'shrub' ? 50 : (s.durationMin >= 45 ? 90 : 84)
-            return (
-              <div className="relative flex items-end justify-center">
-                <div
-                  className="z-10 cursor-pointer transition-transform hover:scale-105 active:scale-95"
-                  onMouseEnter={() => setHoveredTree(getTreeTooltip(s, 0, 1))}
-                  onMouseLeave={() => setHoveredTree(null)}
-                >
-                  <SpriteFoliage
-                    type={pType}
-                    species="all"
-                    variant={getSessionFoliageSeed(s, 0)}
-                    height={h}
-                    delay={0.05}
-                  />
-                </div>
-              </div>
-            )
-          })()
-        ) : (
-          /* 2+ Sessions: Thriving Grove where EVERY session has its own flower/shrub/tree */
-          <div className="relative flex items-end justify-center overflow-visible">
-            {daySessions.map((s, idx) => {
-              const pType = getPlantType(s)
-              const speciesList = ['oak', 'pine', 'blossom', 'palm']
-              const species =
-                (s.durationMin || 0) >= 60
-                  ? idx % 2 === 0
-                    ? 'oak'
-                    : 'pine'
-                  : speciesList[idx % speciesList.length]
-
-              let h
-              if (pType === 'flower') {
-                const fFactors = [0.94, 1.06, 0.96, 1.08]
-                h = Math.round(34 * fFactors[idx % fFactors.length])
-              } else if (pType === 'shrub') {
-                const sFactors = [0.94, 1.06, 0.92, 1.04]
-                h = Math.round(50 * sFactors[idx % sFactors.length])
-              } else {
-                const baseTreeH = Math.max(64, Math.min(92, Math.round(92 - Math.min(count, 12) * 2.2)))
-                const tFactors = [0.94, 1.06, 0.92, 1.04, 0.98]
-                h = Math.round(baseTreeH * tFactors[idx % tFactors.length])
-              }
-
-              const approxWidth = pType === 'flower' ? 24 : pType === 'shrub' ? 36 : Math.round(h * 0.62)
-              const targetGroveWidth = Math.min(132, Math.max(74, 48 + count * 14))
-              const overlapPx =
-                count > 1
-                  ? Math.max(4, Math.min(approxWidth - 6, Math.round((approxWidth * count - targetGroveWidth) / (count - 1))))
-                  : 0
-
-              const isBack = pType === 'tree' ? idx % 2 === 1 : false
-              const baseZ =
-                pType === 'flower'
-                  ? 24 + (idx % 4)
-                  : pType === 'shrub'
-                  ? 18 + (idx % 4)
-                  : isBack ? 10 + (idx % 3) : 14 + (idx % 3)
-
-              return (
-                <div
-                  key={s.id || `${dateStr}-foliage-${idx}`}
-                  className="cursor-pointer transition-all duration-150 hover:scale-115 active:scale-95 hover:drop-shadow-lg"
-                  style={{
-                    marginLeft: idx === 0 ? 0 : -overlapPx,
-                    zIndex: hoveredIdx === idx ? 50 : baseZ,
-                    transform: isBack ? 'translateY(-2px)' : 'translateY(0)',
-                  }}
-                  onMouseEnter={() => {
-                    setHoveredIdx(idx)
-                    setHoveredTree(getTreeTooltip(s, idx, count))
-                  }}
-                  onMouseLeave={() => {
-                    setHoveredIdx(null)
-                    setHoveredTree(null)
-                  }}
-                >
-                  <SpriteFoliage
-                    type={pType}
-                    species={species}
-                    variant={getSessionFoliageSeed(s, idx)}
-                    height={h}
-                    delay={Math.min(0.35, idx * 0.04)}
-                  />
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* ── Grassy Soil Baseline ─────────────────── */}
-      <div className="relative h-1 w-full shrink-0 overflow-hidden">
-        <div className="absolute inset-x-0 bottom-0 h-0.5 bg-emerald-500/20 blur-[0.5px]" />
-      </div>
     </div>
   )
 }

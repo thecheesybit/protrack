@@ -2,11 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Play, Pause, Plus, Minus, Maximize2, X, TreePine } from 'lucide-react'
 import { useStore } from '@/store/useStore'
-
-function mmss(sec) {
-  const s = Math.max(0, sec)
-  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
-}
+import { formatFocusClock as mmss } from '@/lib/focusClock'
 
 function MiniRing({ progress, color = '#f59e0b', size = 130, children }) {
   const stroke = 6

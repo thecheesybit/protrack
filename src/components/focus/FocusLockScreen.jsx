@@ -25,6 +25,7 @@ import { updateSettings } from '@/services/userService'
 import { VIDEO_PRESETS, DEFAULT_FOCUS_SCENE, youtubeId } from '@/lib/focusScenes'
 import { withAlpha } from '@/lib/color'
 import { enterPip } from '@/lib/pip'
+import { formatFocusClock as mmss } from '@/lib/focusClock'
 import { cn } from '@/utils/cn'
 
 /**
@@ -41,11 +42,6 @@ const BAND_META = {
   afternoon: { Icon: Sun, label: 'Afternoon' },
   dusk: { Icon: Sunset, label: 'Dusk' },
   evening: { Icon: Moon, label: 'Evening' },
-}
-
-function mmss(sec) {
-  const s = Math.max(0, sec)
-  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 }
 
 function Ring({ progress, color, size = 300, children }) {

@@ -515,7 +515,8 @@ export function TodayAgenda({
             dateStr={selectedDateStr}
             dayIndex={selectedDay}
             isToday={isSelectedToday}
-            className="relative inset-auto w-full mt-auto pt-4"
+            variant="hero"
+            className="w-full mt-6 shrink-0"
           />
         </div>
       </div>

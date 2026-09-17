@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, memo } from 'react'
 import toast from 'react-hot-toast'
 import { motion } from 'framer-motion'
-import { Play, Pause, RotateCcw, Flame, Clock, TreePine, Sprout, PictureInPicture2 } from 'lucide-react'
+import { Play, Pause, RotateCcw, Flame, Clock, TreePine, Sprout, PictureInPicture2, Maximize2, Flower2, Trophy } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { WidgetFrame } from './WidgetFrame'
 import { MonthlyForest } from '@/components/focus/MonthlyForest'
@@ -10,6 +10,7 @@ import { SpriteTree, SpriteFoliage, formatFloraBreakdown } from '@/components/fo
 import { useFocusSessions } from '@/hooks/useFocusSessions'
 import { cn } from '@/utils/cn'
 import { useAuth } from '@/hooks/useAuth'
+import { formatFocusClock as mmss } from '@/lib/focusClock'
 import { updateSettings } from '@/services/userService'
 import { logFailedFocusSession } from '@/services/focusService'
 import { addLedgerEntry } from '@/services/ledgerService'
@@ -32,9 +33,6 @@ const MOTIVATION_LINES = [
   'Plant something today your future self will walk through.',
 ]
 
-function mmss(sec) {
-  return `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`
-}
 
 // ── Enhanced Ring with gradient stroke + glow ────────────────────────────────
 
@@ -287,6 +285,22 @@ export function FocusWidget({ widget, variant }) {
 
   const floraSummary = useMemo(() => {
     return formatFloraBreakdown(sessions)
+  }, [sessions])
+
+  const floraCounts = useMemo(() => {
+    let trees = 0
+    let shrubs = 0
+    let flowers = 0
+    for (const s of sessions || []) {
+      if (s.completed === false || s.failedReason || (s.durationMin !== undefined && s.durationMin <= 0)) continue
+      const dur = Number(s.durationMin) || 25
+      const plantType = s.plantType || (dur < 10 ? 'flower' : dur <= 15 ? 'shrub' : 'tree')
+      if (plantType === 'flower') flowers++
+      else if (plantType === 'shrub') shrubs++
+      else trees++
+    }
+    const total = trees + shrubs + flowers
+    return { trees, shrubs, flowers, total }
   }, [sessions])
 
   const [bgImage, setBgImage] = useState(() => {
@@ -552,21 +566,78 @@ export function FocusWidget({ widget, variant }) {
           <div className="flex flex-1 flex-col rounded-2xl border border-white/10 bg-gradient-to-b from-black/30 to-emerald-950/20 p-4 backdrop-blur-sm my-3">
             {/* Stats row */}
             <div className="mb-4 grid grid-cols-3 gap-2">
-              <GlassStat icon={<Flame className="h-4 w-4 text-amber-400" />} label="Streak" value={`${stats?.currentStreak || 0}d`} />
-              <GlassStat icon={<Clock className="h-4 w-4 text-sky-400" />} label="Total" value={`${Math.round((stats?.totalFocusMin || 0) / 60)}h`} />
-              <GlassStat icon={<TreePine className="h-4 w-4 text-emerald-400" />} label="Forest" value={floraSummary} />
+              <GlassStat
+                icon={<Flame className="h-3.5 w-3.5" />}
+                label="Streak"
+                value={`${stats?.currentStreak || 0}d`}
+                tooltip={`${stats?.currentStreak || 0}-day consecutive streak`}
+                colorScheme="amber"
+              />
+              <GlassStat
+                icon={<Clock className="h-3.5 w-3.5" />}
+                label="Total"
+                value={`${Math.round((stats?.totalFocusMin || 0) / 60)}h`}
+                tooltip={`${stats?.totalFocusMin || 0} total focus minutes`}
+                colorScheme="sky"
+              />
+              <GlassStat
+                icon={<TreePine className="h-3.5 w-3.5" />}
+                label="Forest"
+                value={floraCounts.total}
+                subValue={
+                  <div className="flex items-center gap-1 text-[10px] font-medium text-white/70">
+                    <span className="flex items-center text-emerald-300" title={`${floraCounts.trees} trees`}>
+                      <TreePine className="h-2.5 w-2.5 mr-0.5" />{floraCounts.trees}
+                    </span>
+                    <span className="text-white/20">·</span>
+                    <span className="flex items-center text-teal-300" title={`${floraCounts.shrubs} shrubs`}>
+                      <Sprout className="h-2.5 w-2.5 mr-0.5" />{floraCounts.shrubs}
+                    </span>
+                    <span className="text-white/20">·</span>
+                    <span className="flex items-center text-rose-300" title={`${floraCounts.flowers} flowers`}>
+                      <Flower2 className="h-2.5 w-2.5 mr-0.5" />{floraCounts.flowers}
+                    </span>
+                  </div>
+                }
+                tooltip={`${floraCounts.total} total flora (${floraCounts.trees} trees, ${floraCounts.shrubs} shrubs, ${floraCounts.flowers} flowers)`}
+                colorScheme="emerald"
+              />
             </div>
 
-            {/* This month's forest — one tree per completed session. The
-                all-time total already shows in the "Forest" stat above, so
-                this heading stays plain rather than repeating that number —
-                MonthlyForest's own pill below shows the count for whichever
-                month is selected. */}
-            <div className="mb-2 flex items-center gap-2">
-              <Sprout className="h-4 w-4 text-emerald-400" />
-              <span className="text-xs font-semibold text-white/70">Your Forest</span>
+            {/* This month's forest — one tree per completed session. */}
+            <div className="mb-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sprout className="h-4 w-4 text-emerald-400" />
+                <span className="text-xs font-semibold text-white/70">Your Forest</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => window.dispatchEvent(new CustomEvent('protrack:open-zen', { detail: { tab: 'leaderboard' } }))}
+                  className="flex items-center gap-1 rounded-lg border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-300 transition-all hover:border-amber-500/40 hover:bg-amber-500/20 active:scale-95"
+                  title="See the public focus leaderboard"
+                >
+                  <Trophy className="h-3 w-3" />
+                  <span>Leaderboard</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.dispatchEvent(new CustomEvent('protrack:open-zen', { detail: { tab: 'forest' } }))}
+                  className="flex items-center gap-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300 transition-all hover:border-emerald-500/40 hover:bg-emerald-500/20 active:scale-95"
+                  title="Open full-screen Sanctuary mode (Ctrl+F) — Drag to rotate 360°"
+                >
+                  <Maximize2 className="h-3 w-3" />
+                  <span>Sanctuary</span>
+                </button>
+              </div>
             </div>
-            <MonthlyForest sessions={sessions} />
+            <div
+              className="flex-1 flex flex-col min-h-0 cursor-pointer"
+              onDoubleClick={() => window.dispatchEvent(new CustomEvent('protrack:open-zen', { detail: { tab: 'forest' } }))}
+              title="Double-click to open full-screen Sanctuary mode (Ctrl+F)"
+            >
+              <MonthlyForest sessions={sessions} currentStreak={stats?.currentStreak || 0} />
+            </div>
           </div>
         </div>
       ) : (
@@ -691,12 +762,37 @@ export function FocusWidget({ widget, variant }) {
   )
 }
 
-function GlassStat({ icon, label, value }) {
+function GlassStat({ icon, label, value, subValue, tooltip, colorScheme = 'emerald' }) {
+  const accentGlow =
+    colorScheme === 'amber'
+      ? 'from-amber-500/10 via-amber-500/[0.03] to-transparent'
+      : colorScheme === 'sky'
+      ? 'from-sky-500/10 via-sky-500/[0.03] to-transparent'
+      : 'from-emerald-500/10 via-emerald-500/[0.03] to-transparent'
+
+  const iconBg =
+    colorScheme === 'amber'
+      ? 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+      : colorScheme === 'sky'
+      ? 'bg-sky-500/15 border-sky-500/30 text-sky-400'
+      : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+
   return (
-    <div className="flex flex-col items-center gap-1 rounded-xl border border-white/10 bg-white/5 py-2.5 backdrop-blur-sm">
-      <span>{icon}</span>
-      <span className="font-display text-lg font-semibold leading-none tracking-tight text-white">{value}</span>
-      <span className="text-[10px] text-white/40">{label}</span>
+    <div
+      title={tooltip}
+      className={`group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b ${accentGlow} p-2.5 backdrop-blur-md transition-all hover:border-white/20 hover:bg-white/[0.06] shadow-sm`}
+    >
+      <div className="flex items-center justify-between w-full mb-1">
+        <div className={`flex h-6 w-6 items-center justify-center rounded-lg border ${iconBg} shadow-xs`}>
+          {icon}
+        </div>
+        <span className="text-[10px] font-bold tracking-wider uppercase text-white/45">{label}</span>
+      </div>
+
+      <div className="flex items-baseline justify-between gap-1">
+        <span className="text-xl font-bold tracking-tight text-white/95 font-mono">{value}</span>
+        {subValue && <div className="ml-auto">{subValue}</div>}
+      </div>
     </div>
   )
 }

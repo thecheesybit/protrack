@@ -68,5 +68,15 @@ service cloud.firestore {
       allow read: if true;
       allow create, update, delete: if isAdmin();
     }
+
+    // Public focus leaderboard — world-readable so any signed-in user can see
+    // the ranked board and other users' forest snapshots. Each user writes ONLY
+    // their own display-safe aggregate (name, focus minutes, plant counts,
+    // streak, compact forest). No private data (subjects/todos/scores) is ever
+    // published here. Same trust model as the Wall of Honor, but owner-written.
+    match /leaderboard/{userId} {
+      allow read: if true;
+      allow create, update, delete: if isOwner(userId);
+    }
   }
 }

@@ -29,8 +29,11 @@
 <tr>
 <td width="50%" valign="top">
 
-### 🌲 Calendar Forest & Focus Tree
-Turn focus sessions into a lush digital forest. Every completed Pomodoro session plants a vibrant tree on your calendar. Inspect session streaks, celebrate milestones with the Session Complete modal, and track your visual productivity density across days and months.
+### 🌲 Living Forest Ecosystem
+Turn focus sessions into a **living 2.5D isometric world**. Every completed session plants a tree, shrub, or flower on a rotatable diorama that grows through **six stages of ecological succession** — bare soil → pioneer meadow → shrubland → young forest → mature forest → climax ecosystem with rivers, hills, mountains, wildlife, and seasonal weather. Consistency drives **vitality** (lapses wilt the forest cosmetically and recover the moment you refocus — sessions are never deleted), each month is a hex tile that seals into a **honeycomb World Map** of your year, and a **next-tier chip** shows exactly what unlocks next.
+
+### 🏆 Public Focus Leaderboard
+Compare forests with other focusers on an opt-out public leaderboard, ranked by weekly & monthly focus time. Tap anyone to explore their forest sanctuary. Only a display-safe summary (name, focus minutes, plant counts, streak, forest snapshot) is ever shared — your subjects, to-dos, and scores stay private. Manage it anytime in **Settings → Privacy**.
 
 ### 🪟 Picture-in-Picture (PiP) Floating Focus
 Multitask without losing track of deep work. Launch a compact, always-on-top floating timer window (native Electron window or draggable web overlay) with live countdowns, play/pause toggles, and instant return to your workspace.

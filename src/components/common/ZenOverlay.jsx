@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, Zap, TreePine, Sprout, Sparkles, Quote } from 'lucide-react'
+import { X, Zap, TreePine, Sprout, Sparkles, Quote, Clock, Trophy } from 'lucide-react'
 import { useStore } from '@/store/useStore'
+import { Leaderboard } from '@/components/leaderboard/Leaderboard'
 import { useIdleDetection } from '@/hooks/useIdleDetection'
 import { useSubjects } from '@/hooks/useSubjects'
 import { useTodos } from '@/hooks/useWellness'
 import { useFocusSessions } from '@/hooks/useFocusSessions'
-import { SpriteFoliage, getSessionFoliageSeed, formatFloraBreakdown } from '@/components/focus/ForestSprites'
-import { getPlantType } from '@/components/focus/CalendarForest'
-import { ForestWildlife } from '@/components/focus/AnimalSprites'
+import { formatFloraBreakdown } from '@/components/focus/ForestSprites'
+import { ForestTerrain, sessionsToForestItems } from '@/components/focus/ForestTerrain'
+import { ForestWorldMap } from '@/components/focus/ForestWorldMap'
+import { deriveMonthEcosystem } from '@/lib/ecosystem'
 import { speak, stopSpeaking } from '@/lib/tts'
 import { classifyDeadline } from '@/lib/deadlines'
 import { cn } from '@/utils/cn'
@@ -114,9 +116,8 @@ export function ZenOverlay() {
   const { isIdle } = useIdleDetection(180000)
   const [show, setShow] = useState(false)
   const [quote, setQuote] = useState(QUOTES[0])
-  const [idleTab, setIdleTab] = useState('forest') // 'forest' | 'quote'
+  const [idleTab, setIdleTab] = useState('forest') // 'forest' | 'leaderboard' | 'quote'
   const [forestMotivationIdx, setForestMotivationIdx] = useState(0)
-  const [hoveredSession, setHoveredSession] = useState(null)
   const { sessions } = useFocusSessions()
   const floraText = useMemo(() => formatFloraBreakdown(sessions), [sessions])
   const currentForestMotivation = useMemo(() => {
@@ -125,13 +126,53 @@ export function ZenOverlay() {
   const completedSessions = useMemo(() => {
     return (sessions || [])
       .filter((s) => s && s.completed !== false && !s.failedReason && (Number(s.durationMin) || 0) > 0)
-      .slice(0, 36)
+      .slice(0, 120)
   }, [sessions])
+  // Oldest-first so the eldest plantings sit at the back of the isometric plot
+  // and the newest grow toward the viewer.
+  const sanctuaryItems = useMemo(
+    () => sessionsToForestItems([...completedSessions].reverse()),
+    [completedSessions],
+  )
   const totalMin = useMemo(() => {
     return (sessions || [])
       .filter((s) => s && s.completed !== false && !s.failedReason)
       .reduce((acc, s) => acc + (Number(s.durationMin) || 0), 0)
   }, [sessions])
+
+  const [sanctuarySubView, setSanctuarySubView] = useState('hex') // 'hex' | 'world'
+
+  const sanctuaryEcosystem = useMemo(() => {
+    const now = new Date()
+    const thisMonthSessions = (sessions || []).filter((s) => {
+      if (!s || s.completed === false || s.failedReason) return false
+      const d = s.startedAt?.toDate ? s.startedAt.toDate() : new Date(s.startedAt || s.createdAt)
+      return d && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
+    })
+    const monthTotalMin = thisMonthSessions.reduce((acc, s) => acc + (Number(s.durationMin) || 0), 0)
+    const activeDaysSet = new Set(
+      thisMonthSessions.map((s) => {
+        const d = s.startedAt?.toDate ? s.startedAt.toDate() : new Date(s.startedAt || s.createdAt)
+        return d.getDate()
+      }),
+    )
+    const lastSession = completedSessions[0]
+    const lastDate = lastSession
+      ? (lastSession.startedAt?.toDate ? lastSession.startedAt.toDate() : new Date(lastSession.startedAt || lastSession.createdAt))
+      : null
+    const daysSinceLast = lastDate ? Math.max(0, Math.floor((Date.now() - lastDate.getTime()) / 86400000)) : 0
+
+    return deriveMonthEcosystem({
+      totalMin: monthTotalMin,
+      activeDays: activeDaysSet.size,
+      daysElapsed: now.getDate(),
+      daysSinceLast,
+      currentStreak: 0,
+      month: now.getMonth(),
+      year: now.getFullYear(),
+      isSealed: false,
+    })
+  }, [sessions, completedSessions])
 
   const autoTimerRef = useRef(null)
   // Id of the queue slot this overlay holds while a quote is on screen, so a
@@ -293,7 +334,7 @@ export function ZenOverlay() {
           }}
           transition={{ duration: 1.2, ease: 'easeOut' }}
           onClick={idleTab === 'quote' ? nextQuote : () => setForestMotivationIdx((i) => i + 1)}
-          className="fixed inset-0 z-50 flex cursor-pointer items-center justify-center p-8 text-center select-none"
+          className="fixed inset-0 z-50 flex cursor-pointer items-center justify-center p-4 sm:p-6 text-center select-none"
         >
           {/* Ambient Background Mesh */}
           <div className="absolute inset-0 overflow-hidden -z-10 bg-bg">
@@ -361,6 +402,22 @@ export function ZenOverlay() {
             <button
               type="button"
               onClick={() => {
+                setIdleTab('leaderboard')
+                stopSpeaking()
+              }}
+              className={cn(
+                'flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer',
+                idleTab === 'leaderboard'
+                  ? 'bg-amber-500/20 border border-amber-500/40 text-amber-200 shadow-glow-sm'
+                  : 'text-white/60 hover:text-white hover:bg-white/5',
+              )}
+            >
+              <Trophy className="h-3.5 w-3.5 text-amber-300" />
+              <span>Leaderboard</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
                 setIdleTab('quote')
                 const voiceEnabled = settings?.zenVoiceEnabled !== false
                 speakQuote(quote, voiceEnabled)
@@ -385,125 +442,87 @@ export function ZenOverlay() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }}
               transition={{ duration: 0.6 }}
-              className="relative z-10 flex w-full max-w-4xl flex-col items-center gap-6 my-auto"
+              className="relative z-10 flex w-full max-w-7xl px-4 flex-col items-center gap-3 my-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Proud Header */}
-              <div className="flex flex-col items-center gap-2 text-center">
-                <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-bold text-emerald-300 backdrop-blur-md">
-                  <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
-                  <span className="tracking-wider uppercase">Your Focus Sanctuary</span>
+              {/* Refined, Streamlined Header (De-crowded & Airy) */}
+              <div className="flex flex-col items-center gap-1.5 text-center mt-6 sm:mt-8">
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <h2 className="text-xl sm:text-2xl font-display font-bold tracking-tight text-white drop-shadow-md">
+                    Look how much you've grown: <span className="text-emerald-400 capitalize">{floraText}</span>
+                  </h2>
+
+                  {/* Sanctuary sub-view toggle: Living Hex vs World Continent */}
+                  <div className="flex items-center rounded-xl border border-white/10 bg-black/40 p-0.5 backdrop-blur-md">
+                    <button
+                      type="button"
+                      onClick={() => setSanctuarySubView('hex')}
+                      className={cn(
+                        'flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer',
+                        sanctuarySubView === 'hex'
+                          ? 'bg-emerald-500/25 text-emerald-300 font-bold shadow-sm'
+                          : 'text-white/60 hover:text-white',
+                      )}
+                    >
+                      <TreePine className="h-3.5 w-3.5" />
+                      <span>Living Diorama</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSanctuarySubView('world')}
+                      className={cn(
+                        'flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer',
+                        sanctuarySubView === 'world'
+                          ? 'bg-emerald-500/25 text-emerald-300 font-bold shadow-sm'
+                          : 'text-white/60 hover:text-white',
+                      )}
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      <span>Honeycomb World</span>
+                    </button>
+                  </div>
                 </div>
-                <h2 className="text-3xl sm:text-4xl font-display font-bold tracking-tight text-white drop-shadow-md">
-                  Look how much you've grown: <span className="text-emerald-400 capitalize">{floraText}</span>
-                </h2>
-                <p className="text-sm font-medium text-emerald-200/85 max-w-xl leading-relaxed italic mt-0.5">
+
+                <p className="text-xs font-medium text-emerald-200/75 max-w-lg leading-relaxed italic">
                   "{currentForestMotivation}"
                 </p>
               </div>
 
-              {/* Atmospheric Meadow & Soil Patch */}
-              <div className="relative w-full h-[280px] sm:h-[320px] rounded-3xl border border-emerald-500/25 bg-gradient-to-b from-[#0a130d]/85 via-[#131b11]/90 to-[#120b06] p-6 shadow-[inset_0_0_50px_rgba(0,0,0,0.7)] flex flex-col justify-end overflow-hidden">
-                {/* Soil & Terrain */}
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[#090604] via-[#16100a]/90 to-transparent" />
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1 border-b border-amber-900/40" />
-                <div className="pointer-events-none absolute bottom-4 left-12 h-16 w-64 rounded-full bg-emerald-600/15 blur-2xl" />
-                <div className="pointer-events-none absolute bottom-6 right-16 h-16 w-64 rounded-full bg-emerald-500/15 blur-2xl" />
-
-                {/* Floating spores / fireflies */}
-                <div className="pointer-events-none absolute top-1/4 left-1/5 h-2 w-2 rounded-full bg-amber-300/50 blur-[1px] animate-pulse" />
-                <div className="pointer-events-none absolute top-1/3 right-1/4 h-2 w-2 rounded-full bg-emerald-300/40 blur-[1px] animate-pulse" style={{ animationDelay: '1.5s' }} />
-
-                {/* Hover inspection card */}
-                <AnimatePresence>
-                  {hoveredSession && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 4, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      transition={{ duration: 0.15 }}
-                      className="absolute top-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none whitespace-nowrap rounded-xl border border-emerald-500/30 bg-slate-950/92 px-3 py-1.5 shadow-2xl backdrop-blur-xl text-center"
-                    >
-                      <p className="text-xs font-bold text-emerald-400">
-                        {hoveredSession.label || hoveredSession.title || 'Focus Session'}
-                      </p>
-                      <p className="text-[10px] text-white/70 mt-0.5">
-                        {Number(hoveredSession.durationMin) || 25}m {getPlantType(hoveredSession)}
-                      </p>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                {completedSessions.length === 0 ? (
-                  <div className="relative z-10 flex h-full flex-col items-center justify-center gap-3 text-center my-auto">
-                    <Sprout className="h-10 w-10 text-emerald-400" />
-                    <p className="text-sm font-semibold text-white/80">Your sanctuary is waiting for its first plant.</p>
-                    <p className="text-xs text-white/50 max-w-sm">Complete a focus session to plant a flower, shrub, or tree!</p>
-                  </div>
-                ) : (
-                  <div className="relative h-full w-full">
-                    {completedSessions.map((s, i) => {
-                      const pType = getPlantType(s)
-                      const seed = getSessionFoliageSeed(s, i)
-                      const phi = 0.618033988749895
-                      const rawX = ((i * phi + ((seed % 23) / 23) * 0.15) % 1)
-                      const leftPct = 10 + rawX * 80
-                      const tier = i % 3
-                      const baseBottom = tier === 0 ? 32 : tier === 1 ? 20 : 8
-                      const bottomPct = Math.max(6, Math.min(38, baseBottom + (((seed >> 2) % 9) - 4) * 1.5))
-                      const depthScale = 0.9 + ((38 - bottomPct) / 32) * 0.35
-                      const z = 10 + Math.round((38 - bottomPct) * 2)
-
-                      const pHeight =
-                        pType === 'flower'
-                          ? Math.round(42 * depthScale)
-                          : pType === 'shrub'
-                          ? Math.round(58 * depthScale)
-                          : Math.round(96 * depthScale)
-
-                      return (
-                        <div
-                          key={s.id || `zen-foliage-${i}`}
-                          className="absolute cursor-pointer transition-transform duration-200 hover:scale-115 active:scale-95 group"
-                          style={{
-                            left: `${leftPct}%`,
-                            bottom: `${bottomPct}%`,
-                            transform: 'translateX(-50%)',
-                            zIndex: z,
-                          }}
-                          onMouseEnter={() => setHoveredSession(s)}
-                          onMouseLeave={() => setHoveredSession(null)}
-                        >
-                          {/* Ground shadow */}
-                          <div
-                            className="pointer-events-none absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-black/65 blur-[2px]"
-                            style={{
-                              width: pType === 'flower' ? '30px' : pType === 'shrub' ? '46px' : '64px',
-                              height: '8px',
-                            }}
-                          />
-                          <SpriteFoliage
-                            type={pType}
-                            species="all"
-                            variant={seed}
-                            height={pHeight}
-                            delay={Math.min(0.5, i * 0.03)}
-                          />
-                        </div>
-                      )
-                    })}
-                    <ForestWildlife count={completedSessions.length} seed={totalMin} />
-                  </div>
-                )}
-              </div>
+              {sanctuarySubView === 'world' ? (
+                <ForestWorldMap
+                  sessions={sessions}
+                  className="h-[64vh] min-h-[500px] max-h-[740px] w-full rounded-3xl shadow-2xl"
+                  onInspectMonth={() => setSanctuarySubView('hex')}
+                />
+              ) : (
+                /* Isometric Living Rhombus ecosystem */
+                <ForestTerrain
+                  items={sanctuaryItems}
+                  maxCells={10000}
+                  ecosystem={sanctuaryEcosystem}
+                  isHex={false}
+                  minHeightClass="h-[64vh] min-h-[500px] max-h-[740px] w-full"
+                  className="rounded-3xl shadow-2xl"
+                  isSanctuary={true}
+                  emptyState={
+                    <>
+                      <Sprout className="h-10 w-10 text-emerald-400" />
+                      <p className="text-sm font-semibold text-white/80">Your sanctuary is waiting for its first plant.</p>
+                      <p className="max-w-sm text-xs text-white/50">Complete a focus session to plant a flower, shrub, or tree!</p>
+                    </>
+                  }
+                />
+              )}
 
               {/* Stat strip & Start focus action */}
-              <div className="flex flex-wrap items-center justify-center gap-3">
-                <span className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white/75 backdrop-blur-md">
-                  ⏱️ {Math.round(totalMin / 60)}h {totalMin % 60}m focused total
+              <div className="flex flex-wrap items-center justify-center gap-2.5">
+                <span className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/75 backdrop-blur-md">
+                  <Clock className="h-3.5 w-3.5 text-sky-400" />
+                  <span>{Math.round(totalMin / 60)}h {totalMin % 60}m focused total</span>
                 </span>
-                <span className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white/75 backdrop-blur-md">
-                  🌱 {completedSessions.length} total sessions
+                <span className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/75 backdrop-blur-md">
+                  <Sprout className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>{completedSessions.length} total sessions</span>
                 </span>
                 <button
                   type="button"
@@ -512,17 +531,25 @@ export function ZenOverlay() {
                     openFocus({ title: 'Sanctuary Session' })
                     dismiss()
                   }}
-                  className="flex items-center gap-2 rounded-2xl border border-emerald-500/50 bg-emerald-500/25 px-5 py-2.5 text-xs font-bold text-emerald-200 shadow-glow-sm backdrop-blur-md transition-all hover:scale-105 hover:bg-emerald-500/35 cursor-pointer"
+                  className="flex items-center gap-2 rounded-xl border border-emerald-500/50 bg-emerald-500/25 px-4 py-1.5 text-xs font-bold text-emerald-200 shadow-glow-sm backdrop-blur-md transition-all hover:scale-105 hover:bg-emerald-500/35 cursor-pointer"
                 >
                   <TreePine className="h-4 w-4 text-emerald-400" />
                   <span>Start Focus & Root Another Specimen</span>
                 </button>
               </div>
 
-              <span className="text-[10px] text-muted/60 tracking-wider uppercase mt-2">
+              <span className="text-[10px] text-muted/60 tracking-wider uppercase mt-1">
                 Click background for next affirmation · Esc to exit
               </span>
             </motion.div>
+          ) : idleTab === 'leaderboard' ? (
+            /* ════════════════════ FOREST LEADERBOARD ════════════════════ */
+            <div
+              className="relative z-10 flex w-full flex-col items-center my-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Leaderboard />
+            </div>
           ) : (
             /* ════════════════════ ZEN WISDOM QUOTE MODE ════════════════════ */
             <motion.div

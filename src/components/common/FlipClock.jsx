@@ -22,7 +22,6 @@ import { cn } from '@/utils/cn'
  * All state persisted to localStorage.
  */
 
-const POS_KEY   = 'protrack:clock_pos'
 const MODE_KEY  = 'protrack:clock_mode'
 const SCALE_KEY = 'protrack:clock_scale'
 
@@ -88,22 +87,15 @@ export function readInitialMode() {
   }
 }
 
+/**
+ * The clock's launch position is always its home dock. The last dragged
+ * position is intentionally NOT persisted across launches — the placement
+ * resets to home every time the app opens (a deliberate behaviour change from
+ * the old persisted-position clock). Dragging still works freely within a
+ * session; it just starts fresh next launch, which also means a position saved
+ * on a bigger window can never strand the clock off-screen.
+ */
 export function readInitialPos(currentScale = DEFAULT_SCALE) {
-  try {
-    const v = typeof localStorage !== 'undefined' && localStorage.getItem(POS_KEY)
-    if (v) {
-      const parsed = JSON.parse(v)
-      if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
-        // If x is 12 (the old hardcoded default before user custom positioning), migrate to new default
-        if (parsed.x === 12) {
-          return getDefaultPos(currentScale)
-        }
-        // Clamp a stored position into the current viewport so a clock saved on
-        // a larger window can never be stranded off-screen.
-        return clampToViewport(parsed, currentScale)
-      }
-    }
-  } catch { /* fallback */ }
   return getDefaultPos(currentScale)
 }
 
@@ -187,6 +179,21 @@ export function FlipClock() {
   const clockCentered = useStore((s) => s.clockCentered)
   const toggleClockCentered = useStore((s) => s.toggleClockCentered)
   const setAlarmModalOpen = useStore((s) => s.setAlarmModalOpen)
+  // Modal / panel overlays that take over the screen. The clock must not bleed
+  // through any of these (the reported "clock still shows on the settings
+  // screen" bug) — it lives on the dashboard, not on top of overlays.
+  const settingsOpen = useStore((s) => s.settingsOpen)
+  const aiOpen = useStore((s) => s.aiOpen)
+  const supportOpen = useStore((s) => s.supportOpen)
+  const whatsNewOpen = useStore((s) => s.whatsNewOpen)
+  const alarmModalOpen = useStore((s) => s.alarmModalOpen)
+  const helpOpen = useStore((s) => s.helpOpen)
+  const weatherPlaygroundOpen = useStore((s) => s.weatherPlaygroundOpen)
+  const focusContext = useStore((s) => s.focusContext)
+  // A blocking center-blur prompt or the Ctrl+F Forest Sanctuary is open (the
+  // sanctuary pushes a `quote` prompt while shown). Both are full-screen
+  // takeovers, so the clock must hide behind them too.
+  const activePrompt = useStore((s) => s.activePrompt)
 
   // Track window dimensions for dynamic centering
   const [winSize, setWinSize] = useState(() => ({
@@ -227,23 +234,14 @@ export function FlipClock() {
   const centeredX = Math.max(0, (winSize.w - baseW * CENTERED_SCALE) / 2)
   const centeredY = Math.max(0, (winSize.h - baseH * CENTERED_SCALE) / 2)
 
-  // The clock is only free to move/resize inside a Deep Focus session. In the
-  // normal dashboard it stays pinned to its bottom-left dock at the default
-  // scale (the `pos`/`scale` custom values apply to focus mode only), and in
-  // centered "desk clock" mode it snaps to screen-centre. Leaving focus (or
-  // centered mode) therefore returns it to the exact docked spot every time.
-  const interactive = focusLocked && !clockCentered
-  const dockPos = getDefaultPos(DEFAULT_SCALE)
-  // The "ALARM" tab hangs ~14px (unscaled) below the clock box, so at the docked
-  // scale it eats into the bottom gutter and the bottom gap ends up much smaller
-  // than the left one. Lift the docked clock by that (scaled) overhang so the
-  // tab's bottom edge keeps the same CLOCK_MARGIN gap as the left edge — the
-  // "equal gap on all edges" the design calls for.
-  const ALARM_TAB_OVERHANG = 14
-  const dockY = Math.max(0, dockPos.y - ALARM_TAB_OVERHANG * DEFAULT_SCALE)
-  const targetX = clockCentered ? centeredX : interactive ? pos.x : dockPos.x
-  const targetY = clockCentered ? centeredY : interactive ? pos.y : dockY
-  const targetScale = clockCentered ? CENTERED_SCALE : interactive ? scale : DEFAULT_SCALE
+  // The clock is freely draggable/resizable on the normal dashboard AND inside
+  // a Deep Focus session (normal draggable behaviour). Only centered "desk
+  // clock" mode (Ctrl+T) locks it to screen-centre. Its position is not
+  // persisted, so every launch starts from the home dock (see readInitialPos).
+  const interactive = !clockCentered
+  const targetX = clockCentered ? centeredX : pos.x
+  const targetY = clockCentered ? centeredY : pos.y
+  const targetScale = clockCentered ? CENTERED_SCALE : scale
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -327,9 +325,8 @@ export function FlipClock() {
 
   const handlePointerUp = useCallback(() => {
     dragStart.current.pressed = false
-    if (dragging.current) {
-      try { localStorage.setItem(POS_KEY, JSON.stringify(posRef.current)) } catch { /* private mode */ }
-    }
+    // Position is intentionally not persisted — it resets to the home dock on
+    // the next launch. Drag freely; it just doesn't carry over.
     dragging.current = false
   }, [])
 
@@ -409,9 +406,24 @@ export function FlipClock() {
 
   const hiddenByAuto = !clockCentered && mode === 'auto' && !focusLocked && (chromeHidden || fullscreen || focusRunning)
 
+  // Any modal/panel overlay that owns the screen. The clock lives on the
+  // dashboard, so it hides behind these — EXCEPT inside a Deep Focus session
+  // (focusLocked) and in centered desk-clock mode, where it must stay visible.
+  const overlayOpen =
+    settingsOpen ||
+    aiOpen ||
+    supportOpen ||
+    whatsNewOpen ||
+    alarmModalOpen ||
+    helpOpen ||
+    weatherPlaygroundOpen ||
+    Boolean(focusContext) ||
+    Boolean(activePrompt)
+  const hiddenByOverlay = overlayOpen && !focusLocked && !clockCentered
+
   // Safe space is available in area (C) below the legend (which has 2cm extra bottom clearance),
   // so the clock remains visible when legends expand.
-  const isHidden = hiddenByAuto
+  const isHidden = hiddenByAuto || hiddenByOverlay
 
   return (
     <>

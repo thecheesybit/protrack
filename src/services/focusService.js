@@ -9,10 +9,14 @@ import {
   limit,
   onSnapshot,
   getDocs,
+  getDoc,
+  setDoc,
+  updateDoc,
   serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { ymd, computeStreak } from '@/lib/dates'
+import { planSessionSimplification } from '@/lib/plantGrowth'
 
 /**
  * Record a completed focus session and atomically roll up the gamification
@@ -121,3 +125,107 @@ export async function logFailedFocusSession(uid, { modeId, subjectId, startedAt 
     createdAt: serverTimestamp(),
   })
 }
+
+/**
+ * One-time client-side migration for Goal B ("Forest Simplifier").
+ *
+ * Normalizes historical focus sessions with duration > 25 min into
+ * standard 25-minute tree blocks and capped shrub/flower remainders.
+ * Recomputes all-time flora statsAggregate (treesGrown, shrubsGrown, flowersGrown)
+ * accurately from the post-migration set.
+ *
+ * Idempotently guarded by settings.forestSimplifiedV1 === true.
+ * Batches writes into chunks of <= 400 operations.
+ *
+ * @param {string} uid
+ * @returns {Promise<{ skipped?: boolean, migrated?: boolean, convertedCount?: number, createdCount?: number, deletedCount?: number }>}
+ */
+export async function simplifyForestOnce(uid) {
+  if (!uid) return { skipped: true }
+
+  const userRef = doc(db, 'users', uid)
+  const userSnap = await getDoc(userRef)
+  if (!userSnap.exists()) return { skipped: true }
+
+  const userData = userSnap.data()
+  if (userData?.settings?.forestSimplifiedV1 === true) {
+    return { skipped: true }
+  }
+
+  // Fetch all existing focusSessions for this user
+  const sessionsCol = collection(db, 'users', uid, 'focusSessions')
+  const snap = await getDocs(sessionsCol)
+  const allSessions = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+
+  const plan = planSessionSimplification(allSessions)
+
+  if (plan.convertedCount > 0) {
+    // Process creations and deletions in batches of <= 400 operations
+    const MAX_BATCH_OPS = 400
+    let currentBatch = writeBatch(db)
+    let opCount = 0
+
+    // First: create child documents
+    for (const item of plan.toCreate) {
+      const newDocRef = doc(sessionsCol)
+      currentBatch.set(newDocRef, item.docData)
+      opCount++
+      if (opCount >= MAX_BATCH_OPS) {
+        await currentBatch.commit()
+        currentBatch = writeBatch(db)
+        opCount = 0
+      }
+    }
+
+    // Second: delete original legacy documents
+    for (const id of plan.toDelete) {
+      const delDocRef = doc(sessionsCol, id)
+      currentBatch.delete(delDocRef)
+      opCount++
+      if (opCount >= MAX_BATCH_OPS) {
+        await currentBatch.commit()
+        currentBatch = writeBatch(db)
+        opCount = 0
+      }
+    }
+
+    // Commit any remaining operations
+    if (opCount > 0) {
+      await currentBatch.commit()
+    }
+  }
+
+  // Atomically update user document: update statsAggregate and set settings.forestSimplifiedV1 = true
+  try {
+    await updateDoc(userRef, {
+      'statsAggregate.treesGrown': plan.newStats.treesGrown,
+      'statsAggregate.shrubsGrown': plan.newStats.shrubsGrown,
+      'statsAggregate.flowersGrown': plan.newStats.flowersGrown,
+      'settings.forestSimplifiedV1': true,
+    })
+  } catch {
+    // Fallback in case statsAggregate didn't exist yet on user doc
+    await setDoc(
+      userRef,
+      {
+        statsAggregate: {
+          treesGrown: plan.newStats.treesGrown,
+          shrubsGrown: plan.newStats.shrubsGrown,
+          flowersGrown: plan.newStats.flowersGrown,
+        },
+        settings: {
+          forestSimplifiedV1: true,
+        },
+      },
+      { merge: true },
+    )
+  }
+
+  return {
+    migrated: true,
+    convertedCount: plan.convertedCount,
+    createdCount: plan.createdCount,
+    deletedCount: plan.deletedCount,
+  }
+}
+

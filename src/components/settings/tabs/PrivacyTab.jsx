@@ -1,6 +1,10 @@
-import { Shield, Lock, Cpu, Cloud, Calendar, Mic, FileText, CheckCircle2 } from 'lucide-react'
+import { Shield, Lock, Cpu, Cloud, Calendar, Mic, FileText, CheckCircle2, Trophy } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { APP_VERSION } from '@/lib/version'
-import { SettingsSection, SettingsCard, SettingsBadge } from '../SettingsUI'
+import { SettingsSection, SettingsCard, SettingsBadge, SettingsToggleRow } from '../SettingsUI'
+import { useAuth } from '@/hooks/useAuth'
+import { useStore } from '@/store/useStore'
+import { updateSettings } from '@/services/userService'
 
 const PRIVACY_PILLARS = [
   {
@@ -22,7 +26,7 @@ const PRIVACY_PILLARS = [
     title: 'Firebase Isolation & Data Ownership',
     badge: 'Isolated UID',
     badgeVariant: 'accent',
-    body: 'When cloud synchronization is active, your timetable, subjects, and todos are synced to Google Firebase Firestore under strict per-user security rules. Database access is cryptographically restricted to your authenticated user ID — no other user or administrator has access to your records.',
+    body: 'When cloud synchronization is active, your timetable, subjects, and todos are synced to Google Firebase Firestore under strict per-user security rules — cryptographically restricted to your authenticated user ID. The only data that ever leaves this boundary is the display-safe summary you publish to the optional public leaderboard (see Public Sharing above); everything else stays private to you.',
   },
   {
     icon: Calendar,
@@ -67,8 +71,39 @@ const TERMS_SECTIONS = [
 ]
 
 export function PrivacyTab({ appInfo }) {
+  const { user } = useAuth()
+  const optedOut = useStore((s) => s.settings?.leaderboardOptOut === true)
+
+  const handleLeaderboardToggle = async (next) => {
+    // next === true means "on the board" → opt-out is the inverse.
+    if (!user?.uid) return
+    try {
+      await updateSettings(user.uid, { leaderboardOptOut: !next, leaderboardNoticeSeen: true })
+      toast.success(next ? 'Your forest is now on the public leaderboard' : 'Removed from the public leaderboard')
+    } catch (err) {
+      console.warn('[privacy] leaderboard toggle failed', err)
+      toast.error('Could not update leaderboard setting')
+    }
+  }
+
   return (
     <div className="space-y-8 pb-4">
+      {/* ── Public sharing controls ─────────────────────────────────── */}
+      <SettingsSection
+        title="Public Sharing"
+        description="You control what, if anything, leaves your private workspace."
+      >
+        <SettingsToggleRow
+          icon={Trophy}
+          title="Public Focus Leaderboard"
+          description="Share a display-safe summary — your name, focus minutes, plant counts, streak, and forest snapshot — on a public leaderboard so you can compare forests with other focusers. Your subjects, to-dos, and scores are never shared. On by default."
+          badge={optedOut ? 'Hidden' : 'Public'}
+          badgeVariant={optedOut ? 'muted' : 'emerald'}
+          checked={!optedOut}
+          onChange={handleLeaderboardToggle}
+        />
+      </SettingsSection>
+
       {/* ── Privacy & Data Charter ──────────────────────────────────── */}
       <SettingsSection
         title="Privacy Charter & Security Architecture"

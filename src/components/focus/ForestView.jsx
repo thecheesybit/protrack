@@ -1,6 +1,7 @@
 import { MonthlyForest } from './MonthlyForest'
+import { ForestTerrain } from './ForestTerrain'
 
-export { MonthlyForest }
+export { MonthlyForest, ForestTerrain }
 
 /**
  * ForestView component rendering the complete botanical forest grove.

@@ -1,17 +1,13 @@
 import { Play, Pause, Maximize2, X, Volume2, VolumeX } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { exitPip, closePip } from '@/lib/pip'
+import { formatFocusClock as mmss } from '@/lib/focusClock'
 
 // The whole square is an Electron drag handle. Only elements that carry `no-drag`
 // stay clickable — every interactive control below opts out explicitly. A
 // transparent full-bleed overlay must NOT carry `no-drag`, or it kills dragging
 // across the entire window.
 const NO_DRAG = { WebkitAppRegion: 'no-drag' }
-
-function mmss(sec) {
-  const s = Math.max(0, sec)
-  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
-}
 
 /**
  * A progress ring that fills whatever box it's given (viewBox-scaled), so the

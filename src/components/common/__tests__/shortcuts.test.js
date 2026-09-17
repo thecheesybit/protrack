@@ -90,7 +90,7 @@ describe('Keyboard Shortcuts & Navigation', () => {
       const dashboardPath = path.resolve(__dirname, '../../layout/Dashboard.jsx')
       const content = fs.readFileSync(dashboardPath, 'utf8')
 
-      expect(content).toContain("helpOpenRef.current")
+      expect(content).toContain("st.helpOpen")
       expect(content).toContain("setHelpOpen(false)")
       expect(content).toContain("setHelpOpen((prev) => !prev)")
       expect(content).toContain("st.toggleWidget('timetable')")

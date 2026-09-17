@@ -29,6 +29,7 @@ const LinkDevicePage = lazy(loadLinkDevicePage)
 const LinkGcalPage = lazy(loadLinkGcalPage)
 const PatreonApprovePage = lazy(loadPatreonApprovePage)
 const Workspace = lazy(loadWorkspace)
+const ForestPreview = lazy(() => import('@/components/focus/ForestPreview').then((m) => ({ default: m.ForestPreview })))
 
 // Eagerly prefetch workspace and auth chunks during the initial load window
 if (typeof window !== 'undefined') {
@@ -46,6 +47,18 @@ function Routes() {
   if (!configured) return <SetupRequired key="setup" />
 
   const pathname = typeof window !== 'undefined' ? window.location.pathname : '/'
+
+  // Visual test harness for Forest Ecosystem overhaul
+  if (typeof window !== 'undefined') {
+    const search = new URLSearchParams(window.location.search)
+    if (search.get('preview') === 'forest') {
+      return (
+        <Suspense fallback={<div className="min-h-screen bg-[#07080c] flex items-center justify-center text-emerald-400">Loading Forest Test Harness...</div>}>
+          <ForestPreview key="forest-preview" />
+        </Suspense>
+      )
+    }
+  }
 
   // Google Calendar auth gateway: /link-gcal?uid=<uid>
   if (pathname.startsWith('/link-gcal')) {

@@ -165,6 +165,21 @@ export const createUiSlice = (set, get) => ({
 
   whatsNewOpen: false,
   setWhatsNewOpen: (whatsNewOpen) => set({ whatsNewOpen }),
+
+  // Shortcuts/help modal + Weather playground — lifted out of Dashboard local
+  // state so other surfaces (e.g. FlipClock) can hide themselves while these
+  // full-screen overlays are open.
+  helpOpen: false,
+  setHelpOpen: (helpOpen) =>
+    set((s) => ({ helpOpen: typeof helpOpen === 'function' ? helpOpen(s.helpOpen) : helpOpen })),
+  weatherPlaygroundOpen: false,
+  setWeatherPlaygroundOpen: (weatherPlaygroundOpen) =>
+    set((s) => ({
+      weatherPlaygroundOpen:
+        typeof weatherPlaygroundOpen === 'function'
+          ? weatherPlaygroundOpen(s.weatherPlaygroundOpen)
+          : weatherPlaygroundOpen,
+    })),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setAiOpen: (aiOpen) => set({ aiOpen }),
   setSupportOpen: (supportOpen) => set({ supportOpen }),

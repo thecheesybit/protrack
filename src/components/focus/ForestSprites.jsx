@@ -238,6 +238,7 @@ export const SpriteFoliage = memo(function SpriteFoliage({
   className,
   style,
   alt,
+  interactive = true,
 }) {
   const normType = ['flower', 'shrub', 'tree'].includes(type) ? type : 'tree'
   const finalHeight = height != null ? height : DEFAULT_FOLIAGE_HEIGHTS[normType]
@@ -261,7 +262,7 @@ export const SpriteFoliage = memo(function SpriteFoliage({
       height={finalHeight}
       initial={{ scale: 0, y: 12, opacity: 0 }}
       animate={{ scale: 1, y: 0, opacity: 1 }}
-      whileHover={{ scale: 1.06, y: -2 }}
+      whileHover={interactive ? { scale: 1.06, y: -2 } : undefined}
       transition={{
         type: 'spring',
         stiffness: 260,

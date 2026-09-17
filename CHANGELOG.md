@@ -1,5 +1,39 @@
 # Changelog
 
+## v2.13.0 — 2026-09-17
+
+### 🌲 Living Forest Ecosystem
+- **Your forest is now a living world.** The month's forest renders as a rotatable 2.5D isometric diorama (rhombus land block with deep, stratified soil walls and directional sunlight) that grows through **six succession tiers** — Bare Substrate → Pioneer Meadow → Shrubland → Young Forest → Mature Forest → Climax Ecosystem — unlocking hydrology (puddles → ponds → streams → rivers → waterfalls), hills & mountains, wildlife, and seasonal weather/day-night as you accumulate focus time and consistency.
+- **Consistency = vitality.** A lapse gently wilts the scene (desaturated foliage, receding water, sheltering fauna) and it revives the instant you refocus — **no focus session is ever deleted or altered** to depict decline.
+- **Honeycomb World Map.** Each month is a hex tile that **seals** into a permanent continent of your year (via a Spark-safe localStorage rollup, so sealed months never degrade when older sessions age out of the sync window). Gap/dormant months are preserved as bare hexes to keep the spiral continuous.
+- **Next-tier chip** on the Focus widget shows exactly what unlocks next ("Next: 3h 20m focus & 4d consistency to reach Woodland"), plus a redesigned stats row (Streak · Total · Forest with an inline `🌲 · 🌿 · 🌸` breakdown).
+- **Small groves feel cozy** (proportional scaling), and every plot keeps an open grass/rock/riverbank border around the trees.
+
+### 🏆 Public Focus Leaderboard
+- **Compare forests with other focusers.** A new opt-out public leaderboard ranks foresters by **Weekly** and **Monthly** focus time. Tap anyone to explore their forest sanctuary (the same 2.5D isometric plot) plus their focus time, tree count, and streak.
+- **Open it** from the **Leaderboard** tab in the `Ctrl+F` Sanctuary or the **Leaderboard** button on the Focus widget's "Your Forest".
+- **On by default, with a one-time heads-up.** A first-launch notice explains what's shared before anything is published — you can keep it on or turn it off then, and anytime from **Settings → Privacy → Public Sharing**.
+- **Display-safe only.** Just your name, focus minutes, plant counts, streak, and a forest snapshot are published to a world-readable `leaderboard/{uid}` document (mirroring the Wall of Honor). Your subjects, to-dos, scores, and notes are never shared. Writes are coalesced to respect the free tier.
+
+### ⏱️ Deep Focus timer shows hours
+- Sessions of an hour or more now read `H:MM:SS` (e.g. `1:30:00`) instead of a large minutes count, across the lock screen, mini overlay, PiP windows, and widget.
+
+### 🕐 Floating clock
+- The desk clock is **draggable again on the dashboard** (not just in Deep Focus), its position **resets to its home dock on every launch**, and it now **hides behind any open panel/overlay** (Settings, AI, Support, Alarm, Help, Weather) — staying visible only on the dashboard, in Deep Focus, and in Desk Clock mode.
+
+## v2.11.1 — 2026-09-17
+
+### 🌳 2.5D/3D Isometric Forest Ecosystem Overhaul & Interactive Engine
+- **360° Continuous 3D Diorama Rotation:** Smooth pointer drag rotates the forest diorama 360° around the vertical yaw axis with continuous depth-sorting ($Z'$) and dynamically shaded soil faces based on real-time directional sunlight. Natural direct-drag physics ensure left/right movement aligns with intuitive hand orientation.
+- **Centered Zoom & Non-Passive Mouse Wheel:** Smooth mouse-wheel scrolling and HUD zoom buttons keep the forest land locked dead-center in view with zero cursor drift, eliminating page-scroll conflict via dedicated non-passive event listeners.
+- **Responsive Floating HUD Controls:** Integrated glass controls (Zoom In, Zoom Out, Rotate 90° Clockwise with shortest angular arc damping, Auto-Rotate Turntable, and Compass Reset to Isometric 45°) with isolated pointer propagation.
+- **Dynamic Plot Area Expansion (> 10,000 Trees):** Hardware-accelerated 2D Canvas with multi-tier Level of Detail (LOD) and frustum culling. The land begins as a small plot ($2\times2$) and smoothly scales up to a massive grove ($100\times100+$) maintaining a silky 60 FPS without DOM bloat.
+- **Active Roaming Wildlife Inside Forest:** Animals wander actively on the grass terrain tiles, gently bobbing while walking, pausing to graze, and dynamically depth-sorting with trees rather than being stranded outside.
+- **Tree Occlusion & X-Ray Peeking:** Hovering any tree highlights it and fades surrounding neighbor trees (to 0.08 opacity), revealing the focused flora and any wildlife hidden beneath the canopy.
+- **Redesigned FocusWidget Stats Row:** Replaced cramped comma-separated strings with balanced, clean glass cards featuring bold hero metrics (`1d Streak`, `15h Total`, and `40` hero number with `34 🌲 · 2 🌿 · 4 🌸` micro-breakdown badges).
+- **Double-Tap / Double-Click to Sanctuary:** Double-clicking the forest plot instantly opens fullscreen Sanctuary mode (`Ctrl+F`).
+- **One-Time Idempotent Historical Migration:** Automatic client-side migration converts legacy pre-v2.10 focus sessions (> 25m) into individual 25-minute tree blocks plus capped remainders, syncing atomized docs and updated `statsAggregate` (`treesGrown`, `shrubsGrown`, `flowersGrown`) in safe Firestore batches (≤ 400 ops/batch) guarded by `settings.forestSimplifiedV1`.
+
 ## v2.12.0 — 2026-09-15
 
 ### 📋 Subjects — topics, cleaner panel, correct selection

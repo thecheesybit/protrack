@@ -52,7 +52,9 @@ describe('FlipClock defaults and positioning', () => {
     expect(pos.y).toBe(691)
   })
 
-  it('migrates legacy hardcoded x: 12 to new default position', () => {
+  it('ignores any stored position and always launches at the home dock', () => {
+    // Position is no longer persisted across launches — the placement resets to
+    // home every time the app opens, so a stored value is disregarded.
     localStorage.setItem('protrack:clock_pos', JSON.stringify({ x: 12, y: 705 }))
     const pos = readInitialPos(1.25)
     expect(pos.x).toBe(24)
@@ -64,20 +66,20 @@ describe('FlipClock defaults and positioning', () => {
     expect(readInitialScale()).toBe(1.5)
   })
 
-  it('preserves user custom saved position when not the legacy default', () => {
+  it('resets to the home dock each launch, disregarding a stored custom position', () => {
     localStorage.setItem('protrack:clock_pos', JSON.stringify({ x: 100, y: 200 }))
     const pos = readInitialPos(1.25)
-    expect(pos.x).toBe(100)
-    expect(pos.y).toBe(200)
+    expect(pos.x).toBe(24)
+    expect(pos.y).toBe(691)
   })
 
-  it('clamps an off-screen stored position back into the viewport (the "clock not showing" fix)', () => {
-    // Saved on a bigger window; current window is 1536×825.
+  it('never launches off-screen even if a huge stale position was stored (position not persisted)', () => {
+    // A position saved on a bigger window used to strand the clock off-screen;
+    // now it always starts at the in-viewport home dock.
     localStorage.setItem('protrack:clock_pos', JSON.stringify({ x: 5000, y: 5000 }))
     const pos = readInitialPos(1.25)
-    // maxX = 1536 - 210 = 1326 · maxY = 825 - 110 = 715
-    expect(pos.x).toBe(1326)
-    expect(pos.y).toBe(715)
+    expect(pos.x).toBe(24)
+    expect(pos.y).toBe(691)
   })
 
   it('clampToViewport keeps an already-visible position unchanged', () => {

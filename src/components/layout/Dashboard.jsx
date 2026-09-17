@@ -39,6 +39,9 @@ import { useHourlyChime } from '@/hooks/useHourlyChime'
 import { useAlarmWatcher } from '@/hooks/useAlarmWatcher'
 import { useTopicMappingBatch } from '@/hooks/useTopicMappingBatch'
 import { useFocusRecovery } from '@/hooks/useFocusRecovery'
+import { useForestMigration } from '@/hooks/useForestMigration'
+import { useLeaderboardPublish } from '@/hooks/useLeaderboardPublish'
+import { LeaderboardConsentModal } from '@/components/leaderboard/LeaderboardConsentModal'
 import { AlarmModal } from '@/components/alarm/AlarmModal'
 import { AlarmRingingBanner } from '@/components/alarm/AlarmRingingBanner'
 import { WeatherPlaygroundModal } from '@/components/common/weather/WeatherPlaygroundModal'
@@ -93,20 +96,13 @@ export function Dashboard() {
   const alarmModalOpen = useStore((s) => s.alarmModalOpen)
   const setAlarmModalOpen = useStore((s) => s.setAlarmModalOpen)
   const scopeDropdownOpen = useStore((s) => s.scopeDropdownOpen)
-  const [helpOpen, setHelpOpen] = useState(false)
-  const [weatherPlaygroundOpen, setWeatherPlaygroundOpen] = useState(false)
-  const helpOpenRef = useRef(helpOpen)
-  useEffect(() => {
-    helpOpenRef.current = helpOpen
-  }, [helpOpen])
-  // Mirrored into a ref for the same reason as helpOpenRef above: the global
-  // keydown listener below is attached once ([] deps) so it can't see fresh
-  // state directly — without this, Escape could never close the Weather
-  // Playground modal (the check would always read the initial `false`).
-  const weatherPlaygroundOpenRef = useRef(weatherPlaygroundOpen)
-  useEffect(() => {
-    weatherPlaygroundOpenRef.current = weatherPlaygroundOpen
-  }, [weatherPlaygroundOpen])
+  // Help + Weather playground live in the store now (so overlays like FlipClock
+  // can react). The global keydown listener reads them via useStore.getState(),
+  // so no local refs are needed to dodge its stale closure.
+  const helpOpen = useStore((s) => s.helpOpen)
+  const setHelpOpen = useStore((s) => s.setHelpOpen)
+  const weatherPlaygroundOpen = useStore((s) => s.weatherPlaygroundOpen)
+  const setWeatherPlaygroundOpen = useStore((s) => s.setWeatherPlaygroundOpen)
 
   const clickCountRef = useRef(0)
   const clickTimerRef = useRef(null)
@@ -147,6 +143,8 @@ export function Dashboard() {
   useAlarmWatcher()  // monitors scheduled alarms and triggers audio + visual overlay
   useFocusRecovery() // restores an interrupted Deep Focus session after a crash/relaunch
   useTopicMappingBatch() // daily AI re-rank of flagged subjects' topic queues (no-op without a key)
+  useForestMigration() // one-time client-side migration normalizing historical focus sessions (Goal B)
+  useLeaderboardPublish() // publishes the user's display-safe aggregate to the public leaderboard (opt-out)
 
   // In-app keyboard shortcuts
   useEffect(() => {
@@ -181,11 +179,11 @@ export function Dashboard() {
 
       // ── Escape: dismiss overlays, help modal, panels, maximized widgets ──
       if (e.key === 'Escape') {
-        if (helpOpenRef.current) {
-          setHelpOpen(false)
+        if (st.helpOpen) {
+          st.setHelpOpen(false)
           return
         }
-        if (weatherPlaygroundOpenRef.current) setWeatherPlaygroundOpen(false)
+        if (st.weatherPlaygroundOpen) st.setWeatherPlaygroundOpen(false)
         else if (st.alarmModalOpen) st.setAlarmModalOpen(false)
         else if (st.clockCentered) st.setClockCentered(false)
         else if (st.focusContext) st.closeFocus()
@@ -235,7 +233,7 @@ export function Dashboard() {
       // ── Alt + W : Weather Sandbox & Atmospheric Playground ──
       if (e.altKey && e.key.toLowerCase() === 'w') {
         e.preventDefault()
-        setWeatherPlaygroundOpen((prev) => !prev)
+        st.setWeatherPlaygroundOpen((prev) => !prev)
         return
       }
 
@@ -249,7 +247,7 @@ export function Dashboard() {
       // ── ? : toggle shortcuts modal open AND close ──
       if (e.key === '?' && !e.metaKey && !e.ctrlKey && !isTyping) {
         e.preventDefault()
-        setHelpOpen((prev) => !prev)
+        st.setHelpOpen((prev) => !prev)
         return
       }
 
@@ -567,6 +565,7 @@ export function Dashboard() {
       )}
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
       <WhatsNewModal />
+      <LeaderboardConsentModal />
       <AlarmModal open={alarmModalOpen} onClose={() => setAlarmModalOpen(false)} />
       <AlarmRingingBanner />
       <WeatherPlaygroundModal open={weatherPlaygroundOpen} onClose={() => setWeatherPlaygroundOpen(false)} />

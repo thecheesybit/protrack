@@ -26,7 +26,11 @@ src/
 │  ├─ island/             DynamicIsland (universal notifier — chimes per event)
 │  ├─ prompt/             CenterPrompt (blur takeover) + CheckinPromptBody, RoutinePromptBody
 │  ├─ desktop/            UpdateGate (forced auto-update overlay)
-│  ├─ focus/              FocusPanel, FocusMiniOverlay, ForestView
+│  ├─ focus/              FocusPanel, FocusMiniOverlay, ForestView,
+│  │                      ForestTerrain (living month diorama), ForestInteractiveCanvas
+│  │                      + ForestCanvasEngine/forestEcosystemRenderer (2.5D canvas),
+│  │                      ForestWorldMap (honeycomb of month-hexes), ForestPreview (dev harness)
+│  ├─ leaderboard/        Leaderboard (weekly/monthly ranks → tap-through forest), LeaderboardConsentModal
 │  ├─ calendar/           NlQuickCapture (chrono-node)
 │  ├─ timetable/          TimetableGrid (+ live "now" flag), SlotEditor, TodayAgenda
 │  ├─ subjects/           SubjectDetail, MicroKanban (drag→Done sync), SubjectQuickAdd (bulk/voice)
@@ -38,7 +42,9 @@ src/
 ├─ hooks/                 useChronoTheme, useIslandCycle, useNowMinutes,
 │                         useDesktopIntegration, useAutoUpdate, useFocusEngine,
 │                         useDeadlines (Island deadline notifications),
-│                         useCalendarSync (two-way Google Calendar live sync), …
+│                         useCalendarSync (two-way Google Calendar live sync),
+│                         useForestMigration (one-time forest simplifier, Goal B),
+│                         useLeaderboard + useLeaderboardPublish (public board read/publish), …
 ├─ store/slices/          Zustand feature slices (below)
 ├─ services/              Firestore/IPC data access (one module per domain)
 ├─ content/              legal.js, changelog.js
@@ -51,7 +57,12 @@ src/
                           tags (pure unified tag layer: parseHashtags/normalizeTag/deriveAutoTags/mergeTags — lowercase hyphen slugs, additive tags[]),
                           gcalMap (pure event↔item mapping), gauth (GIS silent OAuth token refresh),
                           sound (unified 7-tone bank: playSound(name)/chimeForIslandKind; audioFX is a shim),
-                          tts (tiered text-to-speech: speak()/stopSpeaking()/getPreferredVoice())
+                          tts (tiered text-to-speech: speak()/stopSpeaking()/getPreferredVoice()),
+                          plantGrowth (computePlantings/needsSimplify/planSessionSimplification),
+                          forestLayout (iso + rotatable hex layout), ecosystem (succession tiers),
+                          ecoVitality (live vs sealed vitality), ecoRollup (Spark-safe per-month
+                          localStorage rollup), forestWorld (honeycomb spiral coords),
+                          focusClock (H:MM:SS timer format), leaderboard (buildLeaderboardEntry)
 electron/                 main.js, preload.js, (auto-update inline in main)
 functions/                mintDesktopToken
 ```
@@ -92,10 +103,22 @@ users/{uid}
   gcal/handshake                      { status, accessToken?, expiresAt?, error? }  ← ephemeral (desktop→browser OAuth)
   habits/{habitId}                    { name, icon, color, doneDates[], timesPerWeek, timesPerDay, interval }
   todos/{todoId}                      { text, done, modeId, dueAt, subjectId }
-  focusSessions/{id}                  { modeId, subjectId, durationMin, startedAt, hourOfDay }
+  focusSessions/{id}                  { modeId, subjectId, durationMin, plantType, completed, startedAt, hourOfDay }  ← one doc per planting (25-min tree + capped remainder); >25m legacy docs split by the useForestMigration one-time pass
   ledger/{id}                         { kind, title, detail, modeId, at }   ← bounded read (50)
   checkins/{ymd}                      { date, answers: { morning|midday|evening: { qid, type, value, note?, at } } }  ← bounded read (14)
+
+leaderboard/{uid}                     { displayName, photoURL?, weeklyMin, monthlyMin, allTimeMin,
+                                        weekly/monthlyTrees|Shrubs|Flowers, currentStreak,
+                                        weeklyForest[], monthlyForest[] ({t,s}), updatedAt }  ← WORLD-READABLE, owner-written; display-safe only
 ```
+
+**Forest ecosystem is 100% derived, never stored.** Succession tier, vitality, hydrology,
+honeycomb world, and per-hex geography are pure functions of `focusSessions` + `statsAggregate`
+(`lib/ecosystem.js`, `ecoVitality.js`, `forestWorld.js`, `forestLayout.js`). To survive the
+300-doc read window without degrading sealed months, `lib/ecoRollup.js` keeps a compact per-month
+rollup in **localStorage** (`protrack:forest_months:{uid}`, Spark-safe — zero Firestore writes or
+listeners): the active month recomputes live, past months are **sealed** (frozen) so they never
+degrade as old sessions age out of the window.
 
 **Updated field shapes (v1.2):**
 ```
@@ -112,7 +135,7 @@ todos/{todoId}   { text, done, modeId, dueAt, subjectId, subjectColumn?, subject
 desktopHandshakes/{sessionId}         { desktopUid, status, token?, expiresAt }  ← ephemeral
 ```
 
-Rules (`firestore.rules`): everything under `users/{uid}/**` is owner-only. Handshake docs are writable by authenticated client devices to support the client-side Google popup auth bypass.
+Rules (`firestore.rules`): everything under `users/{uid}/**` is owner-only. Handshake docs are writable by authenticated client devices to support the client-side Google popup auth bypass. `leaderboard/{uid}` is **world-readable, owner-written** (same trust model as the Wall of Honor `verified_patreons`) — display-safe fields only. ⚠️ **This rule must be deployed** (`firebase deploy --only firestore:rules`) before the leaderboard works; until then reads are refused and the UI shows a "warming up" state.
 
 ## 4. Key real-time flows
 
@@ -138,6 +161,8 @@ Rules (`firestore.rules`): everything under `users/{uid}/**` is owner-only. Hand
   - **Errors:** `403 accessNotConfigured` → `CalendarSetupError` (Cloud Console link, surfaced by `gcalSlice.gcalSetupError`); `403 insufficientPermissions` → non-destructive `CalendarScopeError` → degrade to primary-only + a one-time reconnect nudge; `401` → one silent refresh then a sticky reconnect prompt; `429/5xx` → exponential backoff.
   - **Subject tasks:** `src/hooks/useModeTasksWithDates.js` fans out one listener per subject in the active mode and feeds Kanban cards **that carry a `dueAt`** to the timetable/day/month views (undated cards stay in their board).
 - **Kanban → subject sync** — on drop to *Done*, `MicroKanban` recomputes `progressPct = done/total` from in-memory tasks, writes it once, announces via the Island, appends a ledger entry.
+- **Living forest ecosystem** — a completed session logs one `focusSessions` doc per planting (`computePlantings`: a 25-min tree + capped remainder). The rendered world is 100% **derived** (no ecosystem docs): `ecosystem.deriveMonthEcosystem` maps a month's minutes + consistency to a succession tier + terrain/hydrology/fauna/weather descriptor; `ecoVitality` gives live vitality for the active month and frozen end-of-month vitality for sealed months; `forestLayout` places flora on a rotatable 2.5D rhombus (single month) / hex, `forestWorld` lays out the honeycomb of month-hexes, and `ForestCanvasEngine`/`forestEcosystemRenderer` draw it on canvas (seeded PRNG for deterministic, jitter-free scenes). `ecoRollup` seals each finished month to `localStorage`. Surfaces: `FocusWidget` "Your Forest", `MonthlyForest` (month hex ⇄ World Map), and the `Ctrl+F` Sanctuary (`ZenOverlay`). `useForestMigration` runs the one-time legacy-session split (Goal B) at launch, guarded by `settings.forestSimplifiedV1`.
+- **Public leaderboard** (opt-out, default-on) — `useLeaderboardPublish` (in `Dashboard`) writes the user's own display-safe aggregate to `leaderboard/{uid}` via `buildLeaderboardEntry` (pure), coalesced by a `protrack:lb_sig` localStorage signature and gated on `settings.leaderboardNoticeSeen` (a one-time `LeaderboardConsentModal`) so nothing publishes silently; opting out (`settings.leaderboardOptOut`, toggled in Settings → Privacy) deletes the entry. `useLeaderboard` subscribes to the board only while the `Leaderboard` UI is mounted (Sanctuary tab / FocusWidget button); tapping a row renders that user's published forest snapshot through `ForestTerrain`'s `items` API. No Cloud Functions.
 - **Auto-update (fully silent)** — `electron-updater` (GitHub feed) → IPC → `updateSlice` → `useAutoUpdate`. `autoDownload` + `autoInstallOnAppQuit` are on, so the new build downloads unattended and installs on the next quit with no UI. `electron-builder.yml` uses the **NSIS one-click** target (no wizard, no "Next"); `update:install` calls `autoUpdater.quitAndInstall(true, true)` (`isSilent` + relaunch). The only prompt is one non-blocking "Restart to apply update" action in the Dynamic Island (and the mirrored button in Settings → Updates); `UpdateGate` still obscures the dashboard while a download is in flight. Store builds skip all of this (`isStoreBuild` → `initAutoUpdate` early-returns).
 - **Exam scorecards** — `ScorecardWidget` (registry id `scorecard`) with `useExams(modeId)` + `useScorecards(modeId, examId)` (both fan out per-mode in `all` scope, same pattern as `useSubjects`). Exams are soft-deleted with a 15-day restore window (`examService`, `EXAM_RETENTION_DAYS`). `scorecardParser.js` turns a pasted Oliveboard/Testbook/PracticeMock result into a structured attempt (regex first, Gemini fallback); `ScorecardAiCoach` calls `generateGeminiExpertAnalysis` → `callAIProvider` (any configured provider) and caches the markdown report in `localStorage`. `html-to-image` powers the shareable scorecard PNG export. Charts (`ScorecardCharts`) use the same lazy-Recharts discipline as analytics.
 - **Deadline engine** (`src/hooks/useDeadlines.js`) — mounted in `Dashboard`; uses `getUpcomingItems` from `lib/deadlines.js` (pure, no reads) to check overdue/due-today items from Zustand-cached todos and fires Island notifications with a 60-second debounce. No new Firestore reads.
