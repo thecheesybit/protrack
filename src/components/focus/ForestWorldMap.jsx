@@ -41,6 +41,12 @@ export const ForestWorldMap = memo(function ForestWorldMap({
   // Keep camera centered on current month when loaded
   const hasCenteredRef = useRef(false)
 
+  // Animation-loop control: the pulse redraw only runs while the map is
+  // actually on-screen and the window is visible (see the loop effect below).
+  const rafRef = useRef(null)
+  const visibleRef = useRef(true)
+  const drawRef = useRef(null)
+
   // Draw loop
   const drawContinent = useCallback(() => {
     const canvas = canvasRef.current
@@ -473,6 +479,9 @@ export const ForestWorldMap = memo(function ForestWorldMap({
     ctx.restore()
   }, [worldHexes, zoom, pan, hoveredHex, selectedHex])
 
+  // Keep the loop calling the latest draw without re-subscribing observers.
+  drawRef.current = drawContinent
+
   // Initial resize and resize observer
   useEffect(() => {
     const container = containerRef.current
@@ -505,16 +514,50 @@ export const ForestWorldMap = memo(function ForestWorldMap({
     return () => ro.disconnect()
   }, [drawContinent, worldHexes])
 
-  // Re-draw on state changes & continuous 60fps loop for active pulse
+  // Continuous pulse loop — but only while the map is actually on-screen and
+  // the window is visible. Mounts once (reads the latest draw via drawRef) so
+  // panning/zooming never churns the observers. When the map scrolls off-screen
+  // (behind another view) or the window is hidden/minimized, the loop stops
+  // entirely — no rAF, no redraw — instead of burning the GPU at 60fps. This
+  // matters because Electron runs with backgroundThrottling:false, so nothing
+  // else throttles it. It resumes the moment the map is visible again.
   useEffect(() => {
-    let animId
-    const loop = () => {
-      drawContinent()
-      animId = requestAnimationFrame(loop)
+    const container = containerRef.current
+
+    const tick = () => {
+      drawRef.current?.()
+      rafRef.current = requestAnimationFrame(tick)
     }
-    animId = requestAnimationFrame(loop)
-    return () => cancelAnimationFrame(animId)
-  }, [drawContinent])
+    const start = () => {
+      if (rafRef.current == null && visibleRef.current && !document.hidden) {
+        rafRef.current = requestAnimationFrame(tick)
+      }
+    }
+    const stop = () => {
+      if (rafRef.current != null) {
+        cancelAnimationFrame(rafRef.current)
+        rafRef.current = null
+      }
+    }
+
+    const io = new IntersectionObserver((entries) => {
+      visibleRef.current = entries[0]?.isIntersecting ?? true
+      if (visibleRef.current) start()
+      else stop()
+    })
+    if (container) io.observe(container)
+
+    const onVisibility = () => (document.hidden ? stop() : start())
+    document.addEventListener('visibilitychange', onVisibility)
+
+    start()
+
+    return () => {
+      stop()
+      io.disconnect()
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [])
 
   // Hit test hex under cursor
   const findHexAtPoint = useCallback(
