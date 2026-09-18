@@ -98,3 +98,30 @@ export function getCachedValue(key) {
   const entry = registry.get(key)
   return entry?.hasValue ? entry.value : undefined
 }
+
+/**
+ * Immediately tears down EVERY shared Firestore listener and empties the cache.
+ *
+ * Used on sign-out: the normal 3s teardown grace period would otherwise keep
+ * listeners live after `firebaseSignOut` revokes the auth token, producing a
+ * burst of `permission-denied` snapshot errors during the sign-out transition
+ * (which stalls the routing animation and can leave a blank screen). Clearing
+ * synchronously before signing out removes that window entirely.
+ */
+export function clearAllSubscriptions() {
+  registry.forEach((entry) => {
+    if (entry.teardownTimer) {
+      clearTimeout(entry.teardownTimer)
+      entry.teardownTimer = null
+    }
+    entry.listeners.clear()
+    if (typeof entry.unsubscribe === 'function') {
+      try {
+        entry.unsubscribe()
+      } catch {
+        /* listener already detached */
+      }
+    }
+  })
+  registry.clear()
+}

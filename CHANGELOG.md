@@ -7,6 +7,7 @@
 - **Pair in seconds from the desktop.** Open **Settings → System → "Link Companion Tablet"** and scan the QR code (or type the 8-character code) on the tablet — it signs straight into your synced workspace. No password re-entry, and it runs entirely on the free tier (no cloud functions).
 - **Touch-first layout.** On a tablet the workspace adapts for touch: larger tap targets, tap-to-select widgets instead of hover, and a persistent dock.
 - **Sideloaded updates.** The tablet app checks GitHub Releases for a newer APK and offers a one-tap update.
+- **Official PRO TRACK icon and name.** Built with the official high-resolution brand mark across all adaptive launcher densities, styled to the deep obsidian `#07080C` theme, and named "PRO TRACK" throughout system launchers and multitasking.
 
 ### ⚡ Faster to load, lighter to ship
 - **The app is roughly half the size.** The bundled download dropped from ~29 MB to ~12 MB with no visible change in quality — the big animated graphics (the AI orb, the app-lock animation) are now efficient muted video instead of huge GIFs, the forest's ~90 plant and animal sprites are WebP, and a handful of unused images that were quietly shipping have been removed.

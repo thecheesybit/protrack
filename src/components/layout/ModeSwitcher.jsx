@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
-import { Plus, Settings2, Sun, Moon, Settings, LogOut, Heart, Minimize2, ChevronDown, ChevronUp, Archive } from 'lucide-react'
+import { Plus, Settings2, Sun, Moon, Settings, LogOut, Heart, Minimize2, ChevronDown, ChevronUp, Archive, LayoutGrid, Sparkles, Clock, Target } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
 import { useTheme } from '@/hooks/useTheme'
 import { useStore } from '@/store/useStore'
 import { getIcon } from '@/lib/icons'
+import { WIDGETS } from '@/components/widgets/widgetRegistry'
 import { updateActiveMode } from '@/services/userService'
 import { archiveMode, unarchiveMode } from '@/services/modeService'
 import { ModeEditorModal } from '@/components/modes/ModeEditorModal'
@@ -14,6 +15,7 @@ import { DeleteModeModal } from '@/components/modes/DeleteModeModal'
 import { ModeContextMenu } from '@/components/modes/ModeContextMenu'
 import { ArchivedModesModal } from '@/components/modes/ArchivedModesModal'
 import { ConfirmLogoutModal } from '@/components/auth/ConfirmLogoutModal'
+import { isTablet } from '@/desktop/isDesktop'
 import { cn } from '@/utils/cn'
 
 /**
@@ -163,6 +165,15 @@ export function ModeSwitcher({ vertical = false }) {
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
   const setSupportOpen = useStore((s) => s.setSupportOpen)
   const fullscreen = useStore((s) => s.fullscreen)
+  const setAiOpen = useStore((s) => s.setAiOpen)
+  const toggleClockCentered = useStore((s) => s.toggleClockCentered)
+  const clockCentered = useStore((s) => s.clockCentered)
+  // Unified tablet rail: widget switching + accordion group state.
+  const maximizeWidget = useStore((s) => s.maximizeWidget)
+  const maximizedWidgetId = useStore((s) => s.maximizedWidgetId)
+  const activeWidgetId = useStore((s) => s.activeWidgetId)
+  const railGroup = useStore((s) => s.railGroup)
+  const setRailGroup = useStore((s) => s.setRailGroup)
 
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingMode, setEditingMode] = useState(null)
@@ -176,7 +187,9 @@ export function ModeSwitcher({ vertical = false }) {
   const modeRailOpen = useStore((s) => s.modeRailOpen)
   const setModeRailOpen = useStore((s) => s.setModeRailOpen)
   const scopeDropdownOpen = useStore((s) => s.scopeDropdownOpen)
-  const isRetracted = !modeRailOpen
+  // On a touch tablet there is no hover to re-reveal the rail, so it must never
+  // auto-retract — it stays pinned open. Desktop keeps its 5s inactivity hide.
+  const isRetracted = isTablet ? false : !modeRailOpen
   const hideTimerRef = useRef(null)
 
   const clearHideTimer = () => {
@@ -187,6 +200,7 @@ export function ModeSwitcher({ vertical = false }) {
   }
 
   const startHideTimer = () => {
+    if (isTablet) return // rail is permanently pinned on touch surfaces
     clearHideTimer()
     if (!editorOpen && !deleteModalOpen && !contextMenu.open && !archivedModalOpen) {
       hideTimerRef.current = setTimeout(() => {
@@ -372,6 +386,156 @@ export function ModeSwitcher({ vertical = false }) {
       />
     </>
   )
+
+  // ── Tablet: ONE unified rail, THREE accordion sections ───────────────────
+  // Tap a section header and it expands to show its list; the other two shrink
+  // to just their header (only one open at a time):
+  //   • Home  — the 9 board widgets (switches the full-screen widget).
+  //   • Scope — all scopes/modes (+ new mode, archived).
+  //   • Gear  — app actions: AI companion, Desk Clock, theme, settings,
+  //     support, sign out.
+  // This replaces both the desktop mode rail AND the in-board widget dock.
+  if (vertical && isTablet) {
+    const resolvedMaxId = maximizedWidgetId || activeWidgetId || 'timetable'
+    const allModesT = [allMode, ...activeModes]
+
+    const headerCls = (isActive) =>
+      cn(
+        'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition-all duration-200 cursor-pointer',
+        isActive ? 'bg-accent/15 text-accent shadow-glow-sm' : 'text-muted hover:bg-ink/5 hover:text-ink',
+      )
+    const itemCls =
+      'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted transition-all duration-200 hover:bg-ink/5 hover:text-ink cursor-pointer'
+
+    return (
+      <>
+        <div className="flex max-h-[calc(100vh-1.25rem)] flex-col items-center gap-1.5 overflow-y-auto no-scrollbar rounded-[1.75rem] border border-line/60 bg-surface/85 px-2 py-2.5 shadow-premium-md backdrop-blur-xl select-none">
+          {/* ── Home — widgets ── */}
+          <button
+            type="button"
+            onClick={() => setRailGroup('home')}
+            title="Home — widgets"
+            aria-label="Home — widgets"
+            className={headerCls(railGroup === 'home')}
+          >
+            <LayoutGrid className="h-6 w-6" />
+          </button>
+
+          {railGroup === 'home' && (
+            <div className="flex shrink-0 flex-col items-center gap-1.5 py-0.5">
+              {WIDGETS.map((w) => {
+                const WI = getIcon(w.icon)
+                const active = w.id === resolvedMaxId
+                return (
+                  <button
+                    key={w.id}
+                    type="button"
+                    onClick={() => maximizeWidget(w.id)}
+                    title={w.title}
+                    aria-label={w.title}
+                    className={cn(
+                      'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all duration-200 cursor-pointer',
+                      active ? 'bg-accent/20 text-accent shadow-glow-sm' : 'text-muted hover:bg-ink/5 hover:text-ink',
+                    )}
+                  >
+                    <WI className="h-5 w-5" />
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          <div className="my-0.5 h-px w-7 shrink-0 bg-line/60" />
+
+          {/* ── Scope — modes ── */}
+          <button
+            type="button"
+            onClick={() => setRailGroup('scopes')}
+            title="Scope"
+            aria-label="Scope"
+            className={headerCls(railGroup === 'scopes')}
+          >
+            <Target className="h-6 w-6" />
+          </button>
+
+          {railGroup === 'scopes' && (
+            <div className="flex shrink-0 flex-col items-center gap-1.5 py-0.5">
+              {allModesT.map((mode) => (
+                <VerticalModePill
+                  key={mode.id}
+                  mode={mode}
+                  active={mode.id === activeModeId}
+                  onSelect={() => selectMode(mode.id)}
+                  onEdit={() => openEdit(mode)}
+                  onContextMenu={handleContextMenu}
+                />
+              ))}
+              <button type="button" onClick={openCreate} title="New mode" aria-label="New mode" className={itemCls}>
+                <Plus className="h-5 w-5" />
+              </button>
+              {archivedModes.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setArchivedModalOpen(true)}
+                  title={`Archived modes (${archivedModes.length})`}
+                  className={cn(itemCls, 'relative text-amber-500')}
+                >
+                  <Archive className="h-5 w-5" />
+                  <span className="absolute top-0.5 right-0.5 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-amber-500 px-1 text-[8px] font-bold text-white">
+                    {archivedModes.length}
+                  </span>
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className="my-0.5 h-px w-7 shrink-0 bg-line/60" />
+
+          {/* ── Gear — app actions ── */}
+          <button
+            type="button"
+            onClick={() => setRailGroup('gear')}
+            title="Settings & actions"
+            aria-label="Settings and actions"
+            className={headerCls(railGroup === 'gear')}
+          >
+            <Settings2 className="h-6 w-6" />
+          </button>
+
+          {railGroup === 'gear' && (
+            <div className="flex shrink-0 flex-col items-center gap-1.5 py-0.5">
+              <button type="button" onClick={() => setAiOpen(true)} title="AI companion" aria-label="AI companion" className={itemCls}>
+                <Sparkles className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={toggleClockCentered}
+                title="Desk Clock"
+                aria-label="Toggle Desk Clock"
+                className={cn(itemCls, clockCentered && 'bg-accent/15 text-accent')}
+              >
+                <Clock className="h-5 w-5" />
+              </button>
+              <button type="button" onClick={toggleTheme} title={isDark ? 'Light mode' : 'Dark mode'} aria-label="Toggle theme" className={itemCls}>
+                {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              </button>
+              <button type="button" onClick={() => setSettingsOpen(true)} title="Settings" aria-label="Settings" className={itemCls}>
+                <Settings className="h-5 w-5" />
+              </button>
+              <button type="button" onClick={() => setSupportOpen(true)} title="Support" aria-label="Support" className={cn(itemCls, 'text-rose-400')}>
+                <Heart className="h-5 w-5 fill-rose-400/20" />
+              </button>
+              <button type="button" onClick={() => setLogoutModalOpen(true)} title="Sign out" aria-label="Sign out" className={cn(itemCls, 'hover:text-red-500')}>
+                <LogOut className="h-5 w-5" />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {sharedDialogs}
+      </>
+    )
+  }
 
   // ── Vertical: unified sidebar rail (DESIGN_SYSTEM.md §5) ──────────────────
   // One continuous glass rail — 4 visible modes on top (scrollable if >4),

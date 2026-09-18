@@ -13,5 +13,11 @@
   },
   "android": {
     "allowMixedContent": true
+  },
+  "plugins": {
+    "FirebaseAuthentication": {
+      "skipNativeAuth": true,
+      "providers": ["google.com"]
+    }
   }
 }

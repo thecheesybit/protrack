@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react'
-import { Monitor, Check, AlertTriangle, Loader2 } from 'lucide-react'
+import { Monitor, Tablet, Check, AlertTriangle, Loader2 } from 'lucide-react'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
 import { useAuth } from '@/hooks/useAuth'
 import { AuroraBackground } from '@/components/common/AuroraBackground'
 import { Logo } from '@/components/common/Logo'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { claimDesktop, resumePendingClaim } from '@/services/deviceLinkService'
+import { claimCompanionInBrowser } from '@/services/companionLinkService'
 import { friendlyAuthError } from '@/lib/authPopup'
 
 /**
- * Opened on the phone after scanning the desktop QR (URL: /link?s=<sessionId>).
- * The signed-in user confirms, which mints a single-use custom token for the
- * waiting desktop via the Cloud Function.
+ * Opened on phone or browser after scanning a QR (URL: /link?s=<sessionId>).
+ * Supports both desktop pairing and companion tablet pairing.
  */
 export function LinkDevicePage() {
   const { user, signIn, loading } = useAuth()
@@ -20,10 +22,23 @@ export function LinkDevicePage() {
   const sessionId = (urlCode || enteredCode).trim()
   const [state, setState] = useState('idle') // idle | linking | done | error
   const [message, setMessage] = useState('')
+  const [isCompanion, setIsCompanion] = useState(false)
 
-  // If confirm() below fell back to a full-page redirect (some browsers block
-  // the Google sign-in popup outright — third-party cookies / FedCM), the tab
-  // navigated away and came back. Finish that claim here.
+  // Detect if sessionId belongs to a companion tablet
+  useEffect(() => {
+    if (!sessionId || !db) return
+    let active = true
+    getDoc(doc(db, 'companionHandshakes', sessionId))
+      .then((snap) => {
+        if (active && snap.exists()) setIsCompanion(true)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [sessionId])
+
+  // If confirm() fell back to a full-page redirect, finish that claim here.
   useEffect(() => {
     let cancelled = false
     resumePendingClaim()
@@ -45,10 +60,18 @@ export function LinkDevicePage() {
     if (!sessionId) return
     setState('linking')
     try {
-      const completed = await claimDesktop(sessionId)
-      // completed === false means it fell back to a redirect — the page is
-      // navigating away right now, so leave the "linking…" state in place.
-      if (completed) setState('done')
+      if (isCompanion) {
+        const completed = await claimCompanionInBrowser(sessionId)
+        if (completed) {
+          setState('done')
+          setTimeout(() => {
+            window.location.href = `protrack://pair?s=${encodeURIComponent(sessionId)}`
+          }, 800)
+        }
+      } else {
+        const completed = await claimDesktop(sessionId)
+        if (completed) setState('done')
+      }
     } catch (err) {
       console.error('[link] claim failed', err)
       setMessage(friendlyAuthError(err))
@@ -67,15 +90,15 @@ export function LinkDevicePage() {
         <div className="mb-6 flex flex-col items-center gap-3">
           <Logo className="h-12 w-12 drop-shadow-lg" />
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15">
-            <Monitor className="h-6 w-6 text-accent" />
+            {isCompanion ? <Tablet className="h-6 w-6 text-accent" /> : <Monitor className="h-6 w-6 text-accent" />}
           </div>
         </div>
 
         {!sessionId ? (
           <>
-            <h1 className="text-lg font-bold">Enter desktop code</h1>
+            <h1 className="text-lg font-bold">Enter pairing code</h1>
             <p className="mb-4 mt-2 text-sm text-muted">
-              Open PRO TRACK on your desktop and copy the 8-character code shown
+              Open PRO TRACK on your desktop or tablet and copy the 8-character code shown
               on the sign-in screen.
             </p>
             <input
@@ -93,11 +116,11 @@ export function LinkDevicePage() {
           <>
             <h1 className="text-lg font-bold">Sign in to link</h1>
             <p className="mb-5 mt-2 text-sm text-muted">
-              Sign in here first, then confirm to unlock the desktop app.
+              Sign in here first, then confirm to unlock the {isCompanion ? 'companion tablet' : 'desktop app'}.
             </p>
             <button
               onClick={signIn}
-              className="w-full rounded-2xl bg-white px-5 py-3 font-semibold text-gray-900 shadow"
+              className="w-full rounded-2xl bg-white px-5 py-3 font-semibold text-gray-900 shadow cursor-pointer"
             >
               Continue with Google
             </button>
@@ -107,10 +130,20 @@ export function LinkDevicePage() {
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15">
               <Check className="h-6 w-6 text-emerald-400" />
             </div>
-            <h1 className="text-lg font-bold">Desktop unlocked</h1>
+            <h1 className="text-lg font-bold">{isCompanion ? 'Companion tablet unlocked' : 'Desktop unlocked'}</h1>
             <p className="mt-2 text-sm text-muted">
-              Your computer is signing in now. You can close this tab.
+              {isCompanion
+                ? 'Your tablet is pairing now. You can return to the PRO TRACK app.'
+                : 'Your computer is signing in now. You can close this tab.'}
             </p>
+            {isCompanion && (
+              <a
+                href={`protrack://pair?s=${encodeURIComponent(sessionId)}`}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent px-5 py-3 font-semibold text-white shadow-glow"
+              >
+                Return to PRO TRACK App
+              </a>
+            )}
             <button onClick={goHome} className="mt-5 text-sm text-accent hover:underline">
               Back to PRO TRACK
             </button>
@@ -128,22 +161,22 @@ export function LinkDevicePage() {
           </>
         ) : (
           <>
-            <h1 className="text-lg font-bold">Link this desktop?</h1>
+            <h1 className="text-lg font-bold">{isCompanion ? 'Link companion tablet?' : 'Link this desktop?'}</h1>
             <p className="mb-5 mt-2 text-sm text-muted">
               Signed in as {user.email}. Confirm to securely sign in on your
-              computer.
+              {isCompanion ? ' tablet.' : ' computer.'}
             </p>
             <button
               onClick={confirm}
               disabled={state === 'linking'}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-accent px-5 py-3 font-semibold text-white shadow-glow disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-accent px-5 py-3 font-semibold text-white shadow-glow disabled:opacity-60 cursor-pointer"
             >
               {state === 'linking' ? (
                 <>
                   <Loader2 className="h-5 w-5 animate-spin" /> Linking…
                 </>
               ) : (
-                'Link this desktop'
+                isCompanion ? 'Link this companion tablet' : 'Link this desktop'
               )}
             </button>
           </>

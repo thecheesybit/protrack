@@ -9,6 +9,8 @@ dist-ssr
 dist-electron
 release
 *.local
+*.keystore
+*.jks
 
 # Env / secrets
 .env

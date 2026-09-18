@@ -69,8 +69,15 @@ function Routes() {
     }
   }
 
+  // The Android tablet build is a standalone, Google-login-only surface. It must
+  // never render any of the web/desktop gateway routes below (device-linking,
+  // companion pairing, gcal handoff, patreon approval) — a deep link that flipped
+  // the location must not expose a non-Google sign-in path inside the app. So on
+  // Android we skip straight to the login/workspace fork.
+  const gatewaysAllowed = !isAndroid
+
   // Google Calendar auth gateway: /link-gcal?uid=<uid>
-  if (pathname.startsWith('/link-gcal')) {
+  if (gatewaysAllowed && pathname.startsWith('/link-gcal')) {
     return (
       <Suspense fallback={null}>
         <LinkGcalPage key="link-gcal" />
@@ -80,7 +87,7 @@ function Routes() {
 
   // Mobile auth gateway: /link?s=<sessionId> — the only authenticated surface
   // the web build exposes (used by the QR handshake).
-  if (pathname.startsWith('/link')) {
+  if (gatewaysAllowed && pathname.startsWith('/link')) {
     return (
       <Suspense fallback={null}>
         <LinkDevicePage key="link" />
@@ -89,7 +96,7 @@ function Routes() {
   }
 
   // Tablet companion gateway: /pair?s=<sessionId> — web download & deep link fallback
-  if (pathname.startsWith('/pair')) {
+  if (gatewaysAllowed && pathname.startsWith('/pair')) {
     return (
       <Suspense fallback={null}>
         <PairLandingPage key="pair" />
@@ -98,7 +105,7 @@ function Routes() {
   }
 
   // Admin-only contribution approval dashboard (its own Google sign-in + lock).
-  if (pathname.startsWith('/patreon-approve')) {
+  if (gatewaysAllowed && pathname.startsWith('/patreon-approve')) {
     return (
       <Suspense fallback={null}>
         <PatreonApprovePage key="patreon-approve" />

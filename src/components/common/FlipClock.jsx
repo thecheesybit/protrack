@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { GripHorizontal, Bell } from 'lucide-react'
 import { playPop } from '@/lib/audioFX'
 import { useStore } from '@/store/useStore'
+import { isTablet } from '@/desktop/isDesktop'
 import { cn } from '@/utils/cn'
 
 /**
@@ -38,12 +39,18 @@ export const CLOCK_MARGIN = 24
 
 export function getDefaultPos(currentScale = DEFAULT_SCALE) {
   const scaledHeight = BASE_CLOCK_HEIGHT * currentScale
-  // Symmetric bottom gutter — same as the left margin — clear of the taskbar.
+  const scaledWidth = BASE_CLOCK_WIDTH * currentScale
+  const winW = typeof window !== 'undefined' ? window.innerWidth : 1200
+  // Tablet docks the clock at the TOP-CENTER (reclaiming the removed branding
+  // space and clearing the left rail's tap targets). Desktop keeps the
+  // symmetric bottom-left gutter, clear of the taskbar.
+  if (isTablet) {
+    return { x: Math.max(CLOCK_MARGIN, (winW - scaledWidth) / 2), y: CLOCK_MARGIN }
+  }
   const defaultY = typeof window !== 'undefined'
     ? Math.max(0, window.innerHeight - scaledHeight - CLOCK_MARGIN)
     : 680
-  const defaultX = CLOCK_MARGIN
-  return { x: defaultX, y: defaultY }
+  return { x: CLOCK_MARGIN, y: defaultY }
 }
 
 /**
@@ -429,7 +436,9 @@ export function FlipClock() {
   // shrinks below the same 1180px), the floating dock clock hides so it never
   // overlaps the widened board. Desk-clock mode (Ctrl+T) is exempt: that's a
   // full-screen clock the user explicitly opened.
-  const hiddenByNarrow = !clockCentered && winSize.w < 1180
+  // Tablet always keeps the clock docked (top). Desktop hides the floating clock
+  // below 1180px so the widened board never collides with it.
+  const hiddenByNarrow = !clockCentered && !isTablet && winSize.w < 1180
   const isHidden = hiddenByAuto || hiddenByOverlay || hiddenByNarrow
 
   return (

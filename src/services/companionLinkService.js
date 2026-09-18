@@ -6,11 +6,14 @@ import {
   doc,
   setDoc,
   getDoc,
+  updateDoc,
   deleteDoc,
+  onSnapshot,
   serverTimestamp,
   Timestamp,
 } from 'firebase/firestore'
-import { auth, db } from '@/lib/firebase'
+import { auth, db, googleProvider } from '@/lib/firebase'
+import { signInWithGooglePopup } from '@/lib/authPopup'
 
 export const COMPANION_TTL_MS = 2 * 60 * 1000 // 2 minutes
 
@@ -42,7 +45,7 @@ export function generateCompanionSessionId() {
 }
 
 /**
- * Build the pairing URL encoded into the desktop QR code.
+ * Build the pairing URL encoded into the companion QR code.
  * Scanned by a phone/camera with no app: opens the Netlify gateway download/fallback page.
  * Scanned by the installed app: intercepted by custom scheme or deep link.
  */
@@ -102,8 +105,12 @@ function normalizeCode(code) {
 }
 
 /**
- * Desktop side: creates a short-lived companion handshake document in Firestore.
- * The document contains the authenticated user's Google ID token.
+ * Desktop side: creates a short-lived companion handshake document in Firestore
+ * carrying the signed-in user's single-use Google ID token. A companion device
+ * then claims it with that Google credential.
+ *
+ * This is a Google-only handshake by design: the tablet build signs in directly
+ * with Google (no anonymous bootstrap), so a Google ID token is always required.
  */
 export async function createCompanionSession(idToken) {
   requireAuth()
@@ -111,7 +118,7 @@ export async function createCompanionSession(idToken) {
     throw new Error('Must be signed in to link a companion tablet.')
   }
   if (!idToken) {
-    throw new Error('Google ID token is required to create a companion session.')
+    throw new Error('A Google ID token is required to create a companion session.')
   }
 
   const sessionId = generateCompanionSessionId()
@@ -133,7 +140,75 @@ export async function createCompanionSession(idToken) {
 }
 
 /**
- * Desktop side: cleanup a companion session doc on modal close or expiration.
+ * Tablet side: listens for the browser/desktop to claim this session.
+ * When claimed with Google ID token, signs in with credential and cleans up.
+ */
+export function listenForCompanionClaim(sessionId, onClaimed, onError, onClaimStart) {
+  requireAuth()
+  let active = true
+  const unsub = onSnapshot(
+    doc(db, 'companionHandshakes', sessionId),
+    async (snap) => {
+      const data = snap.data()
+      if (data?.status === 'claimed' && data?.token) {
+        if (!active) return
+        active = false
+        unsub()
+        onClaimStart?.()
+        try {
+          const credential = GoogleAuthProvider.credential(data.token)
+          const userCred = await signInWithCredential(auth, credential)
+          await deleteDoc(doc(db, 'companionHandshakes', sessionId)).catch(() => {})
+          onClaimed?.(userCred.user)
+        } catch (err) {
+          console.error('[companion] claim sign-in failed', err)
+          onError?.(err)
+        }
+      }
+    },
+    (err) => {
+      if (active) onError?.(err)
+    },
+  )
+  return () => {
+    active = false
+    unsub()
+  }
+}
+
+/**
+ * Browser side: write the claimed Google ID token onto the pending companion handshake doc.
+ */
+export async function writeCompanionClaimToken(sessionId, userCredential) {
+  requireAuth()
+  const credential = GoogleAuthProvider.credentialFromResult(userCredential)
+  const idToken = credential?.idToken
+  if (!idToken) throw new Error('Could not retrieve Google ID token')
+
+  const ref = doc(db, 'companionHandshakes', sessionId)
+  await updateDoc(ref, {
+    status: 'claimed',
+    token: idToken,
+    tokenType: 'google',
+    claimedBy: userCredential.user.uid,
+    claimedAt: serverTimestamp(),
+  })
+}
+
+/**
+ * Browser / Web gateway helper: signs in with Google in a real browser,
+ * then writes the claim token to the pending companion handshake doc.
+ */
+export async function claimCompanionInBrowser(sessionId) {
+  requireAuth()
+  const result = await signInWithGooglePopup(auth, googleProvider, { allowRedirectFallback: true })
+  if (!result) return false // redirecting away
+  await writeCompanionClaimToken(sessionId, result)
+  return true
+}
+
+/**
+ * Cleanup a companion session doc on component unmount or expiration.
  */
 export async function clearCompanionSession(sessionId) {
   if (!db || !sessionId) return
@@ -145,8 +220,7 @@ export async function clearCompanionSession(sessionId) {
 }
 
 /**
- * Tablet side: claims a companion handshake using the session ID scanned or entered.
- * Signs in with the relayed Google credential and immediately deletes the handshake doc.
+ * Direct claim for pre-minted session docs (backward-compatibility).
  */
 export async function claimCompanionSession(rawSessionId) {
   requireAuth()
@@ -183,3 +257,4 @@ export async function claimCompanionSession(rawSessionId) {
 
   return userCredential.user
 }
+

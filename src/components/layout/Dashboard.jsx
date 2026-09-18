@@ -68,7 +68,8 @@ const SupportModal = React.lazy(() =>
 import aiVideo from '@/assets/ai.mp4'
 import { APP_VERSION } from '@/lib/version'
 import { exitPip } from '@/lib/pip'
-import { isDesktop } from '@/desktop/isDesktop'
+import { isDesktop, isTablet } from '@/desktop/isDesktop'
+import { useAndroidBackButton } from '@/hooks/useAndroidBackButton'
 import { cn } from '@/utils/cn'
 
 /**
@@ -146,6 +147,7 @@ export function Dashboard() {
   useTopicMappingBatch() // daily AI re-rank of flagged subjects' topic queues (no-op without a key)
   useForestMigration() // one-time client-side migration normalizing historical focus sessions (Goal B)
   useLeaderboardPublish() // publishes the user's display-safe aggregate to the public leaderboard (opt-out)
+  useAndroidBackButton() // android-only: maps the hardware/gesture back button to the Escape ladder
 
   // In-app keyboard shortcuts
   useEffect(() => {
@@ -396,26 +398,33 @@ export function Dashboard() {
         <>
           <div className={cn(
             "flex h-full w-full flex-col transition-all duration-300",
-            fullscreen ? "px-5 py-3.5" : "px-3.5 py-3 sm:px-4 lg:px-5"
+            isTablet
+              ? "px-2 py-2"
+              : fullscreen ? "px-5 py-3.5" : "px-3.5 py-3 sm:px-4 lg:px-5"
           )}>
-            {/* User Profile / Welcome Section & Selected Scope — fixed on the top left */}
-            <div className={cn(
-              "fixed left-3.5 top-3.5 z-20 flex flex-col gap-1.5 select-none transition-opacity duration-300",
-              clockCentered && "opacity-30 pointer-events-none"
-            )}>
-              <div className="flex items-center gap-3">
-                <Logo className="h-10 w-10 shrink-0 drop-shadow-sm" />
-                {/* Text label + version compact away below 1180px so the left
-                    gutter can shrink and the content widgets gain width. The
-                    icon rail below still switches scope. */}
-                <div className="hidden min-[1180px]:block">
-                  <DynamicBranding firstName={firstName} displayName={user?.displayName} />
+            {/* User Profile / Welcome Section & Selected Scope — fixed on the top
+                left. DESKTOP ONLY: the tablet strips this chrome entirely (scope
+                switching lives on the pinned rail) so the board reclaims the space
+                and sits flush to the top-left. */}
+            {!isTablet && (
+              <div className={cn(
+                "fixed left-3.5 top-3.5 z-20 flex flex-col gap-1.5 select-none transition-opacity duration-300",
+                clockCentered && "opacity-30 pointer-events-none"
+              )}>
+                <div className="flex items-center gap-3">
+                  <Logo className="h-10 w-10 shrink-0 drop-shadow-sm" />
+                  {/* Text label + version compact away below 1180px so the left
+                      gutter can shrink and the content widgets gain width. The
+                      icon rail below still switches scope. */}
+                  <div className="hidden min-[1180px]:block">
+                    <DynamicBranding firstName={firstName} displayName={user?.displayName} />
+                  </div>
+                </div>
+                <div className="hidden min-[1180px]:block pl-[52px]">
+                  <SelectedScopeIndicator />
                 </div>
               </div>
-              <div className="hidden min-[1180px]:block pl-[52px]">
-                <SelectedScopeIndicator />
-              </div>
-            </div>
+            )}
 
             {/* Floating scope switcher — fixed on the far left, vertically centered */}
             <div className={cn(
@@ -434,7 +443,12 @@ export function Dashboard() {
                 // below 1180px the clock hides (see FlipClock) and the branding
                 // compacts, so the gutter collapses and the content widgets take
                 // ~85%+ — the board (B) gains room as width shrinks, sidebar first.
-                "min-h-0 flex-1 pl-24 pr-6 min-[1180px]:pl-[236px] min-[1180px]:pr-[3.5%] transition-all duration-500 ease-out",
+                // TABLET: branding is gone, so the board hugs the rail — just a
+                // slim gutter clearing the pinned rail, and full width elsewhere.
+                "min-h-0 flex-1 transition-all duration-500 ease-out",
+                isTablet
+                  ? "pl-[84px] pr-2.5"
+                  : "pl-24 pr-6 min-[1180px]:pl-[236px] min-[1180px]:pr-[3.5%]",
                 clockCentered && "pointer-events-none opacity-0 scale-[0.97]"
               )}
             >
@@ -450,7 +464,9 @@ export function Dashboard() {
             </main>
           </div>
 
-          {/* Floating AI companion — recedes into a minimal trigger during focus or clock mode */}
+          {/* Floating AI companion — DESKTOP ONLY. On tablet the AI trigger lives
+              on the pinned rail, so the floating orb + hands-free bubble are removed. */}
+          {!isTablet && (
           <motion.button
             onClick={handleAiButtonClick}
             animate={{
@@ -484,10 +500,11 @@ export function Dashboard() {
               <Sparkles className="h-6 w-6" />
             )}
           </motion.button>
+          )}
 
-          {/* Transparent hands-free bubble above the button */}
+          {/* Transparent hands-free bubble above the button (desktop only) */}
           <AnimatePresence>
-            {handsFreeActive && (
+            {!isTablet && handsFreeActive && (
               <motion.div
                 initial={{ opacity: 0, y: 10, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -559,8 +576,9 @@ export function Dashboard() {
       <CenterPrompt />
 
       {/* Shortcuts / commands — transparent ? button, clear of the window's
-          title-bar controls (sits below them). */}
-      {!focusLocked && !clockCentered && (
+          title-bar controls (sits below them). DESKTOP ONLY: the tablet has no
+          keyboard shortcuts to document, and the Command Shelf covers actions. */}
+      {!isTablet && !focusLocked && !clockCentered && (
         <button
           type="button"
           onClick={() => setHelpOpen((v) => !v)}

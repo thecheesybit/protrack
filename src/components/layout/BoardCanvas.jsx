@@ -80,6 +80,7 @@ function MiniCard({ widget, isDockOpen = true, onSingleClick, onDoubleClick }) {
   const meta = MINI_META[widget.id] || { desc: '', gradient: 'from-accent/15 to-accent-2/10' }
   const clickTimer = useRef(null)
   const videoRef = useRef(null)
+  const [videoFailed, setVideoFailed] = useState(false)
   const videoSrc = useMemo(() => getWidgetVideo(widget.id), [widget.id])
 
   useEffect(() => {
@@ -88,7 +89,22 @@ function MiniCard({ widget, isDockOpen = true, onSingleClick, onDoubleClick }) {
     }
   }, [isDockOpen])
 
+  // Touch has no hover, so the ambient video would never play — autoplay it on
+  // tablet (muted + playsInline, paired with the WebView autoplay allowance in
+  // MainActivity). Desktop keeps its play-on-hover behavior untouched.
+  useEffect(() => {
+    if (isTablet && isDockOpen && videoRef.current) {
+      videoRef.current.play().catch(() => {})
+    }
+  }, [isDockOpen, videoSrc])
+
   const handleClick = () => {
+    // On a tablet, a single tap opens the widget full — the desktop
+    // single-tap-swaps / double-tap-maximises timing is awkward with a finger.
+    if (isTablet) {
+      onDoubleClick()
+      return
+    }
     if (clickTimer.current) {
       // Second click within 280ms → double-click
       clearTimeout(clickTimer.current)
@@ -109,6 +125,7 @@ function MiniCard({ widget, isDockOpen = true, onSingleClick, onDoubleClick }) {
   }
 
   const handleMouseLeave = () => {
+    if (isTablet) return // tablet keeps the ambient video running
     if (videoRef.current) {
       videoRef.current.pause()
     }
@@ -122,16 +139,22 @@ function MiniCard({ widget, isDockOpen = true, onSingleClick, onDoubleClick }) {
       onMouseLeave={handleMouseLeave}
       className="group relative flex min-w-[120px] sm:min-w-[135px] flex-1 flex-col items-center justify-center gap-2 overflow-hidden rounded-3xl border border-white/[0.08] bg-surface/60 p-3 sm:p-4 backdrop-blur-xl transition-all duration-200 hover:-translate-y-1 hover:border-accent/40 hover:bg-surface/80 hover:shadow-glow-sm cursor-pointer select-none isolate [clip-path:inset(0_round_1.5rem)] gpu-layer"
     >
-      {/* Dynamic ambient video background - plays on hover only */}
-      {videoSrc && (
+      {/* Dynamic ambient video background — plays on hover (desktop) or autoplays
+          (tablet). Falls back to the gradient below if the clip can't decode. */}
+      {videoSrc && !videoFailed && (
         <video
           ref={videoRef}
           src={videoSrc}
           loop
           muted
           playsInline
-          preload="metadata"
-          className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-30 transition-all duration-700 ease-out group-hover:scale-105 group-hover:opacity-60"
+          autoPlay={isTablet}
+          preload={isTablet ? 'auto' : 'metadata'}
+          onError={() => setVideoFailed(true)}
+          className={cn(
+            'pointer-events-none absolute inset-0 h-full w-full object-cover transition-all duration-700 ease-out group-hover:scale-105 group-hover:opacity-60',
+            isTablet ? 'opacity-50' : 'opacity-30',
+          )}
         />
       )}
 
@@ -181,6 +204,7 @@ function MiniCard({ widget, isDockOpen = true, onSingleClick, onDoubleClick }) {
  */
 export function BoardCanvas() {
   const maximizedWidgetId = useStore((s) => s.maximizedWidgetId)
+  const activeWidgetId = useStore((s) => s.activeWidgetId)
   const maximizeWidget = useStore((s) => s.maximizeWidget)
   const scopeDropdownOpen = useStore((s) => s.scopeDropdownOpen)
 
@@ -198,7 +222,11 @@ export function BoardCanvas() {
   // in below it so the freed space never sits empty.
   const collapsedWidgets = useStore((s) => s.collapsedWidgets)
 
-  const maximized = WIDGETS.find((w) => w.id === maximizedWidgetId)
+  // On tablet the board is always a single full-screen widget switched via the
+  // dock rail — no two-pane grid, no bottom dock ("one widget only, full screen
+  // only"). Default to the timetable when nothing is explicitly maximised.
+  const resolvedMaxId = isTablet ? (maximizedWidgetId || activeWidgetId || LEFT_ID) : maximizedWidgetId
+  const maximized = WIDGETS.find((w) => w.id === resolvedMaxId)
 
   const leftWidget = WIDGETS.find((w) => w.id === LEFT_ID)
 
@@ -398,6 +426,15 @@ export function BoardCanvas() {
 
   // ── Maximised: dock + hero ────────────────────────────────────────────────
   if (maximized) {
+    // Tablet: the unified left rail already switches widgets, so the board is
+    // just the single full-screen widget — no second in-board dock column.
+    if (isTablet) {
+      return (
+        <div className="h-full p-0.5">
+          <Widget widget={maximized} variant="hero" context={contextFor(maximized.id)} />
+        </div>
+      )
+    }
     return (
       <div className="flex h-full gap-3 p-1">
         <div className="flex shrink-0 flex-col gap-2 overflow-y-auto no-scrollbar max-h-full">
@@ -415,8 +452,10 @@ export function BoardCanvas() {
             <DockChip
               key={w.id}
               widget={w}
-              isActive={w.id === maximizedWidgetId}
-              onClick={() => toggleWidget(w.id)}
+              isActive={w.id === resolvedMaxId}
+              // On tablet every widget is full-screen; a chip just switches to it
+              // (never toggles back to a grid, which no longer exists there).
+              onClick={() => (isTablet ? maximizeWidget(w.id) : toggleWidget(w.id))}
             />
           ))}
         </div>

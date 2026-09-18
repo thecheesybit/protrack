@@ -82,6 +82,13 @@ export const createUiSlice = (set, get) => ({
     set({ bottomDockOpen: next })
   },
 
+  // Tablet unified rail accordion: which of the three sections is expanded —
+  // 'home' (widgets), 'scopes' (modes), or 'gear' (app actions). The others
+  // collapse to their header. Local UI only. Defaults to home.
+  railGroup: 'home',
+  setRailGroup: (railGroup) =>
+    set({ railGroup: ['home', 'scopes', 'gear'].includes(railGroup) ? railGroup : 'home' }),
+
   // Selected Scope Dropdown state
   scopeDropdownOpen: false,
   setScopeDropdownOpen: (open) => {

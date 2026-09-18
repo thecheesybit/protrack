@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "272989804582",
+    "project_id": "protrack-1f0d2",
+    "storage_bucket": "protrack-1f0d2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:272989804582:android:a4fa02f31df4f0fbb9eee7",
+        "android_client_info": {
+          "package_name": "com.protrack.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "272989804582-jii03npo1k1klsaagtm2k5jn4efc5vtf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.protrack.app",
+            "certificate_hash": "872e4fb5d1293c31964e8c9d6277c6e86552297e"
+          }
+        },
+        {
+          "client_id": "272989804582-mi5r4o5l0071dhl8g12em3h5v5ulgjni.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCij7EQBR6JpCDDyWfDsMRTD0YGg1cn4Is"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "272989804582-mi5r4o5l0071dhl8g12em3h5v5ulgjni.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

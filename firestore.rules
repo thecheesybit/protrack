@@ -49,17 +49,25 @@ service cloud.firestore {
         && resource.data.desktopUid == request.auth.uid;
     }
 
-    // Tablet companion reverse-handshake (Direction A).
-    // The authenticated desktop publishes a 2-minute ephemeral doc with a single-use
-    // Google ID token. The scanning tablet reads it to sign in with credential,
-    // then immediately deletes the handshake doc.
+    // Tablet companion handshake.
+    // The tablet boots an ephemeral pending doc (sessionId = unguessable Crockford base32).
+    // The browser claims it with a Google ID token; the waiting tablet authenticates
+    // via credential listener and immediately deletes the doc.
     match /companionHandshakes/{sessionId} {
       allow create: if isSignedIn()
-        && request.resource.data.creatorUid == request.auth.uid
-        && request.resource.data.status == 'available'
+        && ((request.resource.data.tabletUid == request.auth.uid
+             && request.resource.data.status == 'pending'
+             && !('token' in request.resource.data))
+            || (request.resource.data.creatorUid == request.auth.uid
+                && request.resource.data.status == 'available'
+                && 'token' in request.resource.data));
+      allow get: if isSignedIn();
+      allow update: if isSignedIn()
+        && resource.data.status == 'pending'
+        && request.resource.data.status == 'claimed'
+        && request.resource.data.tabletUid == resource.data.tabletUid
         && 'token' in request.resource.data;
-      allow get, delete: if true;
-      allow update: if false;
+      allow delete: if isSignedIn();
     }
 
     // Support Corner — contribution intake. A signed-in user may CREATE their
