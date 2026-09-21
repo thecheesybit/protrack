@@ -9,6 +9,9 @@
 - **Sideloaded updates.** The tablet app checks GitHub Releases for a newer APK and offers a one-tap update.
 - **Official PRO TRACK icon and name.** Built with the official high-resolution brand mark across all adaptive launcher densities, styled to the deep obsidian `#07080C` theme, and named "PRO TRACK" throughout system launchers and multitasking.
 
+### 🗓️ Timetable & calendar reliability
+- **Fixed timetable crash on non-Date values.** Safely normalize Firestore Timestamps, epoch timestamps, and date strings in date formatting (`ymd()`), preventing the `e.getFullYear is not a function` error when rendering timetable slots, task deadlines, and calendar items.
+
 ### ⚡ Faster to load, lighter to ship
 - **The app is roughly half the size.** The bundled download dropped from ~29 MB to ~12 MB with no visible change in quality — the big animated graphics (the AI orb, the app-lock animation) are now efficient muted video instead of huge GIFs, the forest's ~90 plant and animal sprites are WebP, and a handful of unused images that were quietly shipping have been removed.
 - **Nothing looks different** — every image and animation renders the same (or sharper: the AI orb is now true-colour instead of a 256-colour GIF), it just weighs a fraction as much and loads faster.

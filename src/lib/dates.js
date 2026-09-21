@@ -1,5 +1,8 @@
 /** Local YYYY-MM-DD for a date (default: now). */
 export function ymd(d = new Date()) {
+  // Accept Firestore Timestamps, ISO strings, and epoch numbers safely.
+  if (d && typeof d.toDate === 'function') d = d.toDate()
+  else if (!(d instanceof Date)) d = new Date(d)
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
