@@ -411,8 +411,16 @@ jobs:
           java-version: '17'
           cache: gradle
 
+      # The action's default is `packages: tools platform-tools`, but modern
+      # cmdline-tools no longer ship a `tools` package, so sdkmanager fails with
+      # "Failed to find package 'tools'" (exit 1). Name exactly what the build
+      # needs — these match android/variables.gradle (compileSdk 34; AGP 8.2.1's
+      # default build-tools is 34.0.0). NOTE: the action splits this input on
+      # single SPACES, so it must stay on one line (a multi-line block won't work).
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
 
       - name: Install dependencies
         run: npm ci
