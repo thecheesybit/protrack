@@ -43,6 +43,13 @@ jobs:
           node-version: 22
           cache: npm
 
+      # Rejects workflow files GitHub would refuse to run (bad expression
+      # contexts like `secrets` in an `if:`, undeclared `needs.*.outputs.*`, …).
+      - name: Lint workflow files
+        run: |
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7 "$RUNNER_TEMP"
+          "$RUNNER_TEMP/actionlint" -color -shellcheck= -pyflakes=
+
       - name: Install dependencies
         run: npm ci
 
@@ -53,6 +60,9 @@ jobs:
           else
             echo "No 'lint' script defined — skipping."
           fi
+
+      - name: Unit tests
+        run: npm test
 
       - name: Video audio guard
         # Fails if any shipped decorative video regained an audio track.

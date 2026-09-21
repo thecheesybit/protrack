@@ -144,7 +144,9 @@ jobs:
       - name: Extract release section from CHANGELOG
         id: notes
         env:
-          NEW_VERSION: ${{ needs.prepare.outputs.version }}
+          # `prepare` exposes `new_version` (not `version`) — the wrong name
+          # resolved to "" and made every release fall back to auto-generated notes.
+          NEW_VERSION: ${{ needs.prepare.outputs.new_version }}
         run: |
           awk "/^## v$NEW_VERSION /{flag=1; next} /^## v/{flag=0} flag" CHANGELOG.md > release-notes.md
           # v2.7.0 and v2.8.1 both shipped with a blank release body because no
@@ -213,9 +215,25 @@ jobs:
           VITE_WEB_URL: ${{ secrets.VITE_WEB_URL }}
         run: npm run build
 
+      # `secrets` is not available in an `if:` expression, and a step's own `env`
+      # is not visible to its own `if:` either — so a step that tests a secret
+      # directly is either rejected outright (invalid workflow) or silently never
+      # runs. Read the secrets into a plain output here and gate on that instead.
+      - name: Check Netlify credentials
+        id: netlify
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        run: |
+          if [ -n "$NETLIFY_AUTH_TOKEN" ] && [ -n "$NETLIFY_SITE_ID" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::NETLIFY_AUTH_TOKEN / NETLIFY_SITE_ID not set — skipping the CI Netlify deploy."
+          fi
+
       - name: Deploy to Netlify
-        # Only deploys when the secrets are present, so forks won't fail.
-        if: ${{ env.NETLIFY_AUTH_TOKEN != '' && env.NETLIFY_SITE_ID != '' }}
+        if: steps.netlify.outputs.enabled == 'true'
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
@@ -223,7 +241,7 @@ jobs:
           npx --yes netlify-cli@17 deploy \
             --dir=dist \
             --prod \
-            --message="Release v${{ needs.prepare.outputs.tag }}"
+            --message="Release ${{ needs.prepare.outputs.tag }}"
 
   build-electron:
     name: Build Electron · ${{ matrix.os }}
@@ -338,9 +356,38 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # An unsigned APK cannot be installed on a device, and the in-app updater
+  # offers any `.apk` release asset — so publishing one would ship a dead update.
+  # Build the APK only when the signing secrets exist; otherwise skip the whole
+  # Android job with a visible warning (the desktop release is unaffected).
+  # `secrets` can't be used in a job/step `if:`, so they're read into env here and
+  # exposed as a plain output that `build-android` gates on.
+  android-signing:
+    name: Check Android signing
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - name: Check signing secrets
+        id: check
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Android APK skipped — one or more of ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD is not set as a repository secret. See CLAUDE.md > CI/CD."
+          fi
+
   build-android:
     name: Android APK
-    needs: [prepare, create-release]
+    needs: [prepare, create-release, android-signing]
+    if: needs.android-signing.outputs.enabled == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -362,6 +409,7 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
+          cache: gradle
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -369,7 +417,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build web bundle for Capacitor
+      # `cap:build` = `cross-env CAPACITOR=true vite build && cap sync android`.
+      # Going through the npm script matters: a bare `cross-env …` in a `run:`
+      # step is "command not found" because node_modules/.bin is only on PATH
+      # inside npm scripts.
+      - name: Build web bundle & sync Capacitor
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
@@ -378,30 +430,38 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_WEB_URL: ${{ secrets.VITE_WEB_URL }}
-        run: cross-env CAPACITOR=true npm run build
+        run: npm run cap:build
 
-      - name: Sync Capacitor Android
-        run: npx cap sync android
-
-      - name: Decode Keystore (if secret provided)
-        id: keystore
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+      - name: Decode keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
-          echo "keystore_path=release.keystore" >> "$GITHUB_OUTPUT"
 
+      # android/app/build.gradle resolves ANDROID_KEYSTORE_PATH relative to the
+      # app module, so `release.keystore` → android/app/release.keystore.
       - name: Build Android Release APK
         working-directory: android
         env:
-          ANDROID_KEYSTORE_PATH: ${{ steps.keystore.outputs.keystore_path }}
+          ANDROID_KEYSTORE_PATH: release.keystore
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x ./gradlew
           ./gradlew assembleRelease --no-daemon
+
+      # Only `app-release.apk` (signed) is published. If signing silently didn't
+      # apply, Gradle emits `app-release-unsigned.apk` instead — fail loudly here
+      # rather than ship an uninstallable update. Kept out of the retry wrapper
+      # below since a missing file isn't transient.
+      - name: Verify signed APK
+        run: |
+          apk=android/app/build/outputs/apk/release/app-release.apk
+          if [ ! -f "$apk" ]; then
+            echo "::error::Signed APK not found at $apk (found: $(ls android/app/build/outputs/apk/release/ 2>&1 | tr '\n' ' '))"
+            exit 1
+          fi
 
       - name: Publish APK to Release
         uses: nick-fields/retry@v3
@@ -410,14 +470,7 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 20
           shell: bash
-          command: |
-            shopt -s nullglob
-            apks=(android/app/build/outputs/apk/release/*.apk)
-            if [ ${#apks[@]} -gt 0 ]; then
-              gh release upload "${{ needs.prepare.outputs.tag }}" "${apks[@]}" --clobber
-            else
-              echo "::warning::No APK file found in android/app/build/outputs/apk/release/"
-            fi
+          command: gh release upload "${{ needs.prepare.outputs.tag }}" android/app/build/outputs/apk/release/app-release.apk --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

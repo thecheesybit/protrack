@@ -49,6 +49,16 @@ jobs:
           node-version: 22
           cache: npm
 
+      # A workflow file that GitHub rejects (e.g. `secrets` inside an `if:`) turns
+      # every later Release run into an instant "workflow file issue" failure and
+      # makes the release dispatch below 422. Catch that here, BEFORE promoting.
+      # shellcheck/pyflakes are off: this gate is for workflow syntax and
+      # expression/context errors, not shell style.
+      - name: Lint workflow files
+        run: |
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7 "$RUNNER_TEMP"
+          "$RUNNER_TEMP/actionlint" -color -shellcheck= -pyflakes=
+
       - name: Install dependencies
         run: npm ci
 
@@ -60,6 +70,12 @@ jobs:
             echo "No 'lint' script defined — skipping."
           fi
 
+      - name: Unit tests
+        run: npm test
+
+      - name: Video audio guard
+        run: npm run check:videos
+
       - name: Build web bundle
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
@@ -70,6 +86,9 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_WEB_URL: ${{ secrets.VITE_WEB_URL }}
         run: npm run build
+
+      - name: Bundle size budget
+        run: npm run size
 
       - name: Build Electron main + preload
         run: npx cross-env ELECTRON=true vite build
