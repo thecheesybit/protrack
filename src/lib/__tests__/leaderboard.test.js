@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { buildLeaderboardEntry } from '@/lib/leaderboard'
+import {
+  buildLeaderboardEntry,
+  isLeaderboardOptedOut,
+  needsLeaderboardNotice,
+  LEADERBOARD_OPT_OUT_ENABLED,
+} from '@/lib/leaderboard'
 
 // Fixed "now": 2026-09-17T06:00:00 local — matches the project's working date.
 const NOW = new Date(2026, 8, 17, 6, 0, 0).getTime()
@@ -92,5 +97,29 @@ describe('buildLeaderboardEntry', () => {
     const e = buildLeaderboardEntry(undefined, { now: NOW })
     expect(e.weeklyMin).toBe(0)
     expect(e.monthlyForest).toEqual([])
+  })
+})
+
+describe('leaderboard opt-out pause', () => {
+  it('ignores a stored opt-out while opt-out is paused', () => {
+    expect(isLeaderboardOptedOut({ leaderboardOptOut: true }, false)).toBe(false)
+    expect(isLeaderboardOptedOut({ leaderboardOptOut: true }, true)).toBe(true)
+    expect(isLeaderboardOptedOut(null, true)).toBe(false)
+  })
+
+  it('re-notifies previously opted-out users while paused', () => {
+    expect(needsLeaderboardNotice({ leaderboardNoticeSeen: true, leaderboardOptOut: true }, false)).toBe(true)
+    expect(needsLeaderboardNotice({ leaderboardNoticeSeen: true, leaderboardOptOut: false }, false)).toBe(false)
+    expect(needsLeaderboardNotice({}, false)).toBe(true)
+    expect(needsLeaderboardNotice(null, false)).toBe(false)
+  })
+
+  it('keeps opted-out users hidden (no notice) when opt-out is enabled', () => {
+    expect(needsLeaderboardNotice({ leaderboardNoticeSeen: true, leaderboardOptOut: true }, true)).toBe(false)
+    expect(needsLeaderboardNotice({ leaderboardNoticeSeen: false }, true)).toBe(true)
+  })
+
+  it('ships with opt-out paused', () => {
+    expect(LEADERBOARD_OPT_OUT_ENABLED).toBe(false)
   })
 })

@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
 import { useFocusSessions } from '@/hooks/useFocusSessions'
-import { buildLeaderboardEntry } from '@/lib/leaderboard'
+import { buildLeaderboardEntry, isLeaderboardOptedOut, needsLeaderboardNotice } from '@/lib/leaderboard'
 import { publishLeaderboardEntry, removeLeaderboardEntry } from '@/services/leaderboardService'
 
 const SIG_KEY = 'protrack:lb_sig'
@@ -38,7 +38,9 @@ function clearLS(key) {
  *  - **Default on**, but never publishes until the user has acknowledged the
  *    one-time disclosure (`settings.leaderboardNoticeSeen`) — so nothing is
  *    published silently.
- *  - **Opt-out** (`settings.leaderboardOptOut`) removes the entry once.
+ *  - **Opt-out** (`settings.leaderboardOptOut`) removes the entry once — but
+ *    opt-out is currently PAUSED (`LEADERBOARD_OPT_OUT_ENABLED`), so the flag is
+ *    ignored and a previously opted-out user is re-notified before publishing.
  *  - **Write-coalesced** via a localStorage signature so it writes only when the
  *    published numbers actually change (free-tier discipline).
  */
@@ -51,8 +53,8 @@ export function useLeaderboardPublish() {
   const stats = useStore((s) => s.stats)
   const { sessions } = useFocusSessions()
 
-  const optedOut = settings?.leaderboardOptOut === true
-  const noticeSeen = settings?.leaderboardNoticeSeen === true
+  const optedOut = isLeaderboardOptedOut(settings)
+  const noticePending = needsLeaderboardNotice(settings)
 
   useEffect(() => {
     if (!uid) return
@@ -71,7 +73,7 @@ export function useLeaderboardPublish() {
     if (readLS(REMOVED_KEY)) clearLS(REMOVED_KEY)
 
     // Wait until settings load and the user has acknowledged the disclosure.
-    if (!settings || !noticeSeen) return
+    if (!settings || noticePending) return
 
     const entry = buildLeaderboardEntry(sessions, {
       displayName: displayName || 'Explorer',
@@ -96,5 +98,5 @@ export function useLeaderboardPublish() {
     publishLeaderboardEntry(uid, entry)
       .then(() => writeLS(SIG_KEY, sig))
       .catch((err) => console.warn('[leaderboard] publish failed', err))
-  }, [uid, optedOut, noticeSeen, settings, sessions, stats, displayName, photoURL])
+  }, [uid, optedOut, noticePending, settings, sessions, stats, displayName, photoURL])
 }

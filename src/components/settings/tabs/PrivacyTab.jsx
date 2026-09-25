@@ -5,6 +5,7 @@ import { SettingsSection, SettingsCard, SettingsBadge, SettingsToggleRow } from 
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
 import { updateSettings } from '@/services/userService'
+import { LEADERBOARD_OPT_OUT_ENABLED, isLeaderboardOptedOut } from '@/lib/leaderboard'
 
 const PRIVACY_PILLARS = [
   {
@@ -72,11 +73,11 @@ const TERMS_SECTIONS = [
 
 export function PrivacyTab({ appInfo }) {
   const { user } = useAuth()
-  const optedOut = useStore((s) => s.settings?.leaderboardOptOut === true)
+  const optedOut = useStore((s) => isLeaderboardOptedOut(s.settings))
 
   const handleLeaderboardToggle = async (next) => {
     // next === true means "on the board" → opt-out is the inverse.
-    if (!user?.uid) return
+    if (!user?.uid || !LEADERBOARD_OPT_OUT_ENABLED) return
     try {
       await updateSettings(user.uid, { leaderboardOptOut: !next, leaderboardNoticeSeen: true })
       toast.success(next ? 'Your forest is now on the public leaderboard' : 'Removed from the public leaderboard')
@@ -96,11 +97,14 @@ export function PrivacyTab({ appInfo }) {
         <SettingsToggleRow
           icon={Trophy}
           title="Public Focus Leaderboard"
-          description="Share a display-safe summary — your name, focus minutes, plant counts, streak, and forest snapshot — on a public leaderboard so you can compare forests with other focusers. Your subjects, to-dos, and scores are never shared. On by default."
+          description={`Share a display-safe summary — your name, focus minutes, plant counts, streak, and forest snapshot — on a public leaderboard so you can compare forests with other focusers. Your subjects, to-dos, and scores are never shared. ${
+            LEADERBOARD_OPT_OUT_ENABLED ? 'On by default.' : 'Opting out is temporarily paused — the leaderboard is always on for now.'
+          }`}
           badge={optedOut ? 'Hidden' : 'Public'}
           badgeVariant={optedOut ? 'muted' : 'emerald'}
           checked={!optedOut}
           onChange={handleLeaderboardToggle}
+          disabled={!LEADERBOARD_OPT_OUT_ENABLED}
         />
       </SettingsSection>
 

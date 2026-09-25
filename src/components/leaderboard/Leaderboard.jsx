@@ -4,6 +4,7 @@ import { Trophy, TreePine, Flame, ArrowLeft, Clock, Sprout, Users } from 'lucide
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
 import { useLeaderboard } from '@/hooks/useLeaderboard'
+import { isLeaderboardOptedOut } from '@/lib/leaderboard'
 import { ForestTerrain } from '@/components/focus/ForestTerrain'
 import { Spinner } from '@/components/ui/Spinner'
 import { cn } from '@/utils/cn'
@@ -54,7 +55,7 @@ const RANK_STYLES = ['text-amber-300', 'text-slate-300', 'text-orange-400']
 export function Leaderboard() {
   const { user } = useAuth()
   const uid = user?.uid
-  const optedOut = useStore((s) => s.settings?.leaderboardOptOut === true)
+  const optedOut = useStore((s) => isLeaderboardOptedOut(s.settings))
   const [period, setPeriod] = useState('monthly') // 'weekly' | 'monthly'
   const [selected, setSelected] = useState(null)
   const { entries, loading, error } = useLeaderboard(100)
@@ -244,7 +245,7 @@ export function Leaderboard() {
         {optedOut ? (
           <>You're hidden from the board · enable in Settings → Privacy</>
         ) : (
-          <>Your forest is public · manage in Settings → Privacy</>
+          <>Your forest is public · details in Settings → Privacy</>
         )}
       </p>
     </motion.div>

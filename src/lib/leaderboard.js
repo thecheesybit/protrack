@@ -16,6 +16,29 @@ import { getPlantTypeForDuration } from './plantGrowth'
 
 const DAY_MS = 86400000
 
+/**
+ * Leaderboard opt-out is PAUSED: every user is on the public board and the
+ * Settings → Privacy toggle is locked on. Flip to `true` to restore opt-out —
+ * the stored `settings.leaderboardOptOut` flag is kept, not erased.
+ */
+export const LEADERBOARD_OPT_OUT_ENABLED = false
+
+/** True only when opting out is allowed AND the user has opted out. */
+export function isLeaderboardOptedOut(settings, optOutEnabled = LEADERBOARD_OPT_OUT_ENABLED) {
+  return optOutEnabled && settings?.leaderboardOptOut === true
+}
+
+/**
+ * Whether the one-time leaderboard disclosure must be shown (and publishing
+ * held back until it is acknowledged). While opt-out is paused, users who had
+ * previously opted out are re-notified before their forest is published.
+ */
+export function needsLeaderboardNotice(settings, optOutEnabled = LEADERBOARD_OPT_OUT_ENABLED) {
+  if (!settings) return false
+  if (isLeaderboardOptedOut(settings, optOutEnabled)) return false
+  return settings.leaderboardNoticeSeen !== true || settings.leaderboardOptOut === true
+}
+
 /** Robustly resolve a session timestamp (Firestore Timestamp | Date | number | string) → ms. */
 function toMs(ts) {
   if (ts == null) return null
