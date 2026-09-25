@@ -518,7 +518,7 @@ export function ZenOverlay() {
               <div className="flex flex-wrap items-center justify-center gap-2.5">
                 <span className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/75 backdrop-blur-md">
                   <Clock className="h-3.5 w-3.5 text-sky-400" />
-                  <span>{Math.round(totalMin / 60)}h {totalMin % 60}m focused total</span>
+                  <span>{Math.floor(totalMin / 60)}h {totalMin % 60}m focused total</span>
                 </span>
                 <span className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/75 backdrop-blur-md">
                   <Sprout className="h-3.5 w-3.5 text-emerald-400" />

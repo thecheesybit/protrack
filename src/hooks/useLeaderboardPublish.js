@@ -2,7 +2,14 @@ import { useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { useStore } from '@/store/useStore'
 import { useFocusSessions } from '@/hooks/useFocusSessions'
-import { buildLeaderboardEntry, isLeaderboardOptedOut, needsLeaderboardNotice } from '@/lib/leaderboard'
+import {
+  buildLeaderboardEntry,
+  isLeaderboardDataReady,
+  isLeaderboardOptedOut,
+  leaderboardSignature,
+  needsLeaderboardNotice,
+} from '@/lib/leaderboard'
+import { ymd, computeStreak } from '@/lib/dates'
 import { publishLeaderboardEntry, removeLeaderboardEntry } from '@/services/leaderboardService'
 
 const SIG_KEY = 'protrack:lb_sig'
@@ -51,7 +58,7 @@ export function useLeaderboardPublish() {
   const photoURL = user?.photoURL
   const settings = useStore((s) => s.settings)
   const stats = useStore((s) => s.stats)
-  const { sessions } = useFocusSessions()
+  const { sessions, loading: sessionsLoading } = useFocusSessions()
 
   const optedOut = isLeaderboardOptedOut(settings)
   const noticePending = needsLeaderboardNotice(settings)
@@ -74,29 +81,23 @@ export function useLeaderboardPublish() {
 
     // Wait until settings load and the user has acknowledged the disclosure.
     if (!settings || noticePending) return
+    // Never publish half-loaded data (it would zero out this month's minutes).
+    if (!isLeaderboardDataReady({ sessions, sessionsLoading, stats })) return
 
     const entry = buildLeaderboardEntry(sessions, {
       displayName: displayName || 'Explorer',
       photoURL: photoURL || null,
-      currentStreak: stats?.currentStreak || 0,
+      // Live streak from activeDays — the stored value is only refreshed when a
+      // session is logged, so it never resets after a missed day.
+      currentStreak: stats?.activeDays ? computeStreak(stats.activeDays) : stats?.currentStreak || 0,
       allTimeMin: stats?.totalFocusMin || 0,
     })
 
-    const sig = JSON.stringify([
-      uid,
-      entry.displayName,
-      entry.photoURL,
-      entry.weeklyMin,
-      entry.monthlyMin,
-      entry.allTimeMin,
-      entry.currentStreak,
-      entry.weeklyForest.length,
-      entry.monthlyForest.length,
-    ])
+    const sig = leaderboardSignature(uid, entry, ymd())
     if (readLS(SIG_KEY) === sig) return
 
     publishLeaderboardEntry(uid, entry)
       .then(() => writeLS(SIG_KEY, sig))
       .catch((err) => console.warn('[leaderboard] publish failed', err))
-  }, [uid, optedOut, noticePending, settings, sessions, stats, displayName, photoURL])
+  }, [uid, optedOut, noticePending, settings, sessions, sessionsLoading, stats, displayName, photoURL])
 }

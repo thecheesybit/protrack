@@ -132,3 +132,38 @@ export function buildLeaderboardEntry(
     monthlyForest: capForest(monthly),
   }
 }
+
+/**
+ * Whether the inputs are complete enough to publish. Publishing before the
+ * focus-session listener delivers would push 0 weekly/monthly minutes (with the
+ * correct all-time total, which comes from stats) over a good entry — so wait
+ * for stats, for the listener, and never publish an empty session list for a
+ * user whose stats say they have focus history.
+ */
+export function isLeaderboardDataReady({ sessions, sessionsLoading, stats }) {
+  if (sessionsLoading || !stats || !Array.isArray(sessions)) return false
+  if (sessions.length === 0 && (Number(stats.totalFocusMin) || 0) > 0) return false
+  return true
+}
+
+/**
+ * Write-coalescing signature for an entry. Includes the local day so every
+ * device republishes at least once a day: weekly/monthly windows roll over
+ * with time (minutes must decay without new sessions), and a stale entry
+ * written by another device/window gets corrected instead of being skipped as
+ * "unchanged" by this device's local signature.
+ */
+export function leaderboardSignature(uid, entry, day) {
+  return JSON.stringify([
+    uid,
+    day,
+    entry.displayName,
+    entry.photoURL,
+    entry.weeklyMin,
+    entry.monthlyMin,
+    entry.allTimeMin,
+    entry.currentStreak,
+    entry.weeklyForest.length,
+    entry.monthlyForest.length,
+  ])
+}

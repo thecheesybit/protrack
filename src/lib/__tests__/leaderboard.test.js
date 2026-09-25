@@ -4,6 +4,8 @@ import {
   isLeaderboardOptedOut,
   needsLeaderboardNotice,
   LEADERBOARD_OPT_OUT_ENABLED,
+  isLeaderboardDataReady,
+  leaderboardSignature,
 } from '@/lib/leaderboard'
 
 // Fixed "now": 2026-09-17T06:00:00 local — matches the project's working date.
@@ -121,5 +123,28 @@ describe('leaderboard opt-out pause', () => {
 
   it('ships with opt-out paused', () => {
     expect(LEADERBOARD_OPT_OUT_ENABLED).toBe(false)
+  })
+})
+
+describe('isLeaderboardDataReady', () => {
+  const s = [{ durationMin: 25 }]
+  it('waits for the session listener and stats', () => {
+    expect(isLeaderboardDataReady({ sessions: s, sessionsLoading: true, stats: {} })).toBe(false)
+    expect(isLeaderboardDataReady({ sessions: s, sessionsLoading: false, stats: null })).toBe(false)
+  })
+  it('refuses an empty session list when stats show focus history', () => {
+    expect(isLeaderboardDataReady({ sessions: [], sessionsLoading: false, stats: { totalFocusMin: 1871 } })).toBe(false)
+  })
+  it('allows a genuinely new user and a loaded history', () => {
+    expect(isLeaderboardDataReady({ sessions: [], sessionsLoading: false, stats: { totalFocusMin: 0 } })).toBe(true)
+    expect(isLeaderboardDataReady({ sessions: s, sessionsLoading: false, stats: { totalFocusMin: 25 } })).toBe(true)
+  })
+})
+
+describe('leaderboardSignature', () => {
+  const entry = buildLeaderboardEntry([], { displayName: 'A', now: NOW })
+  it('changes with the day so stale entries get refreshed daily', () => {
+    expect(leaderboardSignature('u', entry, '2026-09-25')).not.toBe(leaderboardSignature('u', entry, '2026-09-26'))
+    expect(leaderboardSignature('u', entry, '2026-09-25')).toBe(leaderboardSignature('u', entry, '2026-09-25'))
   })
 })
