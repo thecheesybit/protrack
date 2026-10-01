@@ -6,6 +6,7 @@ import {
   LEADERBOARD_OPT_OUT_ENABLED,
   isLeaderboardDataReady,
   leaderboardSignature,
+  resolveLeaderboard,
 } from '@/lib/leaderboard'
 
 // Fixed "now": 2026-09-17T06:00:00 local — matches the project's working date.
@@ -30,9 +31,17 @@ describe('buildLeaderboardEntry', () => {
       sess('c', 25, 20 * DAY), // NOT this week; still Sep (this month, since 17-20 = late Aug -> not this month)
     ]
     const e = buildLeaderboardEntry(sessions, { displayName: 'Ayush', now: NOW })
+    expect(e.monthKey).toBe('2026-09')
     expect(e.weeklyMin).toBe(50)
     // c is ~28 Aug → previous month, so monthly counts only a + b
     expect(e.monthlyMin).toBe(50)
+    // and c is preserved in lastMonth
+    expect(e.lastMonth).toEqual(
+      expect.objectContaining({
+        monthKey: '2026-08',
+        monthlyMin: 25,
+      }),
+    )
   })
 
   it('classifies plant types and builds compact forest snapshots', () => {
@@ -147,4 +156,136 @@ describe('leaderboardSignature', () => {
     expect(leaderboardSignature('u', entry, '2026-09-25')).not.toBe(leaderboardSignature('u', entry, '2026-09-26'))
     expect(leaderboardSignature('u', entry, '2026-09-25')).toBe(leaderboardSignature('u', entry, '2026-09-25'))
   })
+  it('changes when the month rolls over', () => {
+    const octEntry = { ...entry, monthKey: '2026-10' }
+    expect(leaderboardSignature('u', entry, '2026-10-01')).not.toBe(leaderboardSignature('u', octEntry, '2026-10-01'))
+  })
 })
+
+describe('resolveLeaderboard (month reset & preservation)', () => {
+  const OCT_1 = new Date(2026, 9, 1, 10, 0, 0).getTime() // Oct 1, 2026
+
+  it('resets current month minutes to 0 for users who have not focused in October yet', () => {
+    const rawEntries = [
+      {
+        uid: 'user-krishnansh',
+        displayName: 'Krishnansh Singh',
+        monthlyMin: 3053, // 50h 53m in Sept
+        monthlyTrees: 101,
+        weeklyMin: 1064,
+        updatedAt: new Date(2026, 8, 30, 20, 0, 0), // Sept 30
+      },
+      {
+        uid: 'user-nishtha',
+        displayName: 'Nishtha Bhushan',
+        monthlyMin: 25,
+        monthlyTrees: 1,
+        weeklyMin: 25,
+        updatedAt: new Date(2026, 8, 30, 21, 0, 0),
+      },
+      {
+        uid: 'user-ayush',
+        displayName: 'Ayush Kumar',
+        monthKey: '2026-10', // already published in October!
+        monthlyMin: 25,
+        monthlyTrees: 1,
+        weeklyMin: 60,
+        lastMonth: {
+          monthKey: '2026-09',
+          monthlyMin: 500,
+          monthlyTrees: 20,
+        },
+        updatedAt: new Date(2026, 9, 1, 9, 0, 0),
+      },
+    ]
+
+    const resolved = resolveLeaderboard(rawEntries, { now: OCT_1, userUid: 'user-ayush' })
+
+    expect(resolved.currentMonthKey).toBe('2026-10')
+    expect(resolved.lastMonthKey).toBe('2026-09')
+
+    // Find each user in the resolved list
+    const krish = resolved.entries.find((e) => e.uid === 'user-krishnansh')
+    const nish = resolved.entries.find((e) => e.uid === 'user-nishtha')
+    const ayush = resolved.entries.find((e) => e.uid === 'user-ayush')
+
+    // 1. Current month (October) MUST be reset for September publishers:
+    expect(krish.monthlyMin).toBe(0)
+    expect(krish.monthlyTrees).toBe(0)
+    expect(nish.monthlyMin).toBe(0)
+    expect(nish.monthlyTrees).toBe(0)
+
+    // Ayush published in October, so his October minutes are active:
+    expect(ayush.monthlyMin).toBe(25)
+
+    // 2. Last month (September) MUST be preserved:
+    expect(krish.lastMonthMin).toBe(3053)
+    expect(krish.lastMonthTrees).toBe(101)
+    expect(nish.lastMonthMin).toBe(25)
+    expect(ayush.lastMonthMin).toBe(500)
+
+    // 3. Last month champion MUST be Krishnansh (topped with 3053 min):
+    expect(resolved.champion).not.toBeNull()
+    expect(resolved.champion.uid).toBe('user-krishnansh')
+    expect(resolved.champion.displayName).toBe('Krishnansh Singh')
+    expect(resolved.champion.monthlyMin).toBe(3053)
+
+    // Krishnansh must have the champion badge attached:
+    expect(krish.isLastMonthChampion).toBe(true)
+    expect(krish.championBadge).toEqual(
+      expect.objectContaining({
+        monthKey: '2026-09',
+        label: "Sep '26 Champion",
+      }),
+    )
+
+    // Ayush is not the champion:
+    expect(ayush.isLastMonthChampion).toBe(false)
+    expect(resolved.isUserChampion).toBe(false)
+  })
+
+  it('recognizes when the current user is the monthly champion', () => {
+    const rawEntries = [
+      {
+        uid: 'user-ayush',
+        displayName: 'Ayush Kumar',
+        monthlyMin: 5000,
+        monthKey: '2026-09',
+        updatedAt: new Date(2026, 8, 30),
+      },
+      {
+        uid: 'user-other',
+        displayName: 'Other',
+        monthlyMin: 1000,
+        monthKey: '2026-09',
+        updatedAt: new Date(2026, 8, 30),
+      },
+    ]
+
+    const resolved = resolveLeaderboard(rawEntries, { now: OCT_1, userUid: 'user-ayush' })
+    expect(resolved.champion.uid).toBe('user-ayush')
+    expect(resolved.isUserChampion).toBe(true)
+    const ayush = resolved.entries.find((e) => e.uid === 'user-ayush')
+    expect(ayush.isLastMonthChampion).toBe(true)
+    expect(ayush.championBadge.label).toBe("Sep '26 Champion")
+  })
+
+  it('decays weekly minutes to 0 for entries older than 7 days', () => {
+    const rawEntries = [
+      {
+        uid: 'stale-user',
+        weeklyMin: 300,
+        updatedAt: new Date(OCT_1 - 10 * DAY), // 10 days ago
+      },
+      {
+        uid: 'fresh-user',
+        weeklyMin: 300,
+        updatedAt: new Date(OCT_1 - 2 * DAY), // 2 days ago
+      },
+    ]
+    const resolved = resolveLeaderboard(rawEntries, { now: OCT_1 })
+    expect(resolved.entries.find((e) => e.uid === 'stale-user').weeklyMin).toBe(0)
+    expect(resolved.entries.find((e) => e.uid === 'fresh-user').weeklyMin).toBe(300)
+  })
+})
+

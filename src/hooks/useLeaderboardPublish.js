@@ -84,6 +84,12 @@ export function useLeaderboardPublish() {
     // Never publish half-loaded data (it would zero out this month's minutes).
     if (!isLeaderboardDataReady({ sessions, sessionsLoading, stats })) return
 
+    let championBadges = []
+    try {
+      const stored = readLS(`protrack:champion_badges:${uid}`)
+      if (stored) championBadges = JSON.parse(stored)
+    } catch {}
+
     const entry = buildLeaderboardEntry(sessions, {
       displayName: displayName || 'Explorer',
       photoURL: photoURL || null,
@@ -91,6 +97,8 @@ export function useLeaderboardPublish() {
       // session is logged, so it never resets after a missed day.
       currentStreak: stats?.activeDays ? computeStreak(stats.activeDays) : stats?.currentStreak || 0,
       allTimeMin: stats?.totalFocusMin || 0,
+      uid,
+      championBadges,
     })
 
     const sig = leaderboardSignature(uid, entry, ymd())

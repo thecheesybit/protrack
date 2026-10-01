@@ -30,7 +30,7 @@ src/
 │  │                      ForestTerrain (living month diorama), ForestInteractiveCanvas
 │  │                      + ForestCanvasEngine/forestEcosystemRenderer (2.5D canvas),
 │  │                      ForestWorldMap (honeycomb of month-hexes), ForestPreview (dev harness)
-│  ├─ leaderboard/        Leaderboard (weekly/monthly ranks → tap-through forest), LeaderboardConsentModal
+│  ├─ leaderboard/        Leaderboard (weekly/monthly ranks with new-month reset, historical standings & champion badging), LeaderboardConsentModal
 │  ├─ calendar/           NlQuickCapture (chrono-node)
 │  ├─ timetable/          TimetableGrid (+ live "now" flag), SlotEditor, TodayAgenda
 │  ├─ subjects/           SubjectDetail, MicroKanban (drag→Done sync), SubjectQuickAdd (bulk/voice)

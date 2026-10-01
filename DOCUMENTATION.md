@@ -62,6 +62,11 @@ PRO TRACK separates notifications into two distinct channels based on urgency an
 - **Web Audio API Engine (`sound.js` & `audioFX.js`)**:
   - Procedural sound synthesis for chimes, button clicks, alarm ringtones, and temple bell hourly chimes.
   - Curated YouTube ambient streaming with volume normalization.
+- **Leaderboard Archival & Monthly Badging (`leaderboard.js` & `Leaderboard.jsx`)**:
+  - Spark-safe client aggregation publishing display-safe stats (minutes, counts, streaks, forest snapshot) to `leaderboard/{uid}`.
+  - Automatic new-month reset: live monthly data resets to 0m at the start of each calendar month.
+  - Historical preservation: previous month totals are sealed and viewable via the "Last Month" tab.
+  - Monthly Champion crown & badging: dynamically awards the previous month's #1 forester with a golden champion badge across the leaderboard, Sanctuary detail, and Focus widget.
 
 ---
 

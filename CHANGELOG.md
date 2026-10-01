@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.16.0 — 2026-10-01
+
+### 🏆 Monthly Leaderboard Rollover, Standings Archive & Champion Badging
+- **Automatic new-month reset.** When a new calendar month begins, the live Monthly leaderboard cleanly resets to 0m for everyone until new sessions are completed in the current month, preventing stale numbers from previous months from bleeding over.
+- **Permanent last-month standings preservation.** Previous month data (e.g. September 2026) is preserved in full. Users can switch seamlessly between the live month (e.g. October 2026 · Live) and the sealed previous month (e.g. September 2026 · Final) directly in the Monthly leaderboard view.
+- **Monthly Champion crown and badges.** The #1 forester from the previous month is crowned with a golden badge (e.g. `🏆 Sep '26 Champion`), showcased in the Defending Champion banner at the top of the live leaderboard, and awarded a special Champion Honor card in their Sanctuary detail snapshot.
+- **Personal Champion honors in Deep Focus.** If you topped the leaderboard for the previous month, your defending championship status is proudly displayed in the Deep Focus widget header and alongside Your Forest.
+- **Weekly rolling decay.** Weekly minutes accurately decay to 0 if an entry has not been updated within 7 days.
+
 ## v2.14.0 — 2026-09-18
 
 ### 📱 Android tablet companion (new)

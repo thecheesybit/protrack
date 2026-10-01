@@ -276,6 +276,15 @@ export function FocusWidget({ widget, variant }) {
   const timerPresets = useStore((s) => s.settings?.timerPresets || [])
   const { sessions } = useFocusSessions()
 
+  const [championBadge, setChampionBadge] = useState(null)
+  useEffect(() => {
+    if (!user?.uid) return
+    try {
+      const stored = localStorage.getItem(`protrack:champion_badge:${user.uid}`)
+      if (stored) setChampionBadge(JSON.parse(stored))
+    } catch {}
+  }, [user?.uid])
+
   const [exitAttempts, setExitAttempts] = useState(0)
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [activeTab, setActiveTab] = useState('timer')
@@ -442,7 +451,8 @@ export function FocusWidget({ widget, variant }) {
     else resume()
   }
 
-  const subtitle = `${stats?.currentStreak || 0}-day streak · ${floraSummary}`
+  const championTag = championBadge ? ` · 🏆 ${championBadge.shortLabel || 'Champion'}` : ''
+  const subtitle = `${stats?.currentStreak || 0}-day streak · ${floraSummary}${championTag}`
 
   const pipHeaderAction = !isIdle ? (
     <button
@@ -609,6 +619,15 @@ export function FocusWidget({ widget, variant }) {
               <div className="flex items-center gap-2">
                 <Sprout className="h-4 w-4 text-emerald-400" />
                 <span className="text-xs font-semibold text-white/70">Your Forest</span>
+                {championBadge && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-300 shadow-glow-sm"
+                    title={`Defending Monthly Champion · You topped the ${championBadge.monthLabel || 'last month'} focus leaderboard!`}
+                  >
+                    <Trophy className="h-2.5 w-2.5 text-amber-400" />
+                    <span>{championBadge.shortLabel || 'Sep \'26'} Champion</span>
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-1.5">
                 <button
